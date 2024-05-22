@@ -1,0 +1,10 @@
+Package: com.noahsaso.pusher
+Name: Pusher-rootless
+Depends: mobilesubstrate, com.opa334.altlist, com.rpetrich.rocketbootstrap
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Push notifications to other devices
+Maintainer: jzksnsjswkw
+Author: Noah Saso <noahsaso@gmail.com>
+Section: Tweaks
+Depiction: https://beta.noahsaso.com/depiction.php?pkg=pusher

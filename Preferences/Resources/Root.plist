@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>items</key>
+	<array>
+		<!--  Enable Switch -->
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>PostNotification</key>
+			<string>com.noahsaso.pusher/prefs</string>
+			<key>default</key>
+			<true />
+			<key>defaults</key>
+			<string>com.noahsaso.pusher</string>
+			<key>icon</key>
+			<string>enabled</string>
+			<key>key</key>
+			<string>Enabled</string>
+			<key>label</key>
+			<string>Enabled</string>
+		</dict>
+
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>NSPGlobalSettingsListController</string>
+			<key>icon</key>
+			<string>DefaultService</string>
+			<key>label</key>
+			<string>Global Settings</string>
+		</dict>
+
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>NSPServiceListController</string>
+			<key>icon</key>
+			<string>services</string>
+			<key>label</key>
+			<string>Services</string>
+		</dict>
+
+		<!--  Support -->
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Support</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Developer: @NoahSaso</string>
+			<key>icon</key>
+			<string>twitter</string>
+			<key>action</key>
+			<string>openTwitterNoahSaso</string>
+		</dict>
+	</array>
+	<key>title</key>
+	<string>Pusher</string>
+</dict>
+</plist>
