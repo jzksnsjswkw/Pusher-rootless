@@ -121,7 +121,11 @@ typedef enum {
 #define NSPPreferencePusherReceiverImageMaxHeightKey @"Pusher ReceiverImageMaxHeight"
 #define NSPPreferencePusherReceiverImageShrinkFactorKey @"Pusher ReceiverImageShrinkFactor"
 
-#define BUILTIN_PUSHER_SERVICES @[ PUSHER_SERVICE_PUSHOVER, PUSHER_SERVICE_PUSHBULLET, PUSHER_SERVICE_IFTTT, PUSHER_SERVICE_PUSHER_RECEIVER ]
+#define PUSHER_SERVICE_FEISHU @"Feishu"
+#define PUSHER_SERVICE_FEISHU_URL @"https://open.feishu.cn/open-apis/bot/v2/hook/REPLACE_KEY"
+
+
+#define BUILTIN_PUSHER_SERVICES @[ PUSHER_SERVICE_PUSHOVER, PUSHER_SERVICE_PUSHBULLET, PUSHER_SERVICE_IFTTT, PUSHER_SERVICE_PUSHER_RECEIVER, PUSHER_SERVICE_FEISHU ]
 
 #import <Preferences/PSSpecifier.h>
 #import <BulletinBoard/BBBulletin.h>

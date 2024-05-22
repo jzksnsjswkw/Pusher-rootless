@@ -260,6 +260,8 @@ static NSString *getServiceURL(NSString *service, NSDictionary *options) {
     return [PUSHER_SERVICE_PUSHER_RECEIVER_URL
         stringByReplacingOccurrencesOfString:@"REPLACE_DB_NAME"
                                   withString:options[@"dbName"]];
+  } else if (XEq(service, PUSHER_SERVICE_FEISHU)) {
+    return PUSHER_SERVICE_FEISHU_URL;
   }
   return @"";
 }
@@ -1151,6 +1153,39 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
                                    encoding:NSUTF8StringEncoding];
     }
     return @{@"value1" : json};
+  }
+  if (XEq(service, PUSHER_SERVICE_FEISHU)) {
+    NSString *content;
+    if (dictionary[@"appName"]) {
+      content = dictionary[@"appName"];
+    }
+    if (bulletin.title) {
+      if (content) {
+        content = XStr(@"%@: %@", content, bulletin.title);
+      } else {
+        content = bulletin.title;
+      }
+    }
+    if (bulletin.subtitle) {
+      if (content) {
+        content = XStr(@"%@\r%@", content, bulletin.subtitle);
+      } else {
+        content = bulletin.subtitle;
+      }
+    }
+    if (bulletin.message) {
+      if (content) {
+        content = XStr(@"%@\r%@", content, bulletin.message);
+      } else {
+        content = bulletin.message;
+      }
+    }
+    return @{
+      @"msg_type" : @"text",
+      @"content" : @{
+        @"text" : content ?: @""
+      }
+    };
   }
 
   return data;
