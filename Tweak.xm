@@ -1063,6 +1063,40 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
       pushbulletInfoDict[@"device_iden"] = firstDevice;
     }
     return pushbulletInfoDict;
+  } else if (XEq(service, PUSHER_SERVICE_FEISHU)) {
+    BBBulletin *bulletin = dictionary[@"bulletin"];
+
+    NSString *message;
+    if (dictionary[@"appName"]) {
+      message = dictionary[@"appName"];
+    }
+    if (bulletin.title) {
+      if (message) {
+        message = XStr(@"%@: %@", message, bulletin.title);
+      } else {
+        message = bulletin.title;
+      }
+    }
+    if (bulletin.subtitle) {
+      if (message) {
+        message = XStr(@"%@\r%@", message, bulletin.subtitle);
+      } else {
+        message = bulletin.subtitle;
+      }
+    }
+    if (bulletin.message) {
+      if (message) {
+        message = XStr(@"%@\r%@", message, bulletin.message);
+      } else {
+        message = bulletin.message;
+      }
+    }
+    return @{
+      @"msg_type" : @"text",
+      @"content" : @{
+        @"text" : message ?: @""
+      }
+    };
   }
 
   // ifttt, pusher receiver, and custom services
@@ -1153,39 +1187,6 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
                                    encoding:NSUTF8StringEncoding];
     }
     return @{@"value1" : json};
-  }
-  if (XEq(service, PUSHER_SERVICE_FEISHU)) {
-    NSString *content;
-    if (dictionary[@"appName"]) {
-      content = dictionary[@"appName"];
-    }
-    if (bulletin.title) {
-      if (content) {
-        content = XStr(@"%@: %@", content, bulletin.title);
-      } else {
-        content = bulletin.title;
-      }
-    }
-    if (bulletin.subtitle) {
-      if (content) {
-        content = XStr(@"%@\r%@", content, bulletin.subtitle);
-      } else {
-        content = bulletin.subtitle;
-      }
-    }
-    if (bulletin.message) {
-      if (content) {
-        content = XStr(@"%@\r%@", content, bulletin.message);
-      } else {
-        content = bulletin.message;
-      }
-    }
-    return @{
-      @"msg_type" : @"text",
-      @"content" : @{
-        @"text" : content ?: @""
-      }
-    };
   }
 
   return data;
