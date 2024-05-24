@@ -262,6 +262,20 @@ static NSString *getServiceURL(NSString *service, NSDictionary *options) {
                                   withString:options[@"dbName"]];
   } else if (XEq(service, PUSHER_SERVICE_FEISHU)) {
     return PUSHER_SERVICE_FEISHU_URL;
+  } else if (XEq(service, PUSHER_SERVICE_BARK)) {
+    NSString *serverURL = options[@"serverURL"];
+    NSString *finalURL = nil;
+
+    if (serverURL && serverURL.length > 0) {
+      if ([serverURL hasSuffix:@"/"]) {
+          finalURL = [serverURL stringByAppendingString:@"REPLACE_KEY"];
+      } else {
+          finalURL = [serverURL stringByAppendingFormat:@"/REPLACE_KEY"];
+      }
+    } else {
+        finalURL = PUSHER_SERVICE_BARK_URL;
+    }
+    return finalURL;
   }
   return @"";
 }
@@ -440,6 +454,7 @@ static void pusherPrefsChanged() {
     NSString *keyKey = XStr(@"%@Key", service);
     NSString *devicesKey = XStr(@"%@Devices", service);
     NSString *soundsKey = XStr(@"%@Sounds", service);
+    NSString *serverURLKey = XStr(@"%@ServerURL", service);
     NSString *eventNameKey = XStr(@"%@EventName", service);
     NSString *dateFormatKey = XStr(@"%@DateFormat", service);
     NSString *customAppsKey = NSPPreferenceBuiltInServiceCustomAppsKey(service);
@@ -472,8 +487,9 @@ static void pusherPrefsChanged() {
         copy];
     val = prefs[dateFormatKey];
     servicePrefs[@"dateFormat"] = [(val ?: @"") copy];
-    servicePrefs[@"url"] =
-        getServiceURL(service, @{@"eventName" : eventName, @"dbName" : dbName});
+    val = prefs[serverURLKey];
+    NSString *serverURL = [(val ?: @"") copy];
+    servicePrefs[@"url"] = getServiceURL(service, @{@"eventName" : eventName, @"dbName" : dbName, @"serverURL": serverURL});
     val = prefs[whenToPushKey];
     servicePrefs[@"whenToPush"] =
         val ?: @(pusherWhenToPush); // if not set, go with default
@@ -501,6 +517,11 @@ static void pusherPrefsChanged() {
     BOOL logEnabled = val ? ((NSNumber *)val).boolValue : YES;
     if (logEnabled) {
       [pusherEnabledLogs addObject:service];
+    }
+
+    if (XEq(service, PUSHER_SERVICE_BARK)) {
+      servicePrefs[@"serverURL"] = prefs[serverURLKey] ?: @"https://api.day.app";
+      NSLog(@"%@", servicePrefs[@"serverURL"]);
     }
 
     if (XEq(service, PUSHER_SERVICE_IFTTT)) {
@@ -583,8 +604,9 @@ static void pusherPrefsChanged() {
 
       NSString *customAppEventName =
           [(customAppPrefs[@"eventName"] ?: eventName) retain];
+      NSString *customServerURL = [(customAppPrefs[@"serverURL"] ?: serverURL) retain];
       NSString *customAppUrl = getServiceURL(
-          service, @{@"eventName" : customAppEventName, @"dbName" : dbName});
+          service, @{@"eventName" : customAppEventName, @"dbName" : dbName, @"serverURL": customServerURL});
 
       NSMutableDictionary *customAppIDPref = [@{
         @"devices" : [customAppEnabledDevices retain],
@@ -1079,14 +1101,14 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
     }
     if (bulletin.subtitle) {
       if (message) {
-        message = XStr(@"%@\r%@", message, bulletin.subtitle);
+        message = XStr(@"%@\r\n%@", message, bulletin.subtitle);
       } else {
         message = bulletin.subtitle;
       }
     }
     if (bulletin.message) {
       if (message) {
-        message = XStr(@"%@\r%@", message, bulletin.message);
+        message = XStr(@"%@\r\n%@", message, bulletin.message);
       } else {
         message = bulletin.message;
       }
@@ -1096,6 +1118,11 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
       @"content" : @{
         @"text" : message ?: @""
       }
+    };
+  } else if (XEq(service, PUSHER_SERVICE_BARK)) {
+    return @{
+      @"title": dictionary[@"title"],
+      @"body": dictionary[@"message"]
     };
   }
 
