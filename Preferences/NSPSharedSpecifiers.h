@@ -11,6 +11,7 @@
 + (NSArray *)pushbullet:(NSString *)appID;
 + (NSArray *)ifttt:(NSString *)appID;
 + (NSArray *)pusherReceiver:(NSString *)appID;
++ (NSArray *)wechat:(NSString *)appID;
 + (void)setPreferenceValue:(id)value forBuiltInServiceSpecifier:(PSSpecifier *)specifier;
 + (id)readBuiltInServicePreferenceValue:(PSSpecifier *)specifier;
 + (void)setPreferenceValue:(id)value forCustomSpecifier:(PSSpecifier *)specifier;
