@@ -247,6 +247,48 @@ static NSArray *getSNSKeys(NSDictionary *prefs, NSString *prefix) {
   return getSNSKeys(prefs, prefix, nil, nil);
 }
 
+static void fetchWechatAccessToken(NSString *corpid, NSString *corpsecret, void(^completionHandler)(NSString *accessToken)) {
+  if (!corpid || !corpsecret) {
+    completionHandler(nil);
+  }
+
+  NSString *reqUrl = @"https://qyapi.weixin.qq.com/cgi-bin/gettoken";
+  NSDictionary *params = @{
+    @"corpid": corpid,
+    @"corpsecret": corpsecret
+  };
+  NSMutableArray *queryItems = [NSMutableArray array];
+  for (NSString *key in params) {
+    [queryItems addObject:[NSString stringWithFormat:@"%@=%@", key, params[key]]];
+  }
+  NSString *queryString = [queryItems componentsJoinedByString:@"&"];
+  reqUrl = [reqUrl stringByAppendingFormat:@"?%@", queryString];
+  NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:reqUrl]];
+  [request setHTTPMethod:@"POST"];
+  [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
+  NSURLSession *session = [NSURLSession sharedSession];
+  NSURLSessionDataTask *dataTask = [session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+    if (error) {
+      if (completionHandler) {
+        completionHandler(nil);
+      }
+      return;
+    }
+
+    NSDictionary *jsonResponse = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    if (![jsonResponse[@"errcode"] isEqual:@(0)]) {
+      if (completionHandler) {
+        completionHandler(nil);
+      }
+      return;
+    }
+    if (completionHandler) {
+      completionHandler(jsonResponse[@"access_token"]);
+    }
+  }];
+  [dataTask resume];
+}
+
 static NSString *getServiceURL(NSString *service, NSDictionary *options) {
   if (XEq(service, PUSHER_SERVICE_PUSHOVER)) {
     return PUSHER_SERVICE_PUSHOVER_URL;
@@ -276,6 +318,8 @@ static NSString *getServiceURL(NSString *service, NSDictionary *options) {
         finalURL = PUSHER_SERVICE_BARK_URL;
     }
     return finalURL;
+  } else if (XEq(service, PUSHER_SERVICE_WECHAT)) {
+    return PUSHER_SERVICE_WECHAT_URL;
   }
   return @"";
 }
@@ -310,6 +354,8 @@ static PusherAuthorizationType getServiceAuthType(NSString *service,
   } else if (XEq(service, PUSHER_SERVICE_PUSHBULLET) ||
              XEq(service, PUSHER_SERVICE_PUSHER_RECEIVER)) {
     return PusherAuthorizationTypeHeader;
+  } else if (XEq(service, PUSHER_SERVICE_WECHAT)) {
+    return PusherAuthorizationTypeReplaceDynamicKey;
   }
   return PusherAuthorizationTypeReplaceKey; // ifttt key
 }
@@ -489,7 +535,11 @@ static void pusherPrefsChanged() {
     servicePrefs[@"dateFormat"] = [(val ?: @"") copy];
     val = prefs[serverURLKey];
     NSString *serverURL = [(val ?: @"") copy];
-    servicePrefs[@"url"] = getServiceURL(service, @{@"eventName" : eventName, @"dbName" : dbName, @"serverURL": serverURL});
+    servicePrefs[@"url"] = getServiceURL(service, @{
+      @"eventName" : eventName,
+      @"dbName" : dbName,
+      @"serverURL": serverURL
+    });
     val = prefs[whenToPushKey];
     servicePrefs[@"whenToPush"] =
         val ?: @(pusherWhenToPush); // if not set, go with default
@@ -521,7 +571,6 @@ static void pusherPrefsChanged() {
 
     if (XEq(service, PUSHER_SERVICE_BARK)) {
       servicePrefs[@"serverURL"] = prefs[serverURLKey] ?: @"https://api.day.app";
-      NSLog(@"%@", servicePrefs[@"serverURL"]);
     }
 
     if (XEq(service, PUSHER_SERVICE_IFTTT)) {
@@ -550,6 +599,20 @@ static void pusherPrefsChanged() {
       NSString *imageShrinkFactorKey = XStr(@"%@ImageShrinkFactor", service);
       servicePrefs[@"imageShrinkFactor"] =
           prefs[imageShrinkFactorKey] ?: @(PUSHER_DEFAULT_SHRINK_FACTOR);
+    }
+
+    if (XEq(service, PUSHER_SERVICE_WECHAT)) {
+      NSString *corpidKey = XStr(@"%@Corpid", service);
+      servicePrefs[@"corpid"] = prefs[corpidKey] ?: @"";
+
+      NSString *corpsecretKey = XStr(@"%@Corpsecret", service);
+      servicePrefs[@"corpsecret"] = prefs[corpsecretKey] ?: @"";
+
+      NSString *agentIDKey = XStr(@"%@AgentID", service);
+      servicePrefs[@"agentID"] = prefs[agentIDKey] ?: @"";
+
+      NSString *touserKey = XStr(@"%@Touser", service);
+      servicePrefs[@"touser"] = prefs[touserKey] ?: @"";
     }
 
     // devices
@@ -606,7 +669,12 @@ static void pusherPrefsChanged() {
           [(customAppPrefs[@"eventName"] ?: eventName) retain];
       NSString *customServerURL = [(customAppPrefs[@"serverURL"] ?: serverURL) retain];
       NSString *customAppUrl = getServiceURL(
-          service, @{@"eventName" : customAppEventName, @"dbName" : dbName, @"serverURL": customServerURL});
+        service, @{
+          @"eventName" : customAppEventName,
+          @"dbName" : dbName,
+          @"serverURL": customServerURL
+        }
+      );
 
       NSMutableDictionary *customAppIDPref = [@{
         @"devices" : [customAppEnabledDevices retain],
@@ -634,6 +702,10 @@ static void pusherPrefsChanged() {
       if (XEq(service, PUSHER_SERVICE_IFTTT)) {
         customAppIDPref[@"includeIcon"] = customAppPrefs[@"includeIcon"] ?: @NO;
         customAppIDPref[@"curateData"] = customAppPrefs[@"curateData"] ?: @YES;
+      }
+
+      if (XEq(service, PUSHER_SERVICE_WECHAT)) {
+        customAppIDPref[@"touser"] = customAppPrefs[@"touser"] ?: @"";
       }
 
       customApps[customAppID] = customAppIDPref;
@@ -973,6 +1045,7 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
 
   NSArray *devices = servicePrefs[@"devices"];
   NSArray *sounds = servicePrefs[@"sounds"];
+  NSString *touser = servicePrefs[@"touser"];
   NSString *url = servicePrefs[@"url"];
   NSNumber *includeIcon =
       servicePrefs[@"includeIcon"]
@@ -993,6 +1066,7 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
     NSDictionary *customAppPref = customApps[appID];
     devices = customAppPref[@"devices"] ?: devices;
     sounds = customAppPref[@"sounds"] ?: sounds;
+    touser = customAppPref[@"touser"] ?: touser;
     url = customAppPref[@"url"] ?: url;
     includeIcon = customAppPref[@"includeIcon"] ?: includeIcon;
     includeImage = customAppPref[@"includeImage"] ?: includeImage;
@@ -1011,6 +1085,8 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
                            @"message" : message ?: @"",
                            @"devices" : devices ?: @[],
                            @"sounds" : sounds ?: @[],
+                           @"agentID" : servicePrefs[@"agentID"] ?: @"",
+                           @"touser" : touser ?: @"",
                            @"appName" : appName ?: @"",
                            @"bulletin" : bulletin,
                            @"dateFormat" : XStrDefault(
@@ -1038,21 +1114,29 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
                                           @"Access-Token")
                             : @""
                       }];
-  NSString *method = XStrDefault(servicePrefs[@"method"], @"POST");
-  pusherRetriesLeft[retriesLeftKeyForBulletinAndService(bulletin, service)] =
-      @(PUSHER_TRIES - 1);
-  [self makePusherRequest:url
-                 infoDict:infoDict
-              credentials:credentials
-                 authType:authType
-                   method:method
-                logString:XStr(@"[S:%@,A:%@]", service, appName)
-                  service:service
-                 bulletin:bulletin];
-  XLog(@"[S:%@,T:%d,A:%@] Pushed", service, isTest, appName);
-  if (!isTest) {
-    addToLogIfEnabled(service, bulletin, @"Pushed");
-  }
+  [self getPusherDynamicKeyForService:service
+                  withDictionary:@{
+                    @"corpid" : servicePrefs[@"corpid"] ?: @"",
+                    @"corpsecret" : servicePrefs[@"corpsecret"] ?: @""
+                  }
+                  completion:^(NSString *dynamicKey) {
+                    NSString *method = XStrDefault(servicePrefs[@"method"], @"POST");
+                    pusherRetriesLeft[retriesLeftKeyForBulletinAndService(bulletin, service)] =
+                        @(PUSHER_TRIES - 1);
+                    [self makePusherRequest:url
+                                  infoDict:infoDict
+                               credentials:credentials
+                                dynamicKey:dynamicKey
+                                  authType:authType
+                                    method:method
+                                  logString:XStr(@"[S:%@,A:%@]", service, appName)
+                                    service:service
+                                  bulletin:bulletin];
+                    XLog(@"[S:%@,T:%d,A:%@] Pushed", service, isTest, appName);
+                    if (!isTest) {
+                      addToLogIfEnabled(service, bulletin, @"Pushed");
+                    }
+                  }];
 }
 
 %new
@@ -1123,6 +1207,17 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
     return @{
       @"title": dictionary[@"title"],
       @"body": dictionary[@"message"]
+    };
+  } else if (XEq(service, PUSHER_SERVICE_WECHAT)) {
+    NSString *touser = dictionary[@"touser"];
+    return @{
+      @"touser" : (touser && [touser length] != 0) ? touser : @"@all",
+      @"msgtype" : @"text",
+      @"agentid" : dictionary[@"agentID"] ?: @"",
+      @"text" : @{
+        @"content": XStr(@"%@\n%@", dictionary[@"title"], dictionary[@"message"])
+      },
+      @"safe" : @"0"
     };
   }
 
@@ -1266,8 +1361,21 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
 }
 
 %new
+-  (void)getPusherDynamicKeyForService:(NSString *)service withDictionary:(NSDictionary *)dictionary completion:(void(^)(NSString *))completion {
+  if (XEq(service, PUSHER_SERVICE_WECHAT)) {
+    fetchWechatAccessToken(dictionary[@"corpid"], dictionary[@"corpsecret"], ^(NSString *accessToken) {
+      if (completion) {
+        completion(accessToken ?: @"");
+      } 
+    });
+  } else {
+    completion(@"");
+  }
+}
+
+%new
 - (void)makePusherRequest:(NSString *)urlString infoDict:(NSDictionary *)infoDict
-    credentials:(NSDictionary *)credentials authType:(PusherAuthorizationType)authType method:(NSString *)method
+    credentials:(NSDictionary *)credentials dynamicKey:(NSString *)dynamicKey authType:(PusherAuthorizationType)authType method:(NSString *)method
     logString:(NSString *)logString service:(NSString *)service bulletin:(BBBulletin *)bulletin {
 
   NSMutableDictionary *infoDictForRequest = [infoDict mutableCopy];
@@ -1284,6 +1392,11 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
     newUrlString =
         [newUrlString stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
                                                 withString:credentials[@"key"]];
+  }
+  if (authType == PusherAuthorizationTypeReplaceDynamicKey) {
+    newUrlString =
+        [newUrlString stringByReplacingOccurrencesOfString:@"REPLACE_DYNAMIC_KEY"
+                                                withString:dynamicKey];
   }
 
   //! XEq(service, PUSHER_SERVICE_PUSHER_RECEIVER) &&
@@ -1437,6 +1550,7 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
                 [self makePusherRequest:urlString
                                infoDict:retryInfoDict
                             credentials:credentials
+                             dynamicKey:dynamicKey
                                authType:authType
                                  method:method
                               logString:logString
@@ -1486,6 +1600,7 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
                   [self makePusherRequest:urlString
                                  infoDict:retryInfoDict
                               credentials:credentials
+                               dynamicKey:dynamicKey
                                  authType:authType
                                    method:method
                                 logString:logString

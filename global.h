@@ -73,7 +73,8 @@ typedef enum {
 	PusherAuthorizationTypeNone,
 	PusherAuthorizationTypeHeader, // credentials dictionary needs value and headerName
 	PusherAuthorizationTypeCredentials,
-	PusherAuthorizationTypeReplaceKey
+	PusherAuthorizationTypeReplaceKey,
+	PusherAuthorizationTypeReplaceDynamicKey
 } PusherAuthorizationType;
 
 // All keys MUST HAVE the prefix equal to the name of the service
@@ -127,8 +128,13 @@ typedef enum {
 #define PUSHER_SERVICE_BARK @"Bark"
 #define PUSHER_SERVICE_BARK_URL @"https://api.day.app/REPLACE_KEY"
 
+#define PUSHER_SERVICE_WECHAT @"Wechat"
+#define PUSHER_SERVICE_WECHAT_URL @"https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=REPLACE_DYNAMIC_KEY"
+#define NSPPreferenceWechatTouserKey @"WechatTouser"
+#define NSPPreferenceWechatCustomAppsKey @"WechatCustomApps"
 
-#define BUILTIN_PUSHER_SERVICES @[ PUSHER_SERVICE_PUSHOVER, PUSHER_SERVICE_PUSHBULLET, PUSHER_SERVICE_IFTTT, PUSHER_SERVICE_PUSHER_RECEIVER, PUSHER_SERVICE_FEISHU, PUSHER_SERVICE_BARK ]
+
+#define BUILTIN_PUSHER_SERVICES @[ PUSHER_SERVICE_PUSHOVER, PUSHER_SERVICE_PUSHBULLET, PUSHER_SERVICE_IFTTT, PUSHER_SERVICE_PUSHER_RECEIVER, PUSHER_SERVICE_FEISHU, PUSHER_SERVICE_BARK, PUSHER_SERVICE_WECHAT ]
 
 #import <Preferences/PSSpecifier.h>
 #import <BulletinBoard/BBBulletin.h>
@@ -172,9 +178,10 @@ typedef enum {
 - (BBSectionInfo *)_sectionInfoForSectionID:(id)arg1 effective:(BOOL)arg2;
 + (BBServer *)pusherSharedInstance;
 - (void)sendBulletinToPusher:(BBBulletin *)bulletin;
-- (void)makePusherRequest:(NSString *)urlString infoDict:(NSDictionary *)infoDict credentials:(NSDictionary *)credentials authType:(PusherAuthorizationType)authType method:(NSString *)method logString:(NSString *)logString service:(NSString *)service bulletin:(BBBulletin *)bulletin;
+- (void)makePusherRequest:(NSString *)urlString infoDict:(NSDictionary *)infoDict credentials:(NSDictionary *)credentials dynamicKey:(NSString *)dynamicKey authType:(PusherAuthorizationType)authType method:(NSString *)method logString:(NSString *)logString service:(NSString *)service bulletin:(BBBulletin *)bulletin;
 - (NSDictionary *)getPusherInfoDictionaryForService:(NSString *)service withDictionary:(NSDictionary *)dictionary;
 - (NSDictionary *)getPusherCredentialsForService:(NSString *)service withDictionary:(NSDictionary *)dictionary;
+- (NSString *)getPusherDynamicKeyForService:(NSString *)service withDictionary:(NSDictionary *)dictionary completion:(void(^)(NSString *))completion;
 - (void)sendToPusherService:(NSString *)service bulletin:(BBBulletin *)bulletin appID:(NSString *)appID appName:(NSString *)appName title:(NSString *)title message:(NSString *)message isTest:(BOOL)isTest;
 - (NSString *)base64IconDataForBundleID:(NSString *)bundleID;
 @end

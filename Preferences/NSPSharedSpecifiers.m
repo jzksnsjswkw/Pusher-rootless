@@ -40,6 +40,8 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
     return [NSPSharedSpecifiers ifttt:appID];
   } else if (XEq(service, PUSHER_SERVICE_PUSHER_RECEIVER)) {
     return [NSPSharedSpecifiers pusherReceiver:appID];
+  } else if (XEq(service, PUSHER_SERVICE_WECHAT)) {
+    return [NSPSharedSpecifiers wechat:appID];
   }
   return @[];
 }
@@ -298,6 +300,33 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
   }
 
   return @[ eventName, includeIcon, curateData ];
+}
+
++ (NSArray *)wechat:(NSString *)appID {
+  BOOL isCustomApp = appID != nil;
+
+  PSSpecifier *touser = [PSSpecifier
+      preferenceSpecifierNamed:@"Touser"
+                        target:self
+                           set:@selector(setPreferenceValue:
+                                   forBuiltInServiceSpecifier:)
+                           get:@selector(readBuiltInServicePreferenceValue:)
+                        detail:nil
+                          cell:PSEditTextCell
+                          edit:nil];
+  [touser setProperty:NSPPreferenceWechatTouserKey forKey:@"key"];
+  [touser setProperty:@YES forKey:@"enabled"];
+  [touser setProperty:@YES forKey:@"noAutoCorrect"];
+  [touser setProperty:@(isCustomApp) forKey:@"isCustomApp"];
+  [touser setProperty:NSPPreferenceWechatCustomAppsKey
+                  forKey:@"customAppsKey"];
+  [touser setProperty:@"touser" forKey:@"customAppsPrefsKey"];
+
+  if (isCustomApp) {
+    [touser setProperty:appID forKey:@"customAppID"];
+  }
+
+  return @[ touser ];
 }
 
 + (NSArray *)pusherReceiver:(NSString *)appID {
