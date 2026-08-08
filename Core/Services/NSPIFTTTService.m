@@ -1,26 +1,26 @@
 #import "NSPIFTTTService.h"
-#import "../NSPushServiceConfig.h"
 #import "../NSPBulletinContext.h"
+#import "../NSPushServiceConfig.h"
 
 @implementation NSPIFTTTService
 
-+ (NSString *)serviceName {
++ (NSString*)serviceName {
   return PUSHER_SERVICE_IFTTT;
 }
 
-+ (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig *)config {
-  NSNumber *includeIcon = config.rawPrefs[@"includeIcon"];
++ (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config {
+  NSNumber* includeIcon = config.rawPrefs[@"includeIcon"];
   return includeIcon && includeIcon.boolValue;
 }
 
-+ (NSDictionary *)infoDictForBulletinContext:(NSPBulletinContext *)context
-                                      config:(NSPushServiceConfig *)config {
-  NSDictionary *data =
-      [self baseInfoDictForBulletinContext:context config:config];
++ (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context
+                                     config:(NSPushServiceConfig*)config {
+  NSDictionary* data = [self baseInfoDictForBulletinContext:context
+                                                     config:config];
 
-  NSNumber *curateData = config.rawPrefs[@"curateData"];
+  NSNumber* curateData = config.rawPrefs[@"curateData"];
   if (curateData && curateData.boolValue) {
-    NSString *dateStr = [self dateStringForDate:context.bulletin.date
+    NSString* dateStr = [self dateStringForDate:context.bulletin.date
                                          config:config];
     return @{
       @"value1" : context.title ?: @"",
@@ -30,8 +30,9 @@
   }
 
   id json = data;
-  NSData *jsonData =
-      [NSJSONSerialization dataWithJSONObject:json options:0 error:nil];
+  NSData* jsonData = [NSJSONSerialization dataWithJSONObject:json
+                                                     options:0
+                                                       error:nil];
   if (jsonData) {
     json = [[NSString alloc] initWithData:jsonData
                                  encoding:NSUTF8StringEncoding];

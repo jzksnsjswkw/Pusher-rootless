@@ -1,57 +1,57 @@
 #import "NSPushServiceBase.h"
 #import "../helpers.h"
-#import "NSPushServiceConfig.h"
 #import "NSPBulletinContext.h"
 #import "NSPushImage.h"
+#import "NSPushServiceConfig.h"
 #import <UIKit/UIKit.h>
 
 @implementation NSPushServiceBase
 
-+ (NSString *)serviceName {
++ (NSString*)serviceName {
   return nil;
 }
 
-+ (NSString *)loopPreventionAppID {
++ (NSString*)loopPreventionAppID {
   return @"";
 }
 
-+ (PusherAuthorizationType)authTypeForConfig:(NSPushServiceConfig *)config {
++ (PusherAuthorizationType)authTypeForConfig:(NSPushServiceConfig*)config {
   return PusherAuthorizationTypeReplaceKey;
 }
 
-+ (NSDictionary *)credentialsForConfig:(NSPushServiceConfig *)config {
-  return @{@"key": config.rawPrefs[@"key"] ?: @""};
++ (NSDictionary*)credentialsForConfig:(NSPushServiceConfig*)config {
+  return @{@"key" : config.rawPrefs[@"key"] ?: @""};
 }
 
-+ (NSString *)URLStringForConfig:(NSPushServiceConfig *)config {
++ (NSString*)URLStringForConfig:(NSPushServiceConfig*)config {
   return config.rawPrefs[@"url"] ?: @"";
 }
 
-+ (NSDictionary *)infoDictForBulletinContext:(NSPBulletinContext *)context
-                                      config:(NSPushServiceConfig *)config {
++ (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context
+                                     config:(NSPushServiceConfig*)config {
   return [self baseInfoDictForBulletinContext:context config:config];
 }
 
-+ (void)fetchDynamicKeyForConfig:(NSPushServiceConfig *)config
-                      completion:(void (^)(NSString *key))completion {
++ (void)fetchDynamicKeyForConfig:(NSPushServiceConfig*)config
+                      completion:(void (^)(NSString* key))completion {
   completion(@"");
 }
 
-+ (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig *)config {
++ (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config {
   return NO;
 }
 
-+ (BOOL)shouldIncludeImageForConfig:(NSPushServiceConfig *)config {
++ (BOOL)shouldIncludeImageForConfig:(NSPushServiceConfig*)config {
   return NO;
 }
 
-+ (NSDictionary *)baseInfoDictForBulletinContext:(NSPBulletinContext *)context
-                                          config:(NSPushServiceConfig *)config {
-  BBBulletin *bulletin = context.bulletin;
++ (NSDictionary*)baseInfoDictForBulletinContext:(NSPBulletinContext*)context
+                                         config:(NSPushServiceConfig*)config {
+  BBBulletin* bulletin = context.bulletin;
 
-  NSString *dateStr = [self dateStringForDate:bulletin.date config:config];
+  NSString* dateStr = [self dateStringForDate:bulletin.date config:config];
 
-  NSMutableDictionary *data = [@{
+  NSMutableDictionary* data = [@{
     @"deviceName" : UIDevice.currentDevice.name,
     @"appName" : context.appName ?: @"",
     @"appID" : bulletin.sectionID ?: @"",
@@ -66,19 +66,19 @@
   }
 
   if ([self shouldIncludeImageForConfig:config]) {
-    BBAttachmentMetadata *metadata = bulletin.primaryAttachment;
+    BBAttachmentMetadata* metadata = bulletin.primaryAttachment;
     if (metadata && metadata.type == 1) { // assume image type is 1
-      NSURL *URL = metadata.URL;
+      NSURL* URL = metadata.URL;
       if (URL) {
-        UIImage *image = [UIImage imageWithContentsOfFile:URL.path];
+        UIImage* image = [UIImage imageWithContentsOfFile:URL.path];
         if (image) {
-          NSNumber *imageShrinkFactor = config.rawPrefs[@"imageShrinkFactor"];
+          NSNumber* imageShrinkFactor = config.rawPrefs[@"imageShrinkFactor"];
           if (imageShrinkFactor) {
             data[@"imageShrinkFactor"] = imageShrinkFactor;
           }
 
-          NSNumber *imageMaxWidth = config.rawPrefs[@"imageMaxWidth"];
-          NSNumber *imageMaxHeight = config.rawPrefs[@"imageMaxHeight"];
+          NSNumber* imageMaxWidth = config.rawPrefs[@"imageMaxWidth"];
+          NSNumber* imageMaxHeight = config.rawPrefs[@"imageMaxHeight"];
           CGFloat widthShrinkFactor = 0.0;
           CGFloat heightShrinkFactor = 0.0;
 
@@ -93,9 +93,9 @@
 
           // if either has a value, shrink with the largest factor
           if (widthShrinkFactor + heightShrinkFactor > 0.0) {
-            CGFloat shrinkFactor =
-                widthShrinkFactor > heightShrinkFactor ? widthShrinkFactor
-                                                       : heightShrinkFactor;
+            CGFloat shrinkFactor = widthShrinkFactor > heightShrinkFactor
+                                       ? widthShrinkFactor
+                                       : heightShrinkFactor;
             image = [NSPushImage shrinkImage:image byFactor:shrinkFactor];
           }
 
@@ -117,9 +117,9 @@
 
 @implementation NSPushServiceBase (Shared)
 
-+ (NSString *)dateStringForDate:(NSDate *)date
-                         config:(NSPushServiceConfig *)config {
-  NSDateFormatter *dateFormatter = [NSDateFormatter new];
++ (NSString*)dateStringForDate:(NSDate*)date
+                        config:(NSPushServiceConfig*)config {
+  NSDateFormatter* dateFormatter = [NSDateFormatter new];
   [dateFormatter setDateFormat:XStrDefault(config.rawPrefs[@"dateFormat"],
                                            @"MMM d, h:mm a")];
   return [dateFormatter stringFromDate:date];

@@ -1,22 +1,27 @@
-#import <Preferences/PSSpecifier.h>
 #import <Preferences/PSListController.h>
+#import <Preferences/PSSpecifier.h>
 
 @interface NSPSharedSpecifiers : NSObject
-+ (NSArray *)get:(NSString *)service withAppID:(NSString *)appID isCustomService:(BOOL)isCustomService;
-+ (NSArray *)get:(NSString *)service;
-+ (NSArray *)getCustom:(NSString *)service ref:(PSListController *)listController;
-+ (NSArray *)getCustomShared:(NSString *)service withAppID:(NSString *)appID;
-+ (NSArray *)getCustomShared:(NSString *)service;
-+ (NSArray *)pushover:(NSString *)appID;
-+ (NSArray *)pushbullet:(NSString *)appID;
-+ (NSArray *)ifttt:(NSString *)appID;
-+ (NSArray *)pusherReceiver:(NSString *)appID;
-+ (NSArray *)wechat:(NSString *)appID;
-+ (void)setPreferenceValue:(id)value forBuiltInServiceSpecifier:(PSSpecifier *)specifier;
-+ (id)readBuiltInServicePreferenceValue:(PSSpecifier *)specifier;
-+ (void)setPreferenceValue:(id)value forCustomSpecifier:(PSSpecifier *)specifier;
-+ (id)readCustomPreferenceValue:(PSSpecifier *)specifier;
-+ (void)setPreference:(CFStringRef)keyRef value:(CFPropertyListRef)val shouldNotify:(BOOL)shouldNotify;
++ (NSArray*)get:(NSString*)service
+          withAppID:(NSString*)appID
+    isCustomService:(BOOL)isCustomService;
++ (NSArray*)get:(NSString*)service;
++ (NSArray*)getCustom:(NSString*)service ref:(PSListController*)listController;
++ (NSArray*)getCustomShared:(NSString*)service withAppID:(NSString*)appID;
++ (NSArray*)getCustomShared:(NSString*)service;
++ (NSArray*)pushover:(NSString*)appID;
++ (NSArray*)pushbullet:(NSString*)appID;
++ (NSArray*)ifttt:(NSString*)appID;
++ (NSArray*)pusherReceiver:(NSString*)appID;
++ (NSArray*)wechat:(NSString*)appID;
++ (void)setPreferenceValue:(id)value
+    forBuiltInServiceSpecifier:(PSSpecifier*)specifier;
++ (id)readBuiltInServicePreferenceValue:(PSSpecifier*)specifier;
++ (void)setPreferenceValue:(id)value forCustomSpecifier:(PSSpecifier*)specifier;
++ (id)readCustomPreferenceValue:(PSSpecifier*)specifier;
++ (void)setPreference:(CFStringRef)keyRef
+                value:(CFPropertyListRef)val
+         shouldNotify:(BOOL)shouldNotify;
 + (id)getPreference:(CFStringRef)keyRef;
-+ (int)countAppIDsWithPrefix:(NSDictionary *)prefs prefix:(NSString *)prefix;
++ (int)countAppIDsWithPrefix:(NSDictionary*)prefs prefix:(NSString*)prefix;
 @end

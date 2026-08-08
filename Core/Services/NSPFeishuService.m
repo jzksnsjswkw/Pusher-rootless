@@ -4,15 +4,15 @@
 
 @implementation NSPFeishuService
 
-+ (NSString *)serviceName {
++ (NSString*)serviceName {
   return PUSHER_SERVICE_FEISHU;
 }
 
-+ (NSDictionary *)infoDictForBulletinContext:(NSPBulletinContext *)context
-                                      config:(NSPushServiceConfig *)config {
-  BBBulletin *bulletin = context.bulletin;
++ (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context
+                                     config:(NSPushServiceConfig*)config {
+  BBBulletin* bulletin = context.bulletin;
 
-  NSString *message = nil;
+  NSString* message = nil;
   if (context.appName) {
     message = context.appName;
   }
@@ -38,12 +38,7 @@
     }
   }
 
-  return @{
-    @"msg_type" : @"text",
-    @"content" : @{
-      @"text" : message ?: @""
-    }
-  };
+  return @{@"msg_type" : @"text", @"content" : @{@"text" : message ?: @""}};
 }
 
 @end

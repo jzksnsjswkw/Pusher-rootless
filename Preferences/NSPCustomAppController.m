@@ -7,9 +7,9 @@
 
 @implementation NSPCustomAppController
 
-- (id)initWithService:(NSString *)service
-                appID:(NSString *)appID
-             appTitle:(NSString *)appTitle
+- (id)initWithService:(NSString*)service
+                appID:(NSString*)appID
+             appTitle:(NSString*)appTitle
       isCustomService:(BOOL)isCustomService {
   if (self = [super init]) {
     _service = service;
@@ -25,7 +25,7 @@
   self.navigationItem.title = _appTitle;
 }
 
-- (NSArray *)specifiers {
+- (NSArray*)specifiers {
   if (!_specifiers) {
     _specifiers = [[[@[ [PSSpecifier groupSpecifierWithName:@"Customize"] ]
         arrayByAddingObjectsFromArray:[NSPSharedSpecifiers
