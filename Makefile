@@ -17,9 +17,6 @@ TWEAK_NAME = Pusher
 Pusher_FILES = Tweak.xm NSPTestPush.xm UIImage+ReplaceColor.m iOSVersion.m 	$(wildcard Core/*.m) $(wildcard Core/Services/*.m)
 Pusher_CFLAGS += -fobjc-arc
 Pusher_LIBRARIES = rocketbootstrap
-ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
-	Pusher_LIBRARIES += roothide
-endif
 Pusher_FRAMEWORKS = UIKit Foundation
 Pusher_PRIVATE_FRAMEWORKS = AppSupport BulletinBoard
 
