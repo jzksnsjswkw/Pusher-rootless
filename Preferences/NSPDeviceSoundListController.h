@@ -1,25 +1,28 @@
 #import "NSPPSListControllerWithColoredUI.h"
 #import "../global.h"
 
-@interface NSPDeviceListController : NSPPSListControllerWithColoredUI {
-  NSMutableArray *_serviceDevices;
+@interface NSPDeviceSoundListController : NSPPSListControllerWithColoredUI {
+  NSMutableArray *_serviceItems;
   NSDictionary *_prefs;
   UIBarButtonItem *_updateBn;
   UIActivityIndicatorView *_activityIndicator;
   UIBarButtonItem *_activityIndicatorBn;
   NSString *_prefsKey;
   NSString *_service;
+  BOOL _isSound;
   BOOL _isCustomApp;
   NSString *_customAppIDKey;
   BOOL _onlyAllowOne;
 }
-- (void)setPreferenceValue:(id)value forDeviceSpecifier:(PSSpecifier *)specifier;
-- (id)readDevicePreferenceValue:(PSSpecifier *)specifier;
-- (void)updateDevices;
+- (void)setPreferenceValue:(id)value forItemSpecifier:(PSSpecifier *)specifier;
+- (id)readItemPreferenceValue:(PSSpecifier *)specifier;
+- (void)updateItems;
 - (void)showActivityIndicator;
 - (void)hideActivityIndicator;
 - (void)updatePushoverDevices;
 - (void)updatePushbulletDevices;
-- (void)saveServiceDevices;
-- (NSArray *)sortedDeviceList:(NSArray *)devices;
+- (void)updatePushoverSounds;
+- (void)updatePushbulletSounds;
+- (void)saveServiceItems;
+- (NSArray *)sortedItemList:(NSArray *)items;
 @end

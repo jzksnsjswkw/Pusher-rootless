@@ -1,21 +1,9 @@
 #import "NSPGlobalSettingsListController.h"
+#import "NSPSharedSpecifiers.h"
 
 #import "../global.h"
 #import "../helpers.h"
 #import <notify.h>
-
-static int countAppIDsWithPrefix(NSDictionary *prefs, NSString *prefix) {
-  int count = 0;
-  for (id key in prefs.allKeys) {
-    if (![key isKindOfClass:NSString.class]) {
-      continue;
-    }
-    if ([key hasPrefix:prefix] && ((NSNumber *)prefs[key]).boolValue) {
-      count += 1;
-    }
-  }
-  return count;
-}
 
 @implementation NSPGlobalSettingsListController
 
@@ -48,8 +36,12 @@ static int countAppIDsWithPrefix(NSDictionary *prefs, NSString *prefix) {
           XEq(specifier.name, @"Global App List")) {
         specifier.name =
             XStr(@"%@ (%d total)", specifier.name,
-                 countAppIDsWithPrefix(
-                     prefs, [specifier propertyForKey:@"ALSettingsKeyPrefix"]));
+                 [NSPSharedSpecifiers
+                     countAppIDsWithPrefix:
+                         prefs
+                                    prefix:[specifier
+                                               propertyForKey:
+                                                   @"ALSettingsKeyPrefix"]]);
         [specifier setProperty:self forKey:@"psListRef"];
         break;
       }

@@ -1,12 +1,6 @@
 #import "NSPSNSListController.h"
 #import "NSPSharedSpecifiers.h"
 
-static id getPreference(CFStringRef keyRef) {
-  CFPropertyListRef val = CFPreferencesCopyValue(
-      keyRef, PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-  return (__bridge id)val;
-}
-
 @implementation NSPSNSListController
 
 - (NSArray *)specifiers {
@@ -46,8 +40,9 @@ static id getPreference(CFStringRef keyRef) {
         BOOL foundTruthy = NO;
         if (_isCustomService) {
           NSDictionary *customServices =
-              getPreference(
-                  (__bridge CFStringRef)NSPPreferenceCustomServicesKey)
+              [NSPSharedSpecifiers
+                  getPreference:
+                      (__bridge CFStringRef)NSPPreferenceCustomServicesKey]
                   ?: @{};
           if (customServices[_service]) {
             foundTruthy =
@@ -56,9 +51,9 @@ static id getPreference(CFStringRef keyRef) {
           }
         } else {
           foundTruthy =
-              getPreference(
-                  (__bridge CFStringRef)[specifier propertyForKey:@"key"]) !=
-              nil;
+              [NSPSharedSpecifiers
+                  getPreference:(__bridge CFStringRef)
+                                    [specifier propertyForKey:@"key"]] != nil;
         }
         synchronizedWithGlobal = !foundTruthy;
       }
