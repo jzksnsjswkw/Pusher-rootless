@@ -174,7 +174,9 @@ typedef enum {
 // @property (nonatomic, copy) NSArray *additionalAttachments;
 @end
 
-@interface BBServer : NSObject
+#import <BulletinBoard/BBServer.h>
+
+@interface BBServer (Pusher)
 - (BBSectionInfo *)_sectionInfoForSectionID:(id)arg1 effective:(BOOL)arg2;
 + (BBServer *)pusherSharedInstance;
 - (void)sendBulletinToPusher:(BBBulletin *)bulletin;
