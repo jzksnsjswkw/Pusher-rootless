@@ -10,7 +10,7 @@ Pusher_PRIVATE_FRAMEWORKS = Preferences AppSupport
 Pusher_CFLAGS = -Wno-objc-property-no-attribute
 Pusher_LIBRARIES = rocketbootstrap
 ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
-	Pusher_LDFLAGS += -rpath /var/jb/Library/Frameworks -rpath /var/jb/usr/lib
+	Pusher_LDFLAGS += -rpath @loader_path/.jbroot/Library/Frameworks -rpath @loader_path/.jbroot/usr/lib
 endif
 
 include $(THEOS_MAKE_PATH)/bundle.mk
