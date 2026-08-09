@@ -320,6 +320,8 @@ static NSString *getServiceURL(NSString *service, NSDictionary *options) {
     return finalURL;
   } else if (XEq(service, PUSHER_SERVICE_WECHAT)) {
     return PUSHER_SERVICE_WECHAT_URL;
+  } else if (XEq(service, PUSHER_SERVICE_TELEGRAM)) {
+    return PUSHER_SERVICE_TELEGRAM_URL;
   }
   return @"";
 }
@@ -329,6 +331,8 @@ static NSString *getServiceAppID(NSString *service) {
     return PUSHER_SERVICE_PUSHOVER_APP_ID;
   } else if (XEq(service, PUSHER_SERVICE_PUSHBULLET)) {
     return PUSHER_SERVICE_PUSHBULLET_APP_ID;
+  } else if (XEq(service, PUSHER_SERVICE_TELEGRAM)) {
+    return PUSHER_SERVICE_TELEGRAM_APP_ID;
   }
   return @"";
 }
@@ -356,8 +360,10 @@ static PusherAuthorizationType getServiceAuthType(NSString *service,
     return PusherAuthorizationTypeHeader;
   } else if (XEq(service, PUSHER_SERVICE_WECHAT)) {
     return PusherAuthorizationTypeReplaceDynamicKey;
+  } else if (XEq(service, PUSHER_SERVICE_TELEGRAM)) {
+    return PusherAuthorizationTypeReplaceKey;
   }
-  return PusherAuthorizationTypeReplaceKey; // ifttt key
+  return PusherAuthorizationTypeReplaceKey; // ifttt key and other key-based services
 }
 
 static NSString *base64RepresentationForImage(UIImage *image) {
@@ -613,6 +619,10 @@ static void pusherPrefsChanged() {
 
       NSString *touserKey = XStr(@"%@Touser", service);
       servicePrefs[@"touser"] = prefs[touserKey] ?: @"";
+    }
+
+    if (XEq(service, PUSHER_SERVICE_TELEGRAM)) {
+      servicePrefs[@"chatID"] = prefs[NSPPreferenceTelegramChatIDKey] ?: @"";
     }
 
     // devices
@@ -1076,6 +1086,15 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
     imageShrinkFactor =
         customAppPref[@"imageShrinkFactor"] ?: imageShrinkFactor;
   }
+
+  if (XEq(service, PUSHER_SERVICE_TELEGRAM) &&
+      (![(NSString *)servicePrefs[@"key"] length] ||
+       ![(NSString *)servicePrefs[@"chatID"] length])) {
+    XLog(@"[S:%@] Bot Token or Chat ID is empty", service);
+    addToLogIfEnabled(service, bulletin, @"Bot Token or Chat ID is empty");
+    return;
+  }
+
   // Send
   PusherAuthorizationType authType = getServiceAuthType(service, servicePrefs);
   NSDictionary *infoDict = [self
@@ -1087,6 +1106,7 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
                            @"sounds" : sounds ?: @[],
                            @"agentID" : servicePrefs[@"agentID"] ?: @"",
                            @"touser" : touser ?: @"",
+                           @"chatID" : servicePrefs[@"chatID"] ?: @"",
                            @"appName" : appName ?: @"",
                            @"bulletin" : bulletin,
                            @"dateFormat" : XStrDefault(
@@ -1218,6 +1238,18 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
         @"content": XStr(@"%@\n%@", dictionary[@"title"], dictionary[@"message"])
       },
       @"safe" : @"0"
+    };
+  } else if (XEq(service, PUSHER_SERVICE_TELEGRAM)) {
+    NSString *text = XStr(@"%@\n%@\n%@", dictionary[@"appName"],
+                          dictionary[@"title"], dictionary[@"message"]);
+    if (text.length > 4096) {
+      NSRange textRange = [text
+          rangeOfComposedCharacterSequencesForRange:NSMakeRange(0, 4096)];
+      text = [text substringWithRange:textRange];
+    }
+    return @{
+      @"chat_id" : dictionary[@"chatID"] ?: @"",
+      @"text" : text ?: @""
     };
   }
 
@@ -1435,10 +1467,16 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
   newUrlString = [newUrlString
       stringByTrimmingCharactersInSet:[NSCharacterSet
                                           whitespaceAndNewlineCharacterSet]];
-  addToLogIfEnabled(service, bulletin, @"URL", newUrlString);
+  NSString *urlForLog = newUrlString;
+  NSString *telegramToken = credentials[@"key"];
+  if (XEq(service, PUSHER_SERVICE_TELEGRAM) && telegramToken.length > 0) {
+    urlForLog = [urlForLog stringByReplacingOccurrencesOfString:telegramToken
+                                                       withString:@"[REDACTED]"];
+  }
+  addToLogIfEnabled(service, bulletin, @"URL", urlForLog);
   NSURL *requestURL = [NSURL URLWithString:newUrlString];
   if (!requestURL) {
-    XLog(@"Invalid URL: %@", newUrlString);
+    XLog(@"Invalid URL: %@", urlForLog);
     addToLogIfEnabled(service, bulletin, @"Invalid URL");
     return;
   }
@@ -1495,6 +1533,22 @@ static NSString *prefsSayNo(BBServer *server, BBBulletin *bulletin) {
             NSString *dataStr =
                 [[NSString alloc] initWithData:data
                                       encoding:NSUTF8StringEncoding];
+            if (XEq(service, PUSHER_SERVICE_TELEGRAM)) {
+              NSDictionary *telegramResponse =
+                  [NSJSONSerialization JSONObjectWithData:data
+                                                   options:0
+                                                     error:nil];
+              if (![telegramResponse isKindOfClass:NSDictionary.class] ||
+                  ![telegramResponse[@"ok"] boolValue]) {
+                NSString *description = telegramResponse[@"description"] ?: dataStr;
+                addToLogIfEnabled(service, bulletin,
+                                  XStr(@"Telegram API Error: %@", description),
+                                  nil, YES);
+                XLog(@"%@ Telegram API Error: %@", logString, description);
+                [pusherRetriesLeft removeObjectForKey:retryKey];
+                return;
+              }
+            }
             // if has retries left request entity too large and has base64 image
             // string (not image set to true)
             UIImage *image = infoDict[@"image"];
