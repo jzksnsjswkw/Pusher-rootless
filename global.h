@@ -20,7 +20,6 @@
 #define PUSHER_DEFAULT_SHRINK_FACTOR 2.5
 #define PUSHER_DELAY_BETWEEN_RETRIES 3
 
-#import <rocketbootstrap/rocketbootstrap.h>
 #import <AppSupport/CPDistributedMessagingCenter.h>
 #define PUSHER_MESSAGING_CENTER_NAME @"com.noahsaso.pusher/testpush"
 #define PUSHER_TEST_PUSH_MESSAGE_NAME @"sendTest"
