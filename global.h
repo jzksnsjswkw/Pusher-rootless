@@ -132,11 +132,17 @@ typedef enum {
 #define NSPPreferenceWechatTouserKey @"WechatTouser"
 #define NSPPreferenceWechatCustomAppsKey @"WechatCustomApps"
 
+#define PUSHER_SERVICE_TELEGRAM @"Telegram"
+#define PUSHER_SERVICE_TELEGRAM_APP_ID @"ph.telegra.Telegraph"
+#define PUSHER_SERVICE_TELEGRAM_URL @"https://api.telegram.org/botREPLACE_KEY/sendMessage"
+#define NSPPreferenceTelegramChatIDKey @"TelegramChatID"
 
-#define BUILTIN_PUSHER_SERVICES @[ PUSHER_SERVICE_PUSHOVER, PUSHER_SERVICE_PUSHBULLET, PUSHER_SERVICE_IFTTT, PUSHER_SERVICE_PUSHER_RECEIVER, PUSHER_SERVICE_FEISHU, PUSHER_SERVICE_BARK, PUSHER_SERVICE_WECHAT ]
+
+#define BUILTIN_PUSHER_SERVICES @[ PUSHER_SERVICE_PUSHOVER, PUSHER_SERVICE_PUSHBULLET, PUSHER_SERVICE_IFTTT, PUSHER_SERVICE_PUSHER_RECEIVER, PUSHER_SERVICE_FEISHU, PUSHER_SERVICE_BARK, PUSHER_SERVICE_WECHAT, PUSHER_SERVICE_TELEGRAM ]
 
 #import <Preferences/PSSpecifier.h>
 #import <BulletinBoard/BBBulletin.h>
+#import <BulletinBoard/BBServer.h>
 #import <BulletinBoard/BBSectionInfo.h> // imports BBSectionInfoSettings
 #import <SpringBoard/SBApplication.h>
 #import <SpringBoard/SBApplicationController.h>
@@ -173,7 +179,7 @@ typedef enum {
 // @property (nonatomic, copy) NSArray *additionalAttachments;
 @end
 
-@interface BBServer : NSObject
+@interface BBServer (Pusher)
 - (BBSectionInfo *)_sectionInfoForSectionID:(id)arg1 effective:(BOOL)arg2;
 + (BBServer *)pusherSharedInstance;
 - (void)sendBulletinToPusher:(BBBulletin *)bulletin;
