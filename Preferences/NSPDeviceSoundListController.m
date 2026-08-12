@@ -63,11 +63,18 @@
     CFRelease(keyList);
   }
 
-  NSDictionary* val = _prefs[_prefsKey] ?: (_isCustomApp ? @{} : @[]);
+  NSDictionary* builtInServices =
+      (NSDictionary*)_prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
+  NSDictionary* serviceObj = builtInServices[_service] ?: @{};
+  NSString* subkey = _isSound ? @"sounds" : @"devices";
+  NSArray* val = nil;
   if (_isCustomApp) {
-    val = val[_customAppIDKey] ?: @{};
-    NSString* subkey = _isSound ? @"sounds" : @"devices";
-    val = val[subkey] ?: @[];
+    NSDictionary* customApps =
+        serviceObj[NSPPreferenceServiceCustomAppsKey] ?: @{};
+    NSDictionary* customApp = customApps[_customAppIDKey] ?: @{};
+    val = customApp[subkey] ?: @[];
+  } else {
+    val = serviceObj[subkey] ?: @[];
   }
   _serviceItems = [val mutableCopy];
   NSMutableDictionary* indexesToReplace = [NSMutableDictionary new];
@@ -98,21 +105,29 @@
 }
 
 - (void)saveServiceItems {
+  NSMutableDictionary* builtInServices =
+      [([NSPSharedSpecifiers
+            getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey]
+            ?: @{}) mutableCopy];
+  NSMutableDictionary* serviceObj =
+      [(builtInServices[_service] ?: @{}) mutableCopy];
+  NSString* subkey = _isSound ? @"sounds" : @"devices";
   if (_isCustomApp) {
-    NSMutableDictionary* customApps = [(_prefs[_prefsKey] ?: @{}) mutableCopy];
+    NSMutableDictionary* customApps =
+        [(serviceObj[NSPPreferenceServiceCustomAppsKey] ?: @{}) mutableCopy];
     NSMutableDictionary* customApp =
         [(customApps[_customAppIDKey] ?: @{}) mutableCopy];
-    NSString* subkey = _isSound ? @"sounds" : @"devices";
     customApp[subkey] = _serviceItems;
     customApps[_customAppIDKey] = customApp;
-    [NSPSharedSpecifiers setPreference:(__bridge CFStringRef)_prefsKey
-                                 value:(__bridge CFPropertyListRef)customApps
-                          shouldNotify:YES];
+    serviceObj[NSPPreferenceServiceCustomAppsKey] = customApps;
   } else {
-    [NSPSharedSpecifiers setPreference:(__bridge CFStringRef)_prefsKey
-                                 value:(__bridge CFArrayRef)_serviceItems
-                          shouldNotify:YES];
+    serviceObj[subkey] = _serviceItems;
   }
+  builtInServices[_service] = serviceObj;
+  [NSPSharedSpecifiers
+      setPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey
+              value:(__bridge CFPropertyListRef)builtInServices
+       shouldNotify:YES];
 }
 
 - (void)updateItems {
@@ -213,10 +228,11 @@
 }
 
 - (void)updatePushoverDevices {
-  id val = _prefs[NSPPreferencePushoverTokenKey];
-  NSString* pushoverToken = val ?: @"";
-  val = _prefs[NSPPreferencePushoverUserKey];
-  NSString* pushoverUser = val ?: @"";
+  NSDictionary* builtInServices =
+      (NSDictionary*)_prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
+  NSDictionary* serviceObj = builtInServices[_service] ?: @{};
+  NSString* pushoverToken = serviceObj[NSPPreferenceServiceTokenKey] ?: @"";
+  NSString* pushoverUser = serviceObj[NSPPreferenceServiceUserKey] ?: @"";
   NSDictionary* userDictionary =
       @{@"token" : pushoverToken, @"user" : pushoverUser};
   NSData* jsonData =
@@ -333,7 +349,10 @@
 }
 
 - (void)updatePushoverSounds {
-  NSString* pushoverToken = _prefs[NSPPreferencePushoverTokenKey] ?: @"";
+  NSDictionary* builtInServices =
+      (NSDictionary*)_prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
+  NSDictionary* serviceObj = builtInServices[_service] ?: @{};
+  NSString* pushoverToken = serviceObj[NSPPreferenceServiceTokenKey] ?: @"";
   NSMutableURLRequest* request = [NSMutableURLRequest
        requestWithURL:[NSURL URLWithString:XStr(@"https://api.pushover.net/1/"
                                                 @"sounds.json?token=%@",
@@ -441,7 +460,10 @@
 }
 
 - (void)updatePushbulletDevices {
-  NSString* pushbulletToken = _prefs[NSPPreferencePushbulletTokenKey] ?: @"";
+  NSDictionary* builtInServices =
+      (NSDictionary*)_prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
+  NSDictionary* serviceObj = builtInServices[_service] ?: @{};
+  NSString* pushbulletToken = serviceObj[NSPPreferenceServiceTokenKey] ?: @"";
   NSMutableURLRequest* request = [NSMutableURLRequest
        requestWithURL:
            [NSURL URLWithString:@"https://api.pushbullet.com/v2/devices"]
@@ -556,7 +578,10 @@
 }
 
 - (void)updatePushbulletSounds {
-  NSString* pushbulletToken = _prefs[NSPPreferencePushbulletTokenKey] ?: @"";
+  NSDictionary* builtInServices =
+      (NSDictionary*)_prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
+  NSDictionary* serviceObj = builtInServices[_service] ?: @{};
+  NSString* pushbulletToken = serviceObj[NSPPreferenceServiceTokenKey] ?: @"";
   NSMutableURLRequest* request = [NSMutableURLRequest
        requestWithURL:[NSURL
                           URLWithString:@"https://api.pushbullet.com/v2/sounds"]

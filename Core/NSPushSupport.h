@@ -1,5 +1,5 @@
 #import <BulletinBoard/BBBulletin.h>
-#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 
 @interface NSPBulletinContext : NSObject
 
@@ -18,5 +18,13 @@
                              isTest:(BOOL)isTest;
 
 - (NSString*)retryKeyForService:(NSString*)service;
+
+@end
+
+@interface NSPushImage : NSObject
+
++ (NSString*)base64RepresentationForImage:(UIImage*)image;
++ (UIImage*)shrinkImage:(UIImage*)image byFactor:(CGFloat)factor;
++ (NSString*)base64IconDataForBundleID:(NSString*)bundleID;
 
 @end

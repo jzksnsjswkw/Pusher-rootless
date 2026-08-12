@@ -29,7 +29,9 @@
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
-			<string>IFTTTKey</string>
+			<string>key</string>
+			<key>service</key>
+			<string>IFTTT</string>
 			<key>label</key>
 			<string>Key:</string>
 			<key>noAutoCorrect</key>
@@ -55,7 +57,9 @@
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
-			<string>IFTTTAppListIsBlacklist</string>
+			<string>appListIsBlacklist</string>
+			<key>service</key>
+			<string>IFTTT</string>
 			<key>validTitles</key>
 			<array>
 				<string>Blacklist</string>
@@ -76,8 +80,8 @@
 			<string>app_list</string>
 			<key>label</key>
 			<string>App List</string>
-			<key>ALSettingsKeyPrefix</key>
-			<string>IFTTTBL-</string>
+			<key>service</key>
+			<string>IFTTT</string>
 			<key>useSearchBar</key>
 			<true />
 			<key>alphabeticIndexingEnabled</key>
@@ -95,11 +99,11 @@
 			<key>service</key>
 			<string>IFTTT</string>
 			<key>defaultEventNameKey</key>
-			<string>IFTTTEventName</string>
+			<string>eventName</string>
 			<key>defaultIncludeIconKey</key>
-			<string>IFTTTIncludeIcon</string>
+			<string>includeIcon</string>
 			<key>defaultCurateDataKey</key>
-			<string>IFTTTCurateData</string>
+			<string>curateData</string>
 		</dict>
 
 		<!-- Options -->
@@ -162,7 +166,9 @@ HH:mm:ss.SSS = 03:12:11.678
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
-			<string>IFTTTDateFormat</string>
+			<string>dateFormat</string>
+			<key>service</key>
+			<string>IFTTT</string>
 			<key>label</key>
 			<string>Date Format:</string>
 			<key>noAutoCorrect</key>

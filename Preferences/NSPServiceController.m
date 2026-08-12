@@ -103,19 +103,30 @@
     for (PSSpecifier* specifier in allSpecifiers) {
       if (specifier.cellType == PSLinkCell) {
         if (XEq(specifier.name, @"App List")) {
-          specifier.name =
-              XStr(@"%@ (%d total)", specifier.name,
-                   [NSPSharedSpecifiers
-                       countAppIDsWithPrefix:prefs
-                                      prefix:[specifier
-                                                 propertyForKey:
-                                                     @"ALSettingsKeyPrefix"]]);
+          int count = 0;
+          if (_isCustom) {
+            count = [NSPSharedSpecifiers
+                countAppIDsWithPrefix:prefs
+                               prefix:[specifier propertyForKey:
+                                                     @"ALSettingsKeyPrefix"]];
+          } else {
+            count = (int)[NSPSharedSpecifiers
+                        builtInServiceAppListForService:_service]
+                        .count;
+          }
+          specifier.name = XStr(@"%@ (%d total)", specifier.name, count);
           [specifier setProperty:self forKey:@"psListRef"];
         } else if (XEq(specifier.name, @"App Customization")) {
-          NSString* prefsKey =
-              _isCustom ? NSPPreferenceCustomServiceCustomAppsKey(_service)
-                        : NSPPreferenceBuiltInServiceCustomAppsKey(_service);
-          NSArray* customApps = (NSArray*)prefs[prefsKey];
+          NSDictionary* customApps = nil;
+          if (_isCustom) {
+            customApps = (NSDictionary*)
+                prefs[NSPPreferenceCustomServiceCustomAppsKey(_service)];
+          } else {
+            NSDictionary* builtInServices =
+                (NSDictionary*)prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
+            customApps =
+                builtInServices[_service][NSPPreferenceServiceCustomAppsKey];
+          }
           specifier.name = XStr(@"%@ (%d total)", specifier.name,
                                 customApps ? (int)customApps.count : 0);
           [specifier setProperty:self forKey:@"psListRef"];
@@ -183,8 +194,7 @@
         specifier->setter =
             @selector(setPreferenceValue:forBuiltInServiceSpecifier:);
         specifier->getter = @selector(readBuiltInServicePreferenceValue:);
-        [specifier setProperty:XStr(@"%@%@", _service,
-                                    [specifier propertyForKey:@"key"])
+        [specifier setProperty:[specifier propertyForKey:@"customServiceKey"]
                         forKey:@"key"];
       }
       specifier.target = NSPSharedSpecifiers.class;

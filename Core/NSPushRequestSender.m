@@ -1,17 +1,15 @@
 #import "NSPushRequestSender.h"
 #import "../global.h"
 #import "../helpers.h"
-#import "NSPushImage.h"
 #import "NSPushLog.h"
+#import "NSPushSupport.h"
 #import <UIKit/UIKit.h>
 
 @interface NSPushRequestSender ()
 @property(nonatomic, strong) NSMutableDictionary* retriesLeft;
 - (void)sendAttemptWithURLString:(NSString*)urlString
                         infoDict:(NSDictionary*)infoDict
-                     credentials:(NSDictionary*)credentials
-                      dynamicKey:(NSString*)dynamicKey
-                        authType:(PusherAuthorizationType)authType
+                         headers:(NSDictionary*)headers
                           method:(NSString*)method
                        logString:(NSString*)logString
                          service:(NSString*)service
@@ -44,9 +42,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
 
 - (void)sendRequestWithURLString:(NSString*)urlString
                         infoDict:(NSDictionary*)infoDict
-                     credentials:(NSDictionary*)credentials
-                      dynamicKey:(NSString*)dynamicKey
-                        authType:(PusherAuthorizationType)authType
+                         headers:(NSDictionary*)headers
                           method:(NSString*)method
                        logString:(NSString*)logString
                          service:(NSString*)service
@@ -55,9 +51,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
   self.retriesLeft[retryKey] = @(PUSHER_TRIES - 1);
   [self sendAttemptWithURLString:urlString
                         infoDict:infoDict
-                     credentials:credentials
-                      dynamicKey:dynamicKey
-                        authType:authType
+                         headers:headers
                           method:method
                        logString:logString
                          service:service
@@ -66,9 +60,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
 
 - (void)sendAttemptWithURLString:(NSString*)urlString
                         infoDict:(NSDictionary*)infoDict
-                     credentials:(NSDictionary*)credentials
-                      dynamicKey:(NSString*)dynamicKey
-                        authType:(PusherAuthorizationType)authType
+                         headers:(NSDictionary*)headers
                           method:(NSString*)method
                        logString:(NSString*)logString
                          service:(NSString*)service
@@ -78,21 +70,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
     [infoDictForRequest removeObjectForKey:@"imageShrinkFactor"];
   }
 
-  if (authType == PusherAuthorizationTypeCredentials) {
-    [infoDictForRequest addEntriesFromDictionary:credentials];
-  }
-
   NSString* newUrlString = [urlString copy];
-  if (authType == PusherAuthorizationTypeReplaceKey) {
-    newUrlString =
-        [newUrlString stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
-                                                withString:credentials[@"key"]];
-  }
-  if (authType == PusherAuthorizationTypeReplaceDynamicKey) {
-    newUrlString = [newUrlString
-        stringByReplacingOccurrencesOfString:@"REPLACE_DYNAMIC_KEY"
-                                  withString:dynamicKey];
-  }
 
   if (infoDictForRequest[@"image"] &&
       [infoDictForRequest[@"image"] isKindOfClass:UIImage.class]) {
@@ -156,15 +134,13 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                                    label:@"Method"
                                   object:method];
   [request setHTTPMethod:method];
-  if (authType == PusherAuthorizationTypeHeader) {
-    [request setValue:credentials[@"value"]
-        forHTTPHeaderField:credentials[@"headerName"]];
-    [NSPushLog
-        addToLogIfEnabledForService:service
-                           bulletin:bulletin
-                              label:@"Header"
-                             object:XStr(@"%@: %@", credentials[@"headerName"],
-                                         credentials[@"value"])];
+  for (NSString* headerName in headers) {
+    [request setValue:headers[headerName] forHTTPHeaderField:headerName];
+    [NSPushLog addToLogIfEnabledForService:service
+                                  bulletin:bulletin
+                                     label:@"Header"
+                                    object:XStr(@"%@: %@", headerName,
+                                                headers[headerName])];
   }
 
   if (XEq(method, @"POST")) {
@@ -269,14 +245,28 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
               dispatch_after(delayTime, dispatch_get_main_queue(), ^(void) {
                 [self sendAttemptWithURLString:urlString
                                       infoDict:retryInfoDict
-                                   credentials:credentials
-                                    dynamicKey:dynamicKey
-                                      authType:authType
+                                       headers:headers
                                         method:method
                                      logString:logString
                                        service:service
                                       bulletin:bulletin];
               });
+              return;
+            }
+            if (image && [dataStr.lowercaseString
+                             containsString:@"request entity too large"]) {
+              // Final attempt: retries are exhausted and the payload is still
+              // too large even after dropping the image. Log an honest failure
+              // instead of a misleading "Success".
+              [NSPushLog addToLogIfEnabledForService:service
+                                            bulletin:bulletin
+                                               label:@"Network Response: "
+                                                     @"Image too large on "
+                                                     @"final attempt"
+                                              object:dataStr];
+              XLog(@"%@ Failed: image too large after final attempt: %@",
+                   logString, dataStr);
+              [self.retriesLeft removeObjectForKey:retryKey];
               return;
             }
             [NSPushLog addToLogIfEnabledForService:service
@@ -333,9 +323,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                 dispatch_after(delayTime, dispatch_get_main_queue(), ^(void) {
                   [self sendAttemptWithURLString:urlString
                                         infoDict:retryInfoDict
-                                     credentials:credentials
-                                      dynamicKey:dynamicKey
-                                        authType:authType
+                                         headers:headers
                                           method:method
                                        logString:logString
                                          service:service

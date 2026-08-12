@@ -1,15 +1,12 @@
 #import "NSPusher.h"
 #import "../global.h"
 #import "../helpers.h"
-#import "NSPBulletinContext.h"
-#import "NSPushConfigSnapshot.h"
+#import "NSPushConfig.h"
 #import "NSPushFilter.h"
 #import "NSPushLog.h"
-#import "NSPushPrefs.h"
 #import "NSPushRequestSender.h"
 #import "NSPushService.h"
-#import "NSPushServiceConfig.h"
-#import "NSPushServiceManager.h"
+#import "NSPushSupport.h"
 
 @implementation NSPusher {
   NSMutableArray* _recentNotificationTitles;
@@ -121,7 +118,7 @@
       bulletin.message ? bulletin.message : @"");
 
   for (NSString* recentNotificationTitle in _recentNotificationTitles) {
-    if (XEq(title, XStr(@"%@: %@", appName, recentNotificationTitle))) {
+    if (XEq(title, recentNotificationTitle)) {
       XLog(@"Prevented loop");
       [NSPushLog addToLogIfEnabledForService:@""
                                     bulletin:bulletin
@@ -234,8 +231,6 @@
     effectiveConfig = [serviceConfig effectiveConfigForAppID:appID];
   }
 
-  PusherAuthorizationType authType =
-      (PusherAuthorizationType)[serviceClass authTypeForConfig:effectiveConfig];
   NSDictionary* infoDict =
       [serviceClass infoDictForBulletinContext:[NSPBulletinContext
                                                    contextWithBulletin:bulletin
@@ -245,36 +240,29 @@
                                                                message:message
                                                                 isTest:isTest]
                                         config:effectiveConfig];
-  NSDictionary* credentials =
-      [serviceClass credentialsForConfig:effectiveConfig];
 
+  NSString* method = XStrDefault(effectiveConfig.rawPrefs[@"method"], @"POST");
+  NSDictionary* headers = [serviceClass headersForConfig:effectiveConfig];
   [serviceClass
-      fetchDynamicKeyForConfig:effectiveConfig
-                    completion:^(NSString* dynamicKey) {
-                      NSString* method = XStrDefault(
-                          effectiveConfig.rawPrefs[@"method"], @"POST");
-                      [[NSPushRequestSender sharedInstance]
-                          sendRequestWithURLString:
-                              [serviceClass URLStringForConfig:effectiveConfig]
-                                          infoDict:infoDict
-                                       credentials:credentials
-                                        dynamicKey:dynamicKey
-                                          authType:(PusherAuthorizationType)
-                                                       authType
-                                            method:method
-                                         logString:XStr(@"[S:%@,A:%@]", service,
-                                                        appName)
-                                           service:service
-                                          bulletin:bulletin];
-                      XLog(@"[S:%@,T:%d,A:%@] Pushed", service, isTest,
-                           appName);
-                      if (!isTest) {
-                        [NSPushLog addToLogIfEnabledForService:service
-                                                      bulletin:bulletin
-                                                         label:@"Pushed"
-                                                        object:nil];
-                      }
-                    }];
+      URLStringForConfig:effectiveConfig
+              completion:^(NSString* urlString) {
+                [[NSPushRequestSender sharedInstance]
+                    sendRequestWithURLString:urlString
+                                    infoDict:infoDict
+                                     headers:headers
+                                      method:method
+                                   logString:XStr(@"[S:%@,A:%@]", service,
+                                                  appName)
+                                     service:service
+                                    bulletin:bulletin];
+                XLog(@"[S:%@,T:%d,A:%@] Pushed", service, isTest, appName);
+                if (!isTest) {
+                  [NSPushLog addToLogIfEnabledForService:service
+                                                bulletin:bulletin
+                                                   label:@"Pushed"
+                                                  object:nil];
+                }
+              }];
 }
 
 @end
