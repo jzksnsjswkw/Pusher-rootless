@@ -21,7 +21,9 @@
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
-			<string>FeishuKey</string>
+			<string>key</string>
+			<key>service</key>
+			<string>Feishu</string>
 			<key>label</key>
 			<string>Key:</string>
 			<key>noAutoCorrect</key>
@@ -47,7 +49,9 @@
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
-			<string>FeishuAppListIsBlacklist</string>
+			<string>appListIsBlacklist</string>
+			<key>service</key>
+			<string>Feishu</string>
 			<key>validTitles</key>
 			<array>
 				<string>Blacklist</string>
@@ -68,8 +72,8 @@
 			<string>app_list</string>
 			<key>label</key>
 			<string>App List</string>
-			<key>ALSettingsKeyPrefix</key>
-			<string>FeishuBL-</string>
+			<key>service</key>
+			<string>Feishu</string>
 			<key>useSearchBar</key>
 			<true />
 			<key>alphabeticIndexingEnabled</key>

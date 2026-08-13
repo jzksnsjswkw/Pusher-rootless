@@ -64,7 +64,9 @@
   } else {
       attachment = [[%c(BBAttachmentMetadata) alloc] _initWithUUID:@"TestImage" type:1 URL:attachmentURL];
   }
-  [bulletin setPrimaryAttachment:attachment];
+  if (attachment) {
+    [bulletin setPrimaryAttachment:attachment];
+  }
 
   [bbServer
       sendToPusherService:service

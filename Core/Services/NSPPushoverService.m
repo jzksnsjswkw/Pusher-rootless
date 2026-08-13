@@ -1,6 +1,6 @@
 #import "NSPPushoverService.h"
-#import "../NSPBulletinContext.h"
-#import "../NSPushServiceConfig.h"
+#import "../NSPushConfig.h"
+#import "../NSPushSupport.h"
 
 @implementation NSPPushoverService
 
@@ -8,23 +8,21 @@
   return PUSHER_SERVICE_PUSHOVER;
 }
 
++ (NSString*)urlForEventName:(NSString*)eventName
+                      dbName:(NSString*)dbName
+                   serverURL:(NSString*)serverURL {
+  return PUSHER_SERVICE_PUSHOVER_URL;
+}
+
 + (NSString*)loopPreventionAppID {
   return PUSHER_SERVICE_PUSHOVER_APP_ID;
 }
 
-+ (PusherAuthorizationType)authTypeForConfig:(NSPushServiceConfig*)config {
-  return PusherAuthorizationTypeCredentials;
-}
-
-+ (NSDictionary*)credentialsForConfig:(NSPushServiceConfig*)config {
-  return @{
-    @"token" : config.rawPrefs[@"token"] ?: @"",
-    @"user" : config.rawPrefs[@"user"] ?: @""
-  };
-}
-
 + (NSString*)URLStringForConfig:(NSPushServiceConfig*)config {
-  return PUSHER_SERVICE_PUSHOVER_URL;
+  NSString* key = config.rawPrefs[@"key"];
+  NSString* url = config.rawPrefs[@"url"] ?: @"";
+  return [url stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
+                                         withString:key ?: @""];
 }
 
 + (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context
@@ -35,6 +33,8 @@
   }
 
   NSMutableDictionary* infoDict = [@{
+    @"token" : config.rawPrefs[@"token"] ?: @"",
+    @"user" : config.rawPrefs[@"user"] ?: @"",
     @"title" : context.title ?: @"",
     @"message" : context.message ?: @"",
     @"device" : [deviceIDs componentsJoinedByString:@","]

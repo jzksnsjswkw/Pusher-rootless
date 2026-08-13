@@ -20,7 +20,9 @@
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
-			<string>BarkServerURL</string>
+			<string>serverURL</string>
+			<key>service</key>
+			<string>Bark</string>
 			<key>label</key>
 			<string>Server URL:</string>
 			<key>noAutoCorrect</key>
@@ -36,7 +38,9 @@
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
-			<string>BarkKey</string>
+			<string>key</string>
+			<key>service</key>
+			<string>Bark</string>
 			<key>label</key>
 			<string>Key:</string>
 			<key>noAutoCorrect</key>
@@ -62,7 +66,9 @@
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
-			<string>BarkAppListIsBlacklist</string>
+			<string>appListIsBlacklist</string>
+			<key>service</key>
+			<string>Bark</string>
 			<key>validTitles</key>
 			<array>
 				<string>Blacklist</string>
@@ -83,8 +89,8 @@
 			<string>app_list</string>
 			<key>label</key>
 			<string>App List</string>
-			<key>ALSettingsKeyPrefix</key>
-			<string>BarkBL-</string>
+			<key>service</key>
+			<string>Bark</string>
 			<key>useSearchBar</key>
 			<true />
 			<key>alphabeticIndexingEnabled</key>

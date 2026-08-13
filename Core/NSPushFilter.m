@@ -1,6 +1,5 @@
 #import "NSPushFilter.h"
-#import "NSPushConfigSnapshot.h"
-#import "NSPushServiceConfig.h"
+#import "NSPushConfig.h"
 #import "global.h"
 #import "helpers.h"
 

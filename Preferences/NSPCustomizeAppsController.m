@@ -58,9 +58,24 @@
     }
   }
   [self updateTitle];
-  [NSPSharedSpecifiers setPreference:(__bridge CFStringRef)_prefsKey
-                               value:(__bridge CFPropertyListRef)_customApps
-                        shouldNotify:YES];
+  if (_isCustomService) {
+    [NSPSharedSpecifiers setPreference:(__bridge CFStringRef)_prefsKey
+                                 value:(__bridge CFPropertyListRef)_customApps
+                          shouldNotify:YES];
+  } else {
+    NSMutableDictionary* builtInServices = [(
+        [NSPSharedSpecifiers
+            getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey]
+            ?: @{}) mutableCopy];
+    NSMutableDictionary* serviceObj =
+        [(builtInServices[_service] ?: @{}) mutableCopy];
+    serviceObj[NSPPreferenceServiceCustomAppsKey] = _customApps;
+    builtInServices[_service] = serviceObj;
+    [NSPSharedSpecifiers
+        setPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey
+                value:(__bridge CFPropertyListRef)builtInServices
+         shouldNotify:YES];
+  }
 }
 
 - (void)dealloc {
@@ -80,9 +95,8 @@
       [self.specifier propertyForKey:@"isCustomService"] &&
       ((NSNumber*)[self.specifier propertyForKey:@"isCustomService"]).boolValue;
   _prefsKey =
-      [(_isCustomService
-            ? NSPPreferenceCustomServiceCustomAppsKey(_service)
-            : NSPPreferenceBuiltInServiceCustomAppsKey(_service)) retain];
+      [(_isCustomService ? NSPPreferenceCustomServiceCustomAppsKey(_service)
+                         : NSPPreferenceBuiltInServicesKey) retain];
 
   _lastTargetAppID = nil;
   _lastTargetIndexPath = nil;
@@ -140,7 +154,18 @@
     CFRelease(keyList);
   }
 
-  _customApps = [(prefs[_prefsKey] ?: @{}) mutableCopy];
+  NSDictionary* serviceDefaults = nil;
+  if (_isCustomService) {
+    serviceDefaults =
+        (prefs[NSPPreferenceCustomServicesKey] ?: @{})[_service] ?: @{};
+    _customApps = [(prefs[_prefsKey] ?: @{}) mutableCopy];
+  } else {
+    NSDictionary* builtInServices =
+        (NSDictionary*)prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
+    serviceDefaults = builtInServices[_service] ?: @{};
+    _customApps = [(serviceDefaults[NSPPreferenceServiceCustomAppsKey]
+                        ?: @{}) mutableCopy];
+  }
 
   _label = [[self.specifier.name componentsSeparatedByString:@" ("][0] retain];
   [self updateTitle];
@@ -148,59 +173,58 @@
   if (XEq(_service, PUSHER_SERVICE_PUSHOVER) ||
       XEq(_service, PUSHER_SERVICE_PUSHBULLET)) {
     _defaultDevices =
-        [(prefs[[self.specifier propertyForKey:@"defaultDevicesKey"]]
+        [(serviceDefaults[[self.specifier propertyForKey:@"defaultDevicesKey"]]
               ?: @[]) copy];
   }
   if (XEq(_service, PUSHER_SERVICE_PUSHOVER)) {
     _defaultSounds =
-        [(prefs[[self.specifier propertyForKey:@"defaultSoundsKey"]]
+        [(serviceDefaults[[self.specifier propertyForKey:@"defaultSoundsKey"]]
               ?: @[]) copy];
   }
   if (XEq(_service, PUSHER_SERVICE_IFTTT)) {
-    _defaultEventName =
-        [(prefs[[self.specifier propertyForKey:@"defaultEventNameKey"]]
-              ?: @"") copy];
-    _defaultIncludeIcon =
-        [(prefs[[self.specifier propertyForKey:@"defaultIncludeIconKey"]]
-              ?: @NO) copy];
-    _defaultCurateData =
-        [(prefs[[self.specifier propertyForKey:@"defaultCurateDataKey"]]
-              ?: @YES) copy];
+    _defaultEventName = [(
+        serviceDefaults[[self.specifier propertyForKey:@"defaultEventNameKey"]]
+            ?: @"") copy];
+    _defaultIncludeIcon = [(serviceDefaults[[self.specifier
+                                propertyForKey:@"defaultIncludeIconKey"]]
+                                ?: @NO) copy];
+    _defaultCurateData = [(
+        serviceDefaults[[self.specifier propertyForKey:@"defaultCurateDataKey"]]
+            ?: @YES) copy];
   }
   if (XEq(_service, PUSHER_SERVICE_PUSHER_RECEIVER)) {
-    _defaultIncludeIcon =
-        [(prefs[[self.specifier propertyForKey:@"defaultIncludeIconKey"]]
-              ?: @YES) copy];
-    _defaultIncludeImage =
-        [(prefs[[self.specifier propertyForKey:@"defaultIncludeImageKey"]]
-              ?: @YES) copy];
-    _defaultImageMaxWidth =
-        [(prefs[[self.specifier propertyForKey:@"defaultImageMaxWidthKey"]]
-              ?: @(PUSHER_DEFAULT_MAX_WIDTH)) copy];
-    _defaultImageMaxHeight =
-        [(prefs[[self.specifier propertyForKey:@"defaultImageMaxHeightKey"]]
-              ?: @(PUSHER_DEFAULT_MAX_HEIGHT)) copy];
-    _defaultImageShrinkFactor =
-        [(prefs[[self.specifier propertyForKey:@"defaultImageShrinkFactorKey"]]
-              ?: @(PUSHER_DEFAULT_SHRINK_FACTOR)) copy];
-  }
-  if (_isCustomService) {
-    NSDictionary* customService =
-        (prefs[NSPPreferenceCustomServicesKey] ?: @{})[_service] ?: @{};
-    _defaultIncludeIcon = [(
-        customService[[self.specifier propertyForKey:@"defaultIncludeIconKey"]]
-            ?: @NO) copy];
-    _defaultIncludeImage = [(
-        customService[[self.specifier propertyForKey:@"defaultIncludeImageKey"]]
-            ?: @NO) copy];
-    _defaultImageMaxWidth = [(customService[[self.specifier
+    _defaultIncludeIcon = [(serviceDefaults[[self.specifier
+                                propertyForKey:@"defaultIncludeIconKey"]]
+                                ?: @YES) copy];
+    _defaultIncludeImage = [(serviceDefaults[[self.specifier
+                                 propertyForKey:@"defaultIncludeImageKey"]]
+                                 ?: @YES) copy];
+    _defaultImageMaxWidth = [(serviceDefaults[[self.specifier
                                   propertyForKey:@"defaultImageMaxWidthKey"]]
                                   ?: @(PUSHER_DEFAULT_MAX_WIDTH)) copy];
-    _defaultImageMaxHeight = [(customService[[self.specifier
+    _defaultImageMaxHeight = [(serviceDefaults[[self.specifier
                                    propertyForKey:@"defaultImageMaxHeightKey"]]
                                    ?: @(PUSHER_DEFAULT_MAX_HEIGHT)) copy];
     _defaultImageShrinkFactor =
-        [(customService[
+        [(serviceDefaults[
+              [self.specifier propertyForKey:@"defaultImageShrinkFactorKey"]]
+              ?: @(PUSHER_DEFAULT_SHRINK_FACTOR)) copy];
+  }
+  if (_isCustomService) {
+    _defaultIncludeIcon = [(serviceDefaults[[self.specifier
+                                propertyForKey:@"defaultIncludeIconKey"]]
+                                ?: @NO) copy];
+    _defaultIncludeImage = [(serviceDefaults[[self.specifier
+                                 propertyForKey:@"defaultIncludeImageKey"]]
+                                 ?: @NO) copy];
+    _defaultImageMaxWidth = [(serviceDefaults[[self.specifier
+                                  propertyForKey:@"defaultImageMaxWidthKey"]]
+                                  ?: @(PUSHER_DEFAULT_MAX_WIDTH)) copy];
+    _defaultImageMaxHeight = [(serviceDefaults[[self.specifier
+                                   propertyForKey:@"defaultImageMaxHeightKey"]]
+                                   ?: @(PUSHER_DEFAULT_MAX_HEIGHT)) copy];
+    _defaultImageShrinkFactor =
+        [(serviceDefaults[
               [self.specifier propertyForKey:@"defaultImageShrinkFactorKey"]]
               ?: @(PUSHER_DEFAULT_SHRINK_FACTOR)) copy];
   }

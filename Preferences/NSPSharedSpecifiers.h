@@ -24,4 +24,7 @@
          shouldNotify:(BOOL)shouldNotify;
 + (id)getPreference:(CFStringRef)keyRef;
 + (int)countAppIDsWithPrefix:(NSDictionary*)prefs prefix:(NSString*)prefix;
++ (NSArray*)builtInServiceAppListForService:(NSString*)service;
++ (void)setBuiltInServiceAppList:(NSArray*)appList
+                      forService:(NSString*)service;
 @end

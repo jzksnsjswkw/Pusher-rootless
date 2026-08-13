@@ -1,6 +1,6 @@
 #define isBundle(z) [[[NSBundle mainBundle] bundleIdentifier] isEqualToString:z]
 
-#import "Core/NSPushServiceManager.h"
+#import "Core/NSPushService.h"
 #import "Core/NSPusher.h"
 #import "NSPTestPush.h"
 #import "global.h"

@@ -1,6 +1,6 @@
 #import "NSPPushbulletService.h"
-#import "../NSPBulletinContext.h"
-#import "../NSPushServiceConfig.h"
+#import "../NSPushConfig.h"
+#import "../NSPushSupport.h"
 
 @implementation NSPPushbulletService
 
@@ -8,23 +8,25 @@
   return PUSHER_SERVICE_PUSHBULLET;
 }
 
++ (NSString*)urlForEventName:(NSString*)eventName
+                      dbName:(NSString*)dbName
+                   serverURL:(NSString*)serverURL {
+  return PUSHER_SERVICE_PUSHBULLET_URL;
+}
+
 + (NSString*)loopPreventionAppID {
   return PUSHER_SERVICE_PUSHBULLET_APP_ID;
 }
 
-+ (PusherAuthorizationType)authTypeForConfig:(NSPushServiceConfig*)config {
-  return PusherAuthorizationTypeHeader;
-}
-
-+ (NSDictionary*)credentialsForConfig:(NSPushServiceConfig*)config {
-  return @{
-    @"headerName" : @"Access-Token",
-    @"value" : config.rawPrefs[@"token"] ?: @""
-  };
++ (NSDictionary*)headersForConfig:(NSPushServiceConfig*)config {
+  return @{@"Access-Token" : config.rawPrefs[@"token"] ?: @""};
 }
 
 + (NSString*)URLStringForConfig:(NSPushServiceConfig*)config {
-  return PUSHER_SERVICE_PUSHBULLET_URL;
+  NSString* key = config.rawPrefs[@"key"];
+  NSString* url = config.rawPrefs[@"url"] ?: @"";
+  return [url stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
+                                         withString:key ?: @""];
 }
 
 + (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context

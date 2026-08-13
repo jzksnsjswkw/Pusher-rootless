@@ -71,7 +71,9 @@
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
-			<string>Pusher ReceiverDBName</string>
+			<string>dbName</string>
+			<key>service</key>
+			<string>Pusher Receiver</string>
 			<key>label</key>
 			<string>Database Name:</string>
 		</dict>
@@ -85,7 +87,9 @@
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
-			<string>Pusher ReceiverKey</string>
+			<string>key</string>
+			<key>service</key>
+			<string>Pusher Receiver</string>
 			<key>label</key>
 			<string>API Key:</string>
 		</dict>
@@ -109,7 +113,9 @@
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
-			<string>Pusher ReceiverAppListIsBlacklist</string>
+			<string>appListIsBlacklist</string>
+			<key>service</key>
+			<string>Pusher Receiver</string>
 			<key>validTitles</key>
 			<array>
 				<string>Blacklist</string>
@@ -130,8 +136,8 @@
 			<string>app_list</string>
 			<key>label</key>
 			<string>App List</string>
-			<key>ALSettingsKeyPrefix</key>
-			<string>Pusher ReceiverBL-</string>
+			<key>service</key>
+			<string>Pusher Receiver</string>
 			<key>useSearchBar</key>
 			<true />
 			<key>alphabeticIndexingEnabled</key>
@@ -149,15 +155,15 @@
 			<key>service</key>
 			<string>Pusher Receiver</string>
 			<key>defaultIncludeIconKey</key>
-			<string>Pusher ReceiverIncludeIcon</string>
+			<string>includeIcon</string>
 			<key>defaultIncludeImageKey</key>
-			<string>Pusher ReceiverIncludeImage</string>
+			<string>includeImage</string>
 			<key>defaultImageMaxWidthKey</key>
-			<string>Pusher ReceiverImageMaxWidth</string>
+			<string>imageMaxWidth</string>
 			<key>defaultImageMaxHeightKey</key>
-			<string>Pusher ReceiverImageMaxHeight</string>
+			<string>imageMaxHeight</string>
 			<key>defaultImageShrinkFactorKey</key>
-			<string>Pusher ReceiverImageShrinkFactor</string>
+			<string>imageShrinkFactor</string>
 		</dict>
 
 		<!-- Options -->
@@ -208,7 +214,9 @@ HH:mm:ss.SSS = 03:12:11.678
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
-			<string>Pusher ReceiverDateFormat</string>
+			<string>dateFormat</string>
+			<key>service</key>
+			<string>Pusher Receiver</string>
 			<key>label</key>
 			<string>Date Format:</string>
 			<key>noAutoCorrect</key>

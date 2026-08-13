@@ -1,11 +1,43 @@
 #import "NSPIFTTTService.h"
-#import "../NSPBulletinContext.h"
-#import "../NSPushServiceConfig.h"
+#import "../../helpers.h"
+#import "../NSPushConfig.h"
+#import "../NSPushSupport.h"
 
 @implementation NSPIFTTTService
 
 + (NSString*)serviceName {
   return PUSHER_SERVICE_IFTTT;
+}
+
++ (NSString*)URLStringForConfig:(NSPushServiceConfig*)config {
+  NSString* key = config.rawPrefs[@"key"];
+  NSString* url = config.rawPrefs[@"url"] ?: @"";
+  return [url stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
+                                         withString:key ?: @""];
+}
+
++ (NSString*)urlForEventName:(NSString*)eventName
+                      dbName:(NSString*)dbName
+                   serverURL:(NSString*)serverURL {
+  return [PUSHER_SERVICE_IFTTT_URL
+      stringByReplacingOccurrencesOfString:@"REPLACE_EVENT_NAME"
+                                withString:eventName ?: @""];
+}
+
++ (NSDictionary*)extraPrefsForName:(NSString*)name
+                      servicePrefs:(NSDictionary*)servicePrefs {
+  return @{
+    @"includeIcon" : servicePrefs[NSPPreferenceServiceIncludeIconKey] ?: @NO,
+    @"curateData" : servicePrefs[NSPPreferenceServiceCurateDataKey] ?: @YES
+  };
+}
+
++ (NSDictionary*)extraCustomAppPrefsForName:(NSString*)name
+                                   appPrefs:(NSDictionary*)appPrefs {
+  return @{
+    @"includeIcon" : appPrefs[@"includeIcon"] ?: @NO,
+    @"curateData" : appPrefs[@"curateData"] ?: @YES
+  };
 }
 
 + (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config {

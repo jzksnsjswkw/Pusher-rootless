@@ -82,68 +82,54 @@ typedef NS_OPTIONS(NSUInteger, BBActualSectionInfoPushSettings) {
 // IF ADDING MORE CUSTOM SERVICE KEY CALCULATORS, REMEMBER TO RENAME THEM UPON
 // CUSTOM SERVICE RENAME IN SERVICE LIST
 
-#define NSPPreferenceBuiltInServiceCustomAppsKey(service)                      \
-  XStr(@"%@CustomApps", service)
+// Built-in services are stored as one nested object per service under this
+// single top-level key: BuiltInServices[serviceName] = { field : value, ... }.
+#define NSPPreferenceBuiltInServicesKey @"BuiltInServices"
 
-typedef enum {
-  PusherAuthorizationTypeNone,
-  PusherAuthorizationTypeHeader, // credentials dictionary needs value and
-                                 // headerName
-  PusherAuthorizationTypeCredentials,
-  PusherAuthorizationTypeReplaceKey,
-  PusherAuthorizationTypeReplaceDynamicKey
-} PusherAuthorizationType;
+// Generic per-service field names (shared across all built-in services).
+#define NSPPreferenceServiceEnabledKey @"enabled"
+#define NSPPreferenceServiceTokenKey @"token"
+#define NSPPreferenceServiceUserKey @"user"
+#define NSPPreferenceServiceKeyKey @"key"
+#define NSPPreferenceServiceEventNameKey @"eventName"
+#define NSPPreferenceServiceDBNameKey @"dbName"
+#define NSPPreferenceServiceServerURLKey @"serverURL"
+#define NSPPreferenceServiceCorpidKey @"corpid"
+#define NSPPreferenceServiceCorpsecretKey @"corpsecret"
+#define NSPPreferenceServiceAgentIDKey @"agentID"
+#define NSPPreferenceServiceTouserKey @"touser"
+#define NSPPreferenceServiceDateFormatKey @"dateFormat"
+#define NSPPreferenceServiceIncludeIconKey @"includeIcon"
+#define NSPPreferenceServiceIncludeImageKey @"includeImage"
+#define NSPPreferenceServiceCurateDataKey @"curateData"
+#define NSPPreferenceServiceImageMaxWidthKey @"imageMaxWidth"
+#define NSPPreferenceServiceImageMaxHeightKey @"imageMaxHeight"
+#define NSPPreferenceServiceImageShrinkFactorKey @"imageShrinkFactor"
+#define NSPPreferenceServiceSoundsKey @"sounds"
+#define NSPPreferenceServiceDevicesKey @"devices"
+#define NSPPreferenceServiceAppListKey @"appList"
+#define NSPPreferenceServiceAppListIsBlacklistKey @"appListIsBlacklist"
+#define NSPPreferenceServiceCustomAppsKey @"customApps"
+#define NSPPreferenceServiceWhenToPushKey @"whenToPush"
+#define NSPPreferenceServiceWhatNetworkKey @"whatNetwork"
+#define NSPPreferenceServiceSNSIsAndKey @"snsIsAnd"
+#define NSPPreferenceServiceSNSRequireANWithORKey @"snsRequireANWithOR"
 
-// All keys MUST HAVE the prefix equal to the name of the service
 #define PUSHER_SERVICE_PUSHOVER @"Pushover"
 #define PUSHER_SERVICE_PUSHOVER_APP_ID @"net.superblock.Pushover"
 #define PUSHER_SERVICE_PUSHOVER_URL @"https://api.pushover.net/1/messages.json"
-#define NSPPreferencePushoverTokenKey @"PushoverToken"
-#define NSPPreferencePushoverUserKey @"PushoverUser"
-#define NSPPreferencePushoverDevicesKey @"PushoverDevices"
-#define NSPPreferencePushoverSoundsKey @"PushoverSounds"
-#define NSPPreferencePushoverBLPrefix @"PushoverBL-"
-#define NSPPreferencePushoverCustomAppsKey @"PushoverCustomApps"
 
-// All keys MUST HAVE the prefix equal to the name of the service
 #define PUSHER_SERVICE_PUSHBULLET @"Pushbullet"
 #define PUSHER_SERVICE_PUSHBULLET_APP_ID @"com.pushbullet.client"
 #define PUSHER_SERVICE_PUSHBULLET_URL @"https://api.pushbullet.com/v2/pushes"
-#define NSPPreferencePushbulletTokenKey @"PushbulletToken"
-#define NSPPreferencePushbulletDevicesKey @"PushbulletDevices"
-#define NSPPreferencePushbulletBLPrefix @"PushbulletBL-"
-#define NSPPreferencePushbulletCustomAppsKey @"PushbulletCustomApps"
 
-// All keys MUST HAVE the prefix equal to the name of the service
 #define PUSHER_SERVICE_IFTTT @"IFTTT"
 #define PUSHER_SERVICE_IFTTT_URL                                               \
   @"https://maker.ifttt.com/trigger/REPLACE_EVENT_NAME/with/key/REPLACE_KEY"
-#define NSPPreferenceIFTTTKeyKey @"IFTTTKey"
-#define NSPPreferenceIFTTTEventNameKey @"IFTTTEventName"
-#define NSPPreferenceIFTTTDateFormatKey @"IFTTTDateFormat"
-#define NSPPreferenceIFTTTBLPrefix @"IFTTTBL-"
-#define NSPPreferenceIFTTTCustomAppsKey @"IFTTTCustomApps"
-#define NSPPreferenceIFTTTIncludeIconKey @"IFTTTIncludeIcon"
-#define NSPPreferenceIFTTTCurateDataKey @"IFTTTCurateData"
 
-// All keys MUST HAVE the prefix equal to the name of the service
 #define PUSHER_SERVICE_PUSHER_RECEIVER @"Pusher Receiver"
 #define PUSHER_SERVICE_PUSHER_RECEIVER_URL                                     \
   @"https://REPLACE_DB_NAME.restdb.io/rest/notifications"
-#define NSPPreferencePusherReceiverDBNameKey @"Pusher ReceiverDBName"
-#define NSPPreferencePusherReceiverAPIKeyKey @"Pusher ReceiverKey"
-#define NSPPreferencePusherReceiverDateFormatKey @"Pusher ReceiverDateFormat"
-#define NSPPreferencePusherReceiverBLPrefix @"Pusher ReceiverBL-"
-#define NSPPreferencePusherReceiverCustomAppsKey @"Pusher ReceiverCustomApps"
-#define NSPPreferencePusherReceiverIncludeIconKey @"Pusher ReceiverIncludeIcon"
-#define NSPPreferencePusherReceiverIncludeImageKey                             \
-  @"Pusher ReceiverIncludeImage"
-#define NSPPreferencePusherReceiverImageMaxWidthKey                            \
-  @"Pusher ReceiverImageMaxWidth"
-#define NSPPreferencePusherReceiverImageMaxHeightKey                           \
-  @"Pusher ReceiverImageMaxHeight"
-#define NSPPreferencePusherReceiverImageShrinkFactorKey                        \
-  @"Pusher ReceiverImageShrinkFactor"
 
 #define PUSHER_SERVICE_FEISHU @"Feishu"
 #define PUSHER_SERVICE_FEISHU_URL                                              \
@@ -156,8 +142,6 @@ typedef enum {
 #define PUSHER_SERVICE_WECHAT_URL                                              \
   @"https://qyapi.weixin.qq.com/cgi-bin/message/"                              \
   @"send?access_token=REPLACE_DYNAMIC_KEY"
-#define NSPPreferenceWechatTouserKey @"WechatTouser"
-#define NSPPreferenceWechatCustomAppsKey @"WechatCustomApps"
 
 #define BUILTIN_PUSHER_SERVICES                                                \
   @[                                                                           \
@@ -216,22 +200,6 @@ typedef enum {
 - (BBSectionInfo*)_sectionInfoForSectionID:(id)arg1 effective:(BOOL)arg2;
 + (BBServer*)pusherSharedInstance;
 - (void)sendBulletinToPusher:(BBBulletin*)bulletin;
-- (void)makePusherRequest:(NSString*)urlString
-                 infoDict:(NSDictionary*)infoDict
-              credentials:(NSDictionary*)credentials
-               dynamicKey:(NSString*)dynamicKey
-                 authType:(PusherAuthorizationType)authType
-                   method:(NSString*)method
-                logString:(NSString*)logString
-                  service:(NSString*)service
-                 bulletin:(BBBulletin*)bulletin;
-- (NSDictionary*)getPusherInfoDictionaryForService:(NSString*)service
-                                    withDictionary:(NSDictionary*)dictionary;
-- (NSDictionary*)getPusherCredentialsForService:(NSString*)service
-                                 withDictionary:(NSDictionary*)dictionary;
-- (NSString*)getPusherDynamicKeyForService:(NSString*)service
-                            withDictionary:(NSDictionary*)dictionary
-                                completion:(void (^)(NSString*))completion;
 - (void)sendToPusherService:(NSString*)service
                    bulletin:(BBBulletin*)bulletin
                       appID:(NSString*)appID
@@ -239,7 +207,6 @@ typedef enum {
                       title:(NSString*)title
                     message:(NSString*)message
                      isTest:(BOOL)isTest;
-- (NSString*)base64IconDataForBundleID:(NSString*)bundleID;
 @end
 
 // iOS 13

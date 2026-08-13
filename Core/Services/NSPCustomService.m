@@ -1,5 +1,6 @@
 #import "NSPCustomService.h"
-#import "../NSPushServiceConfig.h"
+#import "../NSPushConfig.h"
+#import "../NSPushSupport.h"
 
 @implementation NSPCustomService
 
@@ -8,39 +9,50 @@
   return nil;
 }
 
-+ (PusherAuthorizationType)authTypeForConfig:(NSPushServiceConfig*)config {
-  NSNumber* authMethod = config.rawPrefs[@"authenticationMethod"];
-  if (!authMethod) {
-    return PusherAuthorizationTypeNone;
-  }
-  switch (authMethod.intValue) {
-  case 1:
-    return PusherAuthorizationTypeHeader;
-  case 2:
-    return PusherAuthorizationTypeCredentials;
-  default:
-    return PusherAuthorizationTypeNone;
-  }
++ (NSString*)URLStringForConfig:(NSPushServiceConfig*)config {
+  NSString* key = config.rawPrefs[@"key"];
+  NSString* url = config.rawPrefs[@"url"] ?: @"";
+  return [url stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
+                                         withString:key ?: @""];
 }
 
-+ (NSDictionary*)credentialsForConfig:(NSPushServiceConfig*)config {
-  PusherAuthorizationType authType = [self authTypeForConfig:config];
-  if (authType == PusherAuthorizationTypeCredentials) {
-    NSString* paramName = config.rawPrefs[@"paramName"];
-    if (paramName && paramName.length > 0) {
-      return @{paramName : config.rawPrefs[@"key"] ?: @""};
-    }
-    return @{@"key" : config.rawPrefs[@"key"] ?: @""};
-  }
-  if (authType == PusherAuthorizationTypeHeader) {
++ (NSDictionary*)headersForConfig:(NSPushServiceConfig*)config {
+  NSNumber* authMethod = config.rawPrefs[@"authenticationMethod"];
+  if (authMethod && authMethod.intValue == 1) {
     NSString* paramName = config.rawPrefs[@"paramName"];
     return @{
-      @"headerName" : (paramName && paramName.length > 0) ? paramName
-                                                          : @"Access-Token",
-      @"value" : config.rawPrefs[@"key"] ?: @""
+      (paramName && paramName.length > 0) ? paramName : @"Access-Token"
+          : config.rawPrefs[@"key"] ?: @""
     };
   }
-  return @{@"key" : config.rawPrefs[@"key"] ?: @""};
+  return @{};
+}
+
++ (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config {
+  NSNumber* includeIcon = config.rawPrefs[@"includeIcon"];
+  return includeIcon && includeIcon.boolValue;
+}
+
++ (BOOL)shouldIncludeImageForConfig:(NSPushServiceConfig*)config {
+  NSNumber* includeImage = config.rawPrefs[@"includeImage"];
+  return includeImage && includeImage.boolValue;
+}
+
++ (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context
+                                     config:(NSPushServiceConfig*)config {
+  NSMutableDictionary* data =
+      [[super infoDictForBulletinContext:context config:config] mutableCopy];
+
+  NSNumber* authMethod = config.rawPrefs[@"authenticationMethod"];
+  if (authMethod && authMethod.intValue == 2) {
+    NSString* paramName = config.rawPrefs[@"paramName"];
+    if (paramName && paramName.length > 0) {
+      data[paramName] = config.rawPrefs[@"key"] ?: @"";
+    } else {
+      data[@"key"] = config.rawPrefs[@"key"] ?: @"";
+    }
+  }
+  return data;
 }
 
 @end

@@ -29,7 +29,9 @@
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
-			<string>PushoverToken</string>
+			<string>token</string>
+			<key>service</key>
+			<string>Pushover</string>
 			<key>label</key>
 			<string>API Token/Key:</string>
 			<key>noAutoCorrect</key>
@@ -53,7 +55,9 @@
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
-			<string>PushoverUser</string>
+			<string>user</string>
+			<key>service</key>
+			<string>Pushover</string>
 			<key>label</key>
 			<string>User Key:</string>
 			<key>noAutoCorrect</key>
@@ -79,7 +83,9 @@
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
-			<string>PushoverAppListIsBlacklist</string>
+			<string>appListIsBlacklist</string>
+			<key>service</key>
+			<string>Pushover</string>
 			<key>validTitles</key>
 			<array>
 				<string>Blacklist</string>
@@ -100,8 +106,8 @@
 			<string>app_list</string>
 			<key>label</key>
 			<string>App List</string>
-			<key>ALSettingsKeyPrefix</key>
-			<string>PushoverBL-</string>
+			<key>service</key>
+			<string>Pushover</string>
 			<key>useSearchBar</key>
 			<true />
 			<key>alphabeticIndexingEnabled</key>
@@ -119,9 +125,9 @@
 			<key>service</key>
 			<string>Pushover</string>
 			<key>defaultDevicesKey</key>
-			<string>PushoverDevices</string>
+			<string>devices</string>
 			<key>defaultSoundsKey</key>
-			<string>PushoverSounds</string>
+			<string>sounds</string>
 		</dict>
 
 		<!-- Options -->

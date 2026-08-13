@@ -1,11 +1,24 @@
 #import "NSPFeishuService.h"
 #import "../../helpers.h"
-#import "../NSPBulletinContext.h"
+#import "../NSPushSupport.h"
 
 @implementation NSPFeishuService
 
 + (NSString*)serviceName {
   return PUSHER_SERVICE_FEISHU;
+}
+
++ (NSString*)URLStringForConfig:(NSPushServiceConfig*)config {
+  NSString* key = config.rawPrefs[@"key"];
+  NSString* url = config.rawPrefs[@"url"] ?: @"";
+  return [url stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
+                                         withString:key ?: @""];
+}
+
++ (NSString*)urlForEventName:(NSString*)eventName
+                      dbName:(NSString*)dbName
+                   serverURL:(NSString*)serverURL {
+  return PUSHER_SERVICE_FEISHU_URL;
 }
 
 + (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context
