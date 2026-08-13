@@ -43,6 +43,10 @@ jobs:
         mkdir -p $THEOS/include/AltList
         cp AltList.h $THEOS/include/
         cp *.h $THEOS/include/AltList/
+        # The roothide scheme links frameworks from $THEOS/lib/iphone/roothide, which
+        # install_to_theos.sh does not populate; copy the rootless build there.
+        mkdir -p $THEOS/lib/iphone/roothide
+        cp -R ./.theos/obj/AltList.framework $THEOS/lib/iphone/roothide/
         cd ..
 
     - name: Patch PSSpecifier (idempotent)
