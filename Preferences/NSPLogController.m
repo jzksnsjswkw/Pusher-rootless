@@ -11,12 +11,18 @@
 
 static NSPLogController* logControllerSharedInstance = nil;
 static void logsUpdated() {
-  if (logControllerSharedInstance &&
-      [logControllerSharedInstance isKindOfClass:NSPLogController.class] &&
-      [logControllerSharedInstance
-          respondsToSelector:@selector(updateLogAndReload)]) {
-    [logControllerSharedInstance updateLogAndReload];
-  }
+  // Darwin notification callbacks run on a background thread; UITableView must
+  // only be touched on the main thread. Keep the guards: the static does not
+  // retain the controller, so it may have been deallocated by the time the
+  // block runs.
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (logControllerSharedInstance &&
+        [logControllerSharedInstance isKindOfClass:NSPLogController.class] &&
+        [logControllerSharedInstance
+            respondsToSelector:@selector(updateLogAndReload)]) {
+      [logControllerSharedInstance updateLogAndReload];
+    }
+  });
 }
 
 static NSDictionary* getLogPreferences() {
@@ -26,9 +32,10 @@ static NSDictionary* getLogPreferences() {
       PUSHER_LOG_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
   NSDictionary* prefs = @{};
   if (keyList) {
-    prefs = (NSDictionary*)CFPreferencesCopyMultiple(keyList, PUSHER_LOG_ID,
-                                                     kCFPreferencesCurrentUser,
-                                                     kCFPreferencesAnyHost);
+    // CFPreferencesCopyMultiple returns a +1 object; autorelease it (local var).
+    prefs = [(id)CFPreferencesCopyMultiple(
+        keyList, PUSHER_LOG_ID, kCFPreferencesCurrentUser,
+        kCFPreferencesAnyHost) autorelease];
     if (!prefs) {
       prefs = @{};
     }
@@ -40,7 +47,20 @@ static NSDictionary* getLogPreferences() {
 @implementation NSPLogController
 
 - (void)dealloc {
+  // Remove the Darwin observer before anything else so a notification can't
+  // fire into a half-torn-down object.
+  CFNotificationCenterRemoveObserver(CFNotificationCenterGetDarwinNotifyCenter(),
+                                     NULL, CFSTR(PUSHER_LOG_PREFS_NOTIFICATION),
+                                     NULL);
   logControllerSharedInstance = nil;
+  [_service release];
+  [_logKey release];
+  [_logEnabledKey release];
+  [_filteredAppID release];
+  [_sections release];
+  [_data release];
+  [_truncatedIndexPaths release];
+  [_expandedIndexPaths release];
   [_table release];
   [super dealloc];
 }
@@ -181,6 +201,9 @@ static NSDictionary* getLogPreferences() {
       kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
   _logEnabled =
       logEnabledRef ? ((__bridge NSNumber*)logEnabledRef).boolValue : YES;
+  if (logEnabledRef) {
+    CFRelease(logEnabledRef);
+  }
 
   [self updateLogAndReload];
 }
@@ -208,6 +231,9 @@ static NSDictionary* getLogPreferences() {
 - (void)updateLog {
   NSDictionary* prefs = getLogPreferences();
 
+  if (_truncatedIndexPaths) {
+    [_truncatedIndexPaths release];
+  }
   _truncatedIndexPaths = [NSMutableArray new];
 
   if (_sections) {
@@ -248,6 +274,9 @@ static NSDictionary* getLogPreferences() {
   // _globalOnlyRow above in _gloabl check
 
   _firstLogSection = _data.count;
+  if (_expandedIndexPaths) {
+    [_expandedIndexPaths release];
+  }
   _expandedIndexPaths = [NSMutableArray new];
 
   NSArray* prefsLog = nil;
@@ -369,6 +398,9 @@ static NSDictionary* getLogPreferences() {
      forRowAtIndexPath:(NSIndexPath*)indexPath {
   if (indexPath.section == _filterSection && indexPath.row == _appFilterRow &&
       editingStyle == UITableViewCellEditingStyleDelete) {
+    if (_filteredAppID) {
+      [_filteredAppID release];
+    }
     _filteredAppID = nil;
     [self updateLogAndReload];
   }
@@ -402,24 +434,21 @@ static NSDictionary* getLogPreferences() {
                                kCFPreferencesAnyHost);
     }
 
-    int numSections = [self numberOfSectionsInTableView:tableView];
-    if (numSections >= _firstLogSection) {
-      [tableView beginUpdates];
-      [self updateLog];
-      [tableView
-            deleteSections:[NSIndexSet
-                               indexSetWithIndexesInRange:
-                                   NSMakeRange(_firstLogSection,
-                                               numSections - _firstLogSection)]
-          withRowAnimation:UITableViewRowAnimationAutomatic];
-      [tableView endUpdates];
-    }
+    // Logs are cleared above; simply rebuild the sections and reload. The old
+    // code recomputed a deleteSections range from the pre-clear section count
+    // after _sections had already been rebuilt, which crashed with
+    // NSInternalInconsistencyException whenever any log existed.
+    [self updateLog];
+    [_table reloadData];
   } else if (indexPath.section == _filterSection &&
              indexPath.row == _appFilterRow) {
     // app filter
     NSPAppSelectionController* appSelectionController =
         [NSPAppSelectionController new];
     [appSelectionController setCallback:^(id appID) {
+      if (_filteredAppID) {
+        [_filteredAppID release];
+      }
       _filteredAppID = [appID copy];
       [self updateLogAndReload];
       CFStringRef tutorialKeyRef = CFSTR("LogAppFilterTutorialShown");
@@ -430,6 +459,9 @@ static NSDictionary* getLogPreferences() {
       BOOL tutorialShown =
           tutorialShownRef ? ((__bridge NSNumber*)tutorialShownRef).boolValue
                            : NO;
+      if (tutorialShownRef) {
+        CFRelease(tutorialShownRef);
+      }
       if (!tutorialShown) {
         [self showAppFilterTutorial];
       }
@@ -525,8 +557,8 @@ static NSDictionary* getLogPreferences() {
       BOOL isNetworkResponse = indexPath.row == _networkResponseRow;
       UISegmentedControl* segmentedControl = nil;
       if (isNetworkResponse) {
-        segmentedControl =
-            [[UISegmentedControl alloc] initWithItems:NETWORK_RESPONSE_ITEMS];
+        segmentedControl = [[[UISegmentedControl alloc]
+            initWithItems:NETWORK_RESPONSE_ITEMS] autorelease];
         segmentedControl.selectedSegmentIndex =
             _filteredNetworkResponse
                 ? [NETWORK_RESPONSE_ITEMS
@@ -537,7 +569,8 @@ static NSDictionary* getLogPreferences() {
                    forControlEvents:UIControlEventValueChanged];
       } else {
         segmentedControl =
-            [[UISegmentedControl alloc] initWithItems:END_RESULT_ITEMS];
+            [[[UISegmentedControl alloc] initWithItems:END_RESULT_ITEMS]
+                autorelease];
         segmentedControl.selectedSegmentIndex =
             _filteredEndResult
                 ? [END_RESULT_ITEMS indexOfObject:_filteredEndResult]
@@ -589,7 +622,7 @@ static NSDictionary* getLogPreferences() {
         //                        forDisplayIdentifier:_filteredAppID];
       }
     } else if (indexPath.row == _globalOnlyRow) {
-      UISwitch* globalOnlySwitch = [UISwitch new];
+      UISwitch* globalOnlySwitch = [[UISwitch new] autorelease];
       globalOnlySwitch.on = _filteredGlobalOnly;
       [globalOnlySwitch addTarget:self
                            action:@selector(updateGlobalOnly:)
@@ -604,7 +637,7 @@ static NSDictionary* getLogPreferences() {
   if (expanded) {
     // cell.textLabel.numberOfLines = 0;
     // cell.textLabel.lineBreakMode = NSLineBreakByWordWrapping;
-    expandedTextView = [UITextView new];
+    expandedTextView = [[UITextView new] autorelease];
     expandedTextView.tag = EXPANDED_TEXT_VIEW_TAG;
     expandedTextView.editable = NO;
     expandedTextView.text = cell.textLabel.text;
@@ -677,7 +710,7 @@ static NSDictionary* getLogPreferences() {
   }
 
   if (indexPath.section == 0 && indexPath.row == _logEnabledSwitchRow) {
-    UISwitch* logEnabledSwitch = [UISwitch new];
+    UISwitch* logEnabledSwitch = [[UISwitch new] autorelease];
     logEnabledSwitch.on = _logEnabled;
     [logEnabledSwitch addTarget:self
                          action:@selector(updateLogEnabled:)

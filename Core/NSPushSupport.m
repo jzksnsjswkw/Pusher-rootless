@@ -21,11 +21,6 @@
   return context;
 }
 
-- (NSString*)retryKeyForService:(NSString*)service {
-  return XStr(@"%@_%@_%@", self.bulletin.bulletinID ?: @"empty_bulletin_id",
-              self.bulletin.sectionID, service);
-}
-
 @end
 
 @implementation NSPushImage

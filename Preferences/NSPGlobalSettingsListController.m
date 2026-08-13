@@ -22,9 +22,11 @@
         PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
     NSDictionary* prefs = @{};
     if (keyList) {
-      prefs = (NSDictionary*)CFPreferencesCopyMultiple(
+      // CFPreferencesCopyMultiple returns a +1 object. CFBridgingRelease is a no-op
+      // under MRC, so autorelease the +1 explicitly (local var, used immediately).
+      prefs = [(id)CFPreferencesCopyMultiple(
           keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-          kCFPreferencesAnyHost);
+          kCFPreferencesAnyHost) autorelease];
       if (!prefs) {
         prefs = @{};
       }
@@ -40,7 +42,11 @@
                 countAppIDsWithPrefix:prefs
                                prefix:[specifier propertyForKey:
                                                      @"ALSettingsKeyPrefix"]]);
-        [specifier setProperty:self forKey:@"psListRef"];
+        // Non-retaining NSValue to avoid controller -> specifier -> controller
+        // retain cycle.
+        [specifier
+            setProperty:[NSValue valueWithNonretainedObject:self]
+                 forKey:@"psListRef"];
         break;
       }
     }

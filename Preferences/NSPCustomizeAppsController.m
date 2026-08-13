@@ -79,9 +79,25 @@
 }
 
 - (void)dealloc {
+  // _lastTargetAppID/_lastTargetIndexPath are borrowed references, not owned;
+  // everything else is retained/copied/alloc'd and must be released.
   [_table release];
   [_sections release];
   [_data release];
+  [_service release];
+  [_prefsKey release];
+  [_customApps release];
+  [_label release];
+  [_defaultDevices release];
+  [_defaultSounds release];
+  [_defaultEventName release];
+  [_defaultIncludeIcon release];
+  [_defaultIncludeImage release];
+  [_defaultImageMaxWidth release];
+  [_defaultImageMaxHeight release];
+  [_defaultImageShrinkFactor release];
+  [_defaultCurateData release];
+  [_loadedAppControllers release];
   [super dealloc];
 }
 
@@ -127,6 +143,26 @@
 - (void)viewWillAppear:(BOOL)animated {
   [super viewWillAppear:animated];
 
+  // Release the ivars this pass is about to reassign (viewWillAppear fires on
+  // every pop back, so without this the previous values leak). Must come after
+  // [super viewWillAppear:] because the parent's tintUIToPusherColor reloads
+  // the table, reading these ivars. Do NOT touch _service/_prefsKey/
+  // _lastTargetAppID/_lastTargetIndexPath/_loadedAppControllers/_table: they
+  // are set once in viewDidLoad or are borrowed references.
+  [_customApps release];
+  [_label release];
+  [_defaultDevices release];
+  [_defaultSounds release];
+  [_defaultEventName release];
+  [_defaultIncludeIcon release];
+  [_defaultIncludeImage release];
+  [_defaultImageMaxWidth release];
+  [_defaultImageMaxHeight release];
+  [_defaultImageShrinkFactor release];
+  [_defaultCurateData release];
+  [_sections release];
+  [_data release];
+
   // End editing of previous view controller so updates prefs if editing text
   // field
   if (self.navigationController.viewControllers &&
@@ -145,9 +181,11 @@
       PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
   NSDictionary* prefs = @{};
   if (keyList) {
-    prefs = (NSDictionary*)CFPreferencesCopyMultiple(keyList, PUSHER_APP_ID,
-                                                     kCFPreferencesCurrentUser,
-                                                     kCFPreferencesAnyHost);
+    // CFPreferencesCopyMultiple returns a +1 object. CFBridgingRelease is a no-op
+      // under MRC, so autorelease the +1 explicitly (local var, used immediately).
+    prefs = [(id)CFPreferencesCopyMultiple(
+        keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
+        kCFPreferencesAnyHost) autorelease];
     if (!prefs) {
       prefs = @{};
     }
@@ -244,8 +282,12 @@
 
 - (void)updateTitle {
   self.specifier.name = XStr(@"%@ (%d total)", _label, (int)_customApps.count);
+  // psListRef is stored as a non-retaining NSValue to avoid a retain cycle
+  // (controller -> specifiers -> psListRef -> controller); unwrap it here.
+  NSValue* psListRefValue =
+      (NSValue*)[self.specifier propertyForKey:@"psListRef"];
   PSListController* listController =
-      (PSListController*)[self.specifier propertyForKey:@"psListRef"];
+      (PSListController*)psListRefValue.nonretainedObjectValue;
   if (listController) {
     [listController reloadSpecifier:self.specifier];
   }
@@ -380,6 +422,37 @@
   return UITableViewCellEditingStyleNone;
 }
 
+// Shared by the swipe action and commitEditingStyle (Edit mode), so the delete
+// behavior stays in one place.
+- (void)deleteAppAtRowAtIndexPath:(NSIndexPath*)indexPath
+                          tableView:(UITableView*)tableView {
+  [_data[_sections[indexPath.section]] removeObjectAtIndex:indexPath.row];
+  [self saveAppState];
+
+  [CATransaction begin];
+  [tableView beginUpdates];
+  if (((NSArray*)_data[_sections[indexPath.section]]).count == 0) {
+    [CATransaction setCompletionBlock:^{
+      [tableView reloadData];
+    }];
+  }
+  [tableView deleteRowsAtIndexPaths:@[ indexPath ]
+                   withRowAnimation:UITableViewRowAnimationAutomatic];
+  [tableView endUpdates];
+  [CATransaction commit];
+}
+
+// Implemented so the red minus buttons in Edit mode actually delete rows; the
+// data source previously advertised Delete editing style but had no
+// commitEditingStyle:, making Edit-mode deletion a no-op.
+- (void)tableView:(UITableView*)tableView
+    commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
+     forRowAtIndexPath:(NSIndexPath*)indexPath {
+  if (editingStyle == UITableViewCellEditingStyleDelete) {
+    [self deleteAppAtRowAtIndexPath:indexPath tableView:tableView];
+  }
+}
+
 - (UISwipeActionsConfiguration*)tableView:(UITableView*)tableView
     trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath*)indexPath {
   if (indexPath.section == 0) {
@@ -392,25 +465,8 @@
                         handler:^(UIContextualAction* action,
                                   UIView* sourceView,
                                   void (^completionHandler)(BOOL)) {
-                          [_data[_sections[indexPath.section]]
-                              removeObjectAtIndex:indexPath.row];
-                          [self saveAppState];
-
-                          [CATransaction begin];
-                          [tableView beginUpdates];
-                          if (((NSArray*)_data[_sections[indexPath.section]])
-                                  .count == 0) {
-                            [CATransaction setCompletionBlock:^{
-                              [tableView reloadData];
-                            }];
-                          }
-                          [tableView
-                              deleteRowsAtIndexPaths:@[ indexPath ]
-                                    withRowAnimation:
-                                        UITableViewRowAnimationAutomatic];
-                          [tableView endUpdates];
-                          [CATransaction commit];
-
+                          [self deleteAppAtRowAtIndexPath:indexPath
+                                                 tableView:tableView];
                           completionHandler(YES);
                         }];
 

@@ -17,8 +17,6 @@
                             message:(NSString*)message
                              isTest:(BOOL)isTest;
 
-- (NSString*)retryKeyForService:(NSString*)service;
-
 @end
 
 @interface NSPushImage : NSObject

@@ -42,9 +42,10 @@ jobs:
         cp AltList.h $THEOS/include/AltList/
         cd ..
 
-    - name: Patch PSSpecifier
+    - name: Patch PSSpecifier (idempotent)
       run: |
-        sed -i '' 's/SEL action;/SEL action;\n\tSEL setter;\n\tSEL getter;/' $THEOS/vendor/include/Preferences/PSSpecifier.h
+        grep -q "SEL setter;" $THEOS/vendor/include/Preferences/PSSpecifier.h \
+          || sed -i '' 's/SEL action;/SEL action;\n\tSEL setter;\n\tSEL getter;/' $THEOS/vendor/include/Preferences/PSSpecifier.h
 
     - name: Build package
       run: |

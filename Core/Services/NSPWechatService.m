@@ -60,16 +60,27 @@
 // WeChat access_token is valid for ~7200 seconds. Cache it so we don't
 // re-request (and risk rate-limits) on every notification, and so a failed
 // gettoken never poisons the retry path with an empty token.
-static NSString* cachedWechatTokenForKey(NSString* cacheKey, BOOL* hit) {
-  static NSMutableDictionary* tokenCache = nil;
-  static NSObject* lock = nil;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    tokenCache = [NSMutableDictionary new];
-    lock = [NSObject new];
+//
+// IMPORTANT: these must be file-scope statics, not function-scope. A
+// function-scope static in cachedWechatTokenForKey: and a separate one in
+// cacheWechatTokenForKey: would make the writer and reader operate on two
+// different dictionaries, so the cache would never hit and every notification
+// would trigger a fresh gettoken request.
+static NSMutableDictionary* wechatTokenCache = nil;
+static NSObject* wechatTokenCacheLock = nil;
+static dispatch_once_t wechatTokenCacheOnceToken;
+
+static void wechatTokenCacheInit(void) {
+  dispatch_once(&wechatTokenCacheOnceToken, ^{
+    wechatTokenCache = [NSMutableDictionary new];
+    wechatTokenCacheLock = [NSObject new];
   });
-  @synchronized(lock) {
-    NSDictionary* entry = tokenCache[cacheKey];
+}
+
+static NSString* cachedWechatTokenForKey(NSString* cacheKey, BOOL* hit) {
+  wechatTokenCacheInit();
+  @synchronized(wechatTokenCacheLock) {
+    NSDictionary* entry = wechatTokenCache[cacheKey];
     if (entry && [entry[@"expire"] timeIntervalSinceNow] > 0) {
       *hit = YES;
       return entry[@"token"];
@@ -80,20 +91,14 @@ static NSString* cachedWechatTokenForKey(NSString* cacheKey, BOOL* hit) {
 }
 
 static void cacheWechatTokenForKey(NSString* cacheKey, NSString* token) {
-  static NSMutableDictionary* tokenCache = nil;
-  static NSObject* lock = nil;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    tokenCache = [NSMutableDictionary new];
-    lock = [NSObject new];
-  });
+  wechatTokenCacheInit();
   if (!token || token.length == 0) {
     return; // never cache an empty/failed token
   }
   // Cache with a small margin below WeChat's 7200s expiry.
   NSDate* expire = [NSDate dateWithTimeIntervalSinceNow:7200 - 60];
-  @synchronized(lock) {
-    tokenCache[cacheKey] = @{@"token" : token, @"expire" : expire};
+  @synchronized(wechatTokenCacheLock) {
+    wechatTokenCache[cacheKey] = @{@"token" : token, @"expire" : expire};
   }
 }
 

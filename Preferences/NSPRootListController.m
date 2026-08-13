@@ -2,6 +2,13 @@
 
 @implementation NSPRootListController
 
+- (void)dealloc {
+  [_priorTintColor release];
+  [_headerImageView release];
+  [_headerContainer release];
+  [super dealloc];
+}
+
 - (void)viewDidLoad {
   [super viewDidLoad];
   if (!_priorTintColor) {
@@ -36,6 +43,11 @@
 
   // Resize frame to fit
   CGRect newFrame = _headerImageView.frame;
+  // Banner image missing (or zero-sized): nothing to scale, avoid dividing by
+  // zero below which would produce a NaN frame.
+  if (newFrame.size.width == 0) {
+    return;
+  }
   CGFloat ratio = width / newFrame.size.width;
   newFrame.size.width = width;
   newFrame.size.height *= ratio;

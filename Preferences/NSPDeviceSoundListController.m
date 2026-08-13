@@ -7,6 +7,22 @@
 
 @implementation NSPDeviceSoundListController
 
+- (void)dealloc {
+  // _onlyAllowOne/_isSound/_isCustomApp are scalars; everything else here is
+  // owned (alloc/retain in viewDidLoad or reassigned in viewWillAppear).
+  [_serviceItems release];
+  [_prefs release];
+  [_updateBn release];
+  [_activityIndicator release];
+  [_activityIndicatorBn release];
+  [_prefsKey release];
+  [_service release];
+  if (_customAppIDKey) {
+    [_customAppIDKey release];
+  }
+  [super dealloc];
+}
+
 - (void)viewDidLoad {
   [super viewDidLoad];
 
@@ -36,6 +52,18 @@
 - (void)viewWillAppear:(BOOL)animated {
   [super viewWillAppear:animated];
 
+  // Release the ivars this pass is about to reassign (viewWillAppear fires on
+  // every pop back). Must come after [super viewWillAppear:] — the parent's
+  // tintUIToPusherColor reloads the table and reads _serviceItems — and before
+  // the reassignments below. Do NOT touch _service/_prefsKey/_customAppIDKey/
+  // _updateBn/_activityIndicator/_activityIndicatorBn: set once in viewDidLoad.
+  if (_serviceItems) {
+    [_serviceItems release];
+  }
+  if (_prefs) {
+    [_prefs release];
+  }
+
   // End editing of previous view controller so updates prefs if editing text
   // field
   if (self.navigationController.viewControllers &&
@@ -54,9 +82,15 @@
       PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
   _prefs = @{};
   if (keyList) {
-    _prefs = (NSDictionary*)CFPreferencesCopyMultiple(keyList, PUSHER_APP_ID,
-                                                      kCFPreferencesCurrentUser,
-                                                      kCFPreferencesAnyHost);
+    // CFPreferencesCopyMultiple returns a +1 object. Do NOT use
+    // CFBridgingRelease here: with the iOS 26.5 SDK it is an inline function
+    // that autoreleases its argument (it used to be a no-op cast macro), so
+    // the value would die when the autorelease pool drains and _prefs would
+    // dangle. A plain cast keeps the +1 owned; _prefs is released in the
+    // viewWillAppear release block above and in dealloc.
+    _prefs = (NSDictionary*)CFPreferencesCopyMultiple(
+        keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
+        kCFPreferencesAnyHost);
     if (!_prefs) {
       _prefs = @{};
     }
@@ -257,6 +291,10 @@
       dataTaskWithRequest:request
         completionHandler:^(NSData* data, NSURLResponse* response,
                             NSError* error) {
+          // Run the whole response handling on the main thread: _serviceItems
+          // is mutated here and read by the table view, so touching it from
+          // NSURLSession's background queue races with cell rendering.
+          dispatch_async(dispatch_get_main_queue(), ^{
           if (data.length && error == nil) {
             XLog(@"Success");
             NSError* jsonError = nil;
@@ -345,6 +383,7 @@
           }
 
           [self hideActivityIndicator];
+          });
         }] resume];
 }
 
@@ -367,6 +406,10 @@
       dataTaskWithRequest:request
         completionHandler:^(NSData* data, NSURLResponse* response,
                             NSError* error) {
+          // Run the whole response handling on the main thread: _serviceItems
+          // is mutated here and read by the table view, so touching it from
+          // NSURLSession's background queue races with cell rendering.
+          dispatch_async(dispatch_get_main_queue(), ^{
           if (data.length && error == nil) {
             XLog(@"Success");
             NSError* jsonError = nil;
@@ -456,6 +499,7 @@
           }
 
           [self hideActivityIndicator];
+          });
         }] resume];
 }
 
@@ -478,6 +522,10 @@
       dataTaskWithRequest:request
         completionHandler:^(NSData* data, NSURLResponse* response,
                             NSError* error) {
+          // Run the whole response handling on the main thread: _serviceItems
+          // is mutated here and read by the table view, so touching it from
+          // NSURLSession's background queue races with cell rendering.
+          dispatch_async(dispatch_get_main_queue(), ^{
           if (data.length && error == nil) {
             XLog(@"Success");
             NSError* jsonError = nil;
@@ -574,6 +622,7 @@
           }
 
           [self hideActivityIndicator];
+          });
         }] resume];
 }
 
@@ -596,6 +645,10 @@
       dataTaskWithRequest:request
         completionHandler:^(NSData* data, NSURLResponse* response,
                             NSError* error) {
+          // Run the whole response handling on the main thread: _serviceItems
+          // is mutated here and read by the table view, so touching it from
+          // NSURLSession's background queue races with cell rendering.
+          dispatch_async(dispatch_get_main_queue(), ^{
           if (data.length && error == nil) {
             XLog(@"Success");
             NSError* jsonError = nil;
@@ -692,6 +745,7 @@
           }
 
           [self hideActivityIndicator];
+          });
         }] resume];
 }
 

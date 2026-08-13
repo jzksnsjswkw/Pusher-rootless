@@ -76,8 +76,16 @@
            @"Notifications is disabled in this app's settings.";
   }
 
+  // No filter conditions configured: nothing to check, let the notification
+  // through. (An empty list with OR used to block everything because the loop
+  // below never found anything "sufficient", unlike AND which returned nil.)
+  if (sns.count == 0) {
+    return nil;
+  }
+
+  BOOL foundSufficient = NO;
   for (NSString* key in sns) {
-    BOOL sufficient = YES;
+    BOOL sufficient = NO;
     if (XEq(key, PUSHER_SUFFICIENT_ALLOW_NOTIFICATIONS_KEY)) {
       sufficient = sectionInfo.allowsNotifications;
     } else if (XEq(key, PUSHER_SUFFICIENT_LOCK_SCREEN_KEY)) {
@@ -91,6 +99,11 @@
                     BBActualSectionInfoPushSettingsBadges) != 0;
     } else if (XEq(key, PUSHER_SUFFICIENT_SHOWS_PREVIEWS_KEY)) {
       sufficient = sectionInfo.showsMessagePreview;
+    } else {
+      // Unknown/misspelled condition key: treat it as not satisfied so a
+      // config typo can't silently bypass the filter. This is defensive only;
+      // getSNSKeys only produces the known keys.
+      XLog(@"Unknown SNS condition key: %@", key);
     }
     // AND, so if any one is insufficient, just return right away
     if (isAnd && !sufficient) {
@@ -98,12 +111,16 @@
       // OR, so just one sufficient is enough
     } else if (!isAnd && sufficient) {
       XLog(@"OR and sufficient: %@", key);
+      foundSufficient = YES;
       break;
     }
   }
 
-  // none passed as sufficient before so insufficient if OR
-  if (!isAnd) {
+  // None passed as sufficient before, so insufficient if OR. We must track
+  // foundSufficient explicitly: the plain `break` above used to fall through
+  // to this check and block every notification in OR mode, even when a
+  // condition had just matched.
+  if (!isAnd && !foundSufficient) {
     XLog(@"OR and insufficient");
     return @"'OR' and none were correct";
   }

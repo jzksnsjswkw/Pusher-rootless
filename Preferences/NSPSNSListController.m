@@ -3,6 +3,12 @@
 
 @implementation NSPSNSListController
 
+- (void)dealloc {
+  [_service release];
+  [_synchronizeSpecifier release];
+  [super dealloc];
+}
+
 - (NSArray*)specifiers {
   if (!_specifiers) {
     _specifiers = [[self loadSpecifiersFromPlistName:@"SNS"
@@ -66,15 +72,15 @@
              forKey:@"footerText"];
 
     _synchronizeSpecifier =
-        [PSSpecifier preferenceSpecifierNamed:(synchronizedWithGlobal
-                                                   ? @"Synchronized"
-                                                   : @"Synchronize With Global")
+        [[PSSpecifier preferenceSpecifierNamed:(synchronizedWithGlobal
+                                                       ? @"Synchronized"
+                                                       : @"Synchronize With Global")
                                        target:self
                                           set:nil
                                           get:nil
                                        detail:nil
                                          cell:PSButtonCell
-                                         edit:nil];
+                                         edit:nil] retain];
     [_synchronizeSpecifier setButtonAction:@selector(synchronizeWithGlobal:)];
     [_synchronizeSpecifier setProperty:@(!synchronizedWithGlobal)
                                 forKey:@"enabled"];

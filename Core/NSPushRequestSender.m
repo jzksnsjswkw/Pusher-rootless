@@ -14,6 +14,8 @@
                        logString:(NSString*)logString
                          service:(NSString*)service
                         bulletin:(BBBulletin*)bulletin;
+- (NSNumber*)retriesLeftForRetryKey:(NSString*)retryKey;
+- (void)setRetriesLeft:(NSNumber*)count forRetryKey:(NSString*)retryKey;
 @end
 
 static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
@@ -40,6 +42,25 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
   return self;
 }
 
+// retriesLeft is read/written from both the main thread and NSURLSession's
+// background completion queues; all access must go through these locked
+// accessors to avoid a data race on the mutable dictionary.
+- (NSNumber*)retriesLeftForRetryKey:(NSString*)retryKey {
+  @synchronized(self) {
+    return self.retriesLeft[retryKey];
+  }
+}
+
+- (void)setRetriesLeft:(NSNumber*)count forRetryKey:(NSString*)retryKey {
+  @synchronized(self) {
+    if (count) {
+      self.retriesLeft[retryKey] = count;
+    } else {
+      [self.retriesLeft removeObjectForKey:retryKey];
+    }
+  }
+}
+
 - (void)sendRequestWithURLString:(NSString*)urlString
                         infoDict:(NSDictionary*)infoDict
                          headers:(NSDictionary*)headers
@@ -48,7 +69,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                          service:(NSString*)service
                         bulletin:(BBBulletin*)bulletin {
   NSString* retryKey = retryKeyForBulletinAndService(bulletin, service);
-  self.retriesLeft[retryKey] = @(PUSHER_TRIES - 1);
+  [self setRetriesLeft:@(PUSHER_TRIES - 1) forRetryKey:retryKey];
   [self sendAttemptWithURLString:urlString
                         infoDict:infoDict
                          headers:headers
@@ -78,7 +99,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
         [NSPushImage base64RepresentationForImage:infoDictForRequest[@"image"]];
   }
 
-  if (XEq(method, @"GET")) {
+  if ([method caseInsensitiveCompare:@"GET"] == NSOrderedSame) {
     // Only unreserved RFC 3986 characters are left unescaped so that
     // '&', '=', '+', '#', '?', '/' etc. in keys/values can't corrupt the
     // query string.
@@ -104,7 +125,13 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                              (parameterString.length < 1 ? @"" : @"&"),
                              escapedKey, escapedValue);
     }
-    newUrlString = XStr(@"%@?%@", newUrlString, parameterString);
+    // Don't add a duplicate '?' if the URL template already contains one
+    // (custom services can provide full URLs with a query string).
+    if (parameterString.length > 0) {
+      newUrlString =
+          XStr(@"%@%@%@", newUrlString,
+               [newUrlString containsString:@"?"] ? @"&" : @"?", parameterString);
+    }
     XLog(@"URL String: %@", newUrlString);
   }
 
@@ -122,6 +149,9 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                                   bulletin:bulletin
                                      label:@"Invalid URL"
                                     object:nil];
+    // Clear the retry key so a bad URL doesn't leak an entry in the
+    // long-running SpringBoard process (it would otherwise grow unbounded).
+    [self setRetriesLeft:nil forRetryKey:retryKeyForBulletinAndService(bulletin, service)];
     return;
   }
   NSMutableURLRequest* request =
@@ -159,10 +189,22 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
     [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
     [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
 
+    NSError* jsonError = nil;
     NSData* requestData =
         [NSJSONSerialization dataWithJSONObject:infoDictForRequest
                                         options:NSJSONWritingPrettyPrinted
-                                          error:nil];
+                                          error:&jsonError];
+    if (!requestData) {
+      XLog(@"%@ JSON serialization failed: %@", logString, jsonError);
+      [NSPushLog addToLogIfEnabledForService:service
+                                    bulletin:bulletin
+                                       label:@"JSON Serialization Error"
+                                      object:jsonError.description
+                                dontTruncate:YES];
+      [self setRetriesLeft:nil
+               forRetryKey:retryKeyForBulletinAndService(bulletin, service)];
+      return;
+    }
     [request setValue:XStr(@"%d", (int)requestData.length)
         forHTTPHeaderField:@"Content-Length"];
     [request setHTTPBody:requestData];
@@ -176,7 +218,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
           XLog(@"%@ Got response back", logString);
 
           NSString* retryKey = retryKeyForBulletinAndService(bulletin, service);
-          NSNumber* retriesLeft = self.retriesLeft[retryKey];
+          NSNumber* retriesLeft = [self retriesLeftForRetryKey:retryKey];
 
           if (data.length && error == nil) {
             NSString* dataStr =
@@ -190,7 +232,8 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                     containsString:@"request entity too large"] &&
                 retriesLeft && retriesLeft.intValue > 0 &&
                 [image isKindOfClass:UIImage.class]) {
-              self.retriesLeft[retryKey] = @(retriesLeft.intValue - 1);
+              [self setRetriesLeft:@(retriesLeft.intValue - 1)
+                       forRetryKey:retryKey];
               NSMutableDictionary* retryInfoDict = [infoDict mutableCopy];
 
               CGFloat imageShrinkFactor =
@@ -201,7 +244,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                   @"unchanged (your shrink factor may be less than 1.0)";
               // if last retry and has image, set image property to true
               // instead of image base64
-              if (((NSNumber*)self.retriesLeft[retryKey]).intValue == 0) {
+              if ([self retriesLeftForRetryKey:retryKey].intValue == 0) {
                 status = @"removed";
                 retryInfoDict[@"image"] = @YES;
               } else if (imageShrinkFactor > 1.0) {
@@ -266,7 +309,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                                               object:dataStr];
               XLog(@"%@ Failed: image too large after final attempt: %@",
                    logString, dataStr);
-              [self.retriesLeft removeObjectForKey:retryKey];
+              [self setRetriesLeft:nil forRetryKey:retryKey];
               return;
             }
             [NSPushLog addToLogIfEnabledForService:service
@@ -274,7 +317,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                                              label:@"Network Response: Success"
                                             object:dataStr];
             XLog(@"%@ Success: %@", logString, dataStr);
-            [self.retriesLeft removeObjectForKey:retryKey];
+            [self setRetriesLeft:nil forRetryKey:retryKey];
           } else {
             if (error) {
               [NSPushLog addToLogIfEnabledForService:service
@@ -293,13 +336,14 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
             }
             if (retriesLeft) {
               if (retriesLeft.intValue > 0) {
-                self.retriesLeft[retryKey] = @(retriesLeft.intValue - 1);
+                [self setRetriesLeft:@(retriesLeft.intValue - 1)
+                         forRetryKey:retryKey];
 
                 NSMutableDictionary* retryInfoDict = [infoDict mutableCopy];
                 // if last retry and has image, set image property to true
                 // instead of image base64
-                if (retryInfoDict[@"image"] && self.retriesLeft[retryKey] &&
-                    ((NSNumber*)self.retriesLeft[retryKey]).intValue == 0) {
+                if (retryInfoDict[@"image"] &&
+                    [self retriesLeftForRetryKey:retryKey].intValue == 0) {
                   retryInfoDict[@"image"] = @YES;
                 }
 
@@ -330,7 +374,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                                         bulletin:bulletin];
                 });
               } else {
-                [self.retriesLeft removeObjectForKey:retryKey];
+                [self setRetriesLeft:nil forRetryKey:retryKey];
               }
             }
           }
