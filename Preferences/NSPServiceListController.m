@@ -1,17 +1,6 @@
 #import "NSPServiceListController.h"
 #import "NSPServiceController.h"
-
-static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
-                          BOOL shouldNotify) {
-  CFPreferencesSetValue(keyRef, val, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                        kCFPreferencesAnyHost);
-  CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                           kCFPreferencesAnyHost);
-  if (shouldNotify) {
-    // Reload stuff
-    notify_post(PUSHER_PREFS_NOTIFICATION);
-  }
-}
+#import "NSPSharedSpecifiers.h"
 
 @implementation NSPServiceListController
 
@@ -219,7 +208,9 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
                  });
 
   CFStringRef tutorialKeyRef = CFSTR("ServiceListTutorialShown");
-  setPreference(tutorialKeyRef, (__bridge CFNumberRef) @YES, NO);
+  [NSPSharedSpecifiers setPreference:tutorialKeyRef
+                               value:(__bridge CFNumberRef) @YES
+                        shouldNotify:NO];
   CFRelease(tutorialKeyRef);
   NSMutableDictionary *mutablePrefs = [_prefs mutableCopy];
   mutablePrefs[@"ServiceListTutorialShown"] = @YES;
@@ -246,10 +237,11 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
     // Save
     for (NSString *service in _services) {
       NSString *enabledKey = XStr(@"%@Enabled", service);
-      setPreference((__bridge CFStringRef)enabledKey,
-                    (__bridge CFNumberRef)
-                        @([_data[@"Enabled"] containsObject:service]),
-                    NO);
+      [NSPSharedSpecifiers setPreference:(__bridge CFStringRef)enabledKey
+                                   value:(__bridge CFNumberRef)
+                                             @([_data[@"Enabled"]
+                                                 containsObject:service])
+                            shouldNotify:NO];
     }
     for (NSString *customService in _customServices.allKeys) {
       NSNumber *customServiceEnabled =
@@ -334,8 +326,10 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
 }
 
 - (void)saveCustomServices {
-  setPreference((__bridge CFStringRef)NSPPreferenceCustomServicesKey,
-                (__bridge CFPropertyListRef)_customServices, YES);
+  [NSPSharedSpecifiers setPreference:
+                            (__bridge CFStringRef)NSPPreferenceCustomServicesKey
+                               value:(__bridge CFPropertyListRef)_customServices
+                        shouldNotify:YES];
 }
 
 - (void)tableView:(UITableView *)table

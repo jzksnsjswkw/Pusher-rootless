@@ -10,18 +10,6 @@
 #import "../helpers.h"
 #import <notify.h>
 
-static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
-                          BOOL shouldNotify) {
-  CFPreferencesSetValue(keyRef, val, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                        kCFPreferencesAnyHost);
-  CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                           kCFPreferencesAnyHost);
-  if (shouldNotify) {
-    // Reload stuff
-    notify_post(PUSHER_PREFS_NOTIFICATION);
-  }
-}
-
 @implementation NSPCustomizeAppsController
 
 - (void)setAppDefaults:(NSString *)appID {
@@ -70,8 +58,9 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
     }
   }
   [self updateTitle];
-  setPreference((__bridge CFStringRef)_prefsKey,
-                (__bridge CFPropertyListRef)_customApps, YES);
+  [NSPSharedSpecifiers setPreference:(__bridge CFStringRef)_prefsKey
+                               value:(__bridge CFPropertyListRef)_customApps
+                        shouldNotify:YES];
 }
 
 - (void)dealloc {

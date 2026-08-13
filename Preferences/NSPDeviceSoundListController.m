@@ -1,22 +1,11 @@
-#import "NSPDeviceListController.h"
+#import "NSPDeviceSoundListController.h"
 
 #import "../global.h"
 #import "../helpers.h"
+#import "NSPSharedSpecifiers.h"
 #import <notify.h>
 
-static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
-                          BOOL shouldNotify) {
-  CFPreferencesSetValue(keyRef, val, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                        kCFPreferencesAnyHost);
-  CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                           kCFPreferencesAnyHost);
-  if (shouldNotify) {
-    // Reload stuff
-    notify_post(PUSHER_PREFS_NOTIFICATION);
-  }
-}
-
-@implementation NSPDeviceListController
+@implementation NSPDeviceSoundListController
 
 - (void)viewDidLoad {
   [super viewDidLoad];
@@ -25,7 +14,7 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
   _updateBn = [[UIBarButtonItem alloc] initWithTitle:@"Update"
                                                style:UIBarButtonItemStylePlain
                                               target:self
-                                              action:@selector(updateDevices)];
+                                              action:@selector(updateItems)];
   _activityIndicator = [[UIActivityIndicatorView alloc]
       initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
   _activityIndicatorBn =
@@ -33,6 +22,8 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
 
   _prefsKey = [[self.specifier propertyForKey:@"prefsKey"] retain];
   _service = [[self.specifier propertyForKey:@"service"] retain];
+  _isSound =
+      ((NSNumber *)[self.specifier propertyForKey:@"isSound"]).boolValue;
   _isCustomApp =
       ((NSNumber *)[self.specifier propertyForKey:@"isCustomApp"]).boolValue;
   if (_isCustomApp) {
@@ -40,7 +31,7 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
         [[self.specifier propertyForKey:@"customAppIDKey"] retain];
   }
 
-  _onlyAllowOne = XEq(_service, PUSHER_SERVICE_PUSHBULLET);
+  _onlyAllowOne = _isSound || XEq(_service, PUSHER_SERVICE_PUSHBULLET);
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -76,22 +67,23 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
   NSDictionary *val = _prefs[_prefsKey] ?: (_isCustomApp ? @{} : @[]);
   if (_isCustomApp) {
     val = val[_customAppIDKey] ?: @{};
-    val = val[@"devices"] ?: @[];
+    NSString *subkey = _isSound ? @"sounds" : @"devices";
+    val = val[subkey] ?: @[];
   }
-  _serviceDevices = [val mutableCopy];
+  _serviceItems = [val mutableCopy];
   NSMutableDictionary *indexesToReplace = [NSMutableDictionary new];
-  for (int i = 0; i < _serviceDevices.count; i++) {
-    indexesToReplace[@(i)] = [_serviceDevices[i] mutableCopy];
+  for (int i = 0; i < _serviceItems.count; i++) {
+    indexesToReplace[@(i)] = [_serviceItems[i] mutableCopy];
   }
   for (NSNumber *index in indexesToReplace.allKeys) {
-    [_serviceDevices replaceObjectAtIndex:index.intValue
-                               withObject:indexesToReplace[index]];
+    [_serviceItems replaceObjectAtIndex:index.intValue
+                             withObject:indexesToReplace[index]];
   }
 
   [self reloadSpecifiers];
 
   // Update in background
-  [self updateDevices];
+  [self updateItems];
 }
 
 - (void)showActivityIndicator {
@@ -106,28 +98,39 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
   });
 }
 
-- (void)saveServiceDevices {
+- (void)saveServiceItems {
   if (_isCustomApp) {
     NSMutableDictionary *customApps = [(_prefs[_prefsKey] ?: @{}) mutableCopy];
     NSMutableDictionary *customApp =
         [(customApps[_customAppIDKey] ?: @{}) mutableCopy];
-    customApp[@"devices"] = _serviceDevices;
+    NSString *subkey = _isSound ? @"sounds" : @"devices";
+    customApp[subkey] = _serviceItems;
     customApps[_customAppIDKey] = customApp;
-    setPreference((__bridge CFStringRef)_prefsKey,
-                  (__bridge CFPropertyListRef)customApps, YES);
+    [NSPSharedSpecifiers setPreference:(__bridge CFStringRef)_prefsKey
+                                 value:(__bridge CFPropertyListRef)customApps
+                          shouldNotify:YES];
   } else {
-    setPreference((__bridge CFStringRef)_prefsKey,
-                  (__bridge CFArrayRef)_serviceDevices, YES);
+    [NSPSharedSpecifiers setPreference:(__bridge CFStringRef)_prefsKey
+                                 value:(__bridge CFArrayRef)_serviceItems
+                          shouldNotify:YES];
   }
 }
 
-- (void)updateDevices {
+- (void)updateItems {
   [self showActivityIndicator];
 
   if (XEq(_service, PUSHER_SERVICE_PUSHOVER)) {
-    [self updatePushoverDevices];
+    if (_isSound) {
+      [self updatePushoverSounds];
+    } else {
+      [self updatePushoverDevices];
+    }
   } else if (XEq(_service, PUSHER_SERVICE_PUSHBULLET)) {
-    [self updatePushbulletDevices];
+    if (_isSound) {
+      [self updatePushbulletSounds];
+    } else {
+      [self updatePushbulletDevices];
+    }
   }
 }
 
@@ -135,33 +138,35 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
   if (!_specifiers) {
     NSMutableArray *allSpecifiers = [NSMutableArray new];
 
-    if (_serviceDevices.count) {
+    if (_serviceItems.count) {
       PSSpecifier *groupSpecifier = [PSSpecifier emptyGroupSpecifier];
-      if (XEq(_service, PUSHER_SERVICE_PUSHOVER)) {
-        [groupSpecifier setProperty:@"Selecting none will forward push "
-                                    @"notifications to all devices."
-                             forKey:@"footerText"];
-      } else if (XEq(_service, PUSHER_SERVICE_PUSHBULLET)) {
-        [groupSpecifier
-            setProperty:
-                @"Pushbullet only allows one receiving device. Selecting none "
-                @"will forward push notifications to all devices."
-                 forKey:@"footerText"];
+      if (!_isSound) {
+        if (XEq(_service, PUSHER_SERVICE_PUSHOVER)) {
+          [groupSpecifier setProperty:@"Selecting none will forward push "
+                                      @"notifications to all devices."
+                               forKey:@"footerText"];
+        } else if (XEq(_service, PUSHER_SERVICE_PUSHBULLET)) {
+          [groupSpecifier
+              setProperty:
+                  @"Pushbullet only allows one receiving device. Selecting none "
+                  @"will forward push notifications to all devices."
+                   forKey:@"footerText"];
+        }
       }
       [allSpecifiers addObject:groupSpecifier];
     }
 
-    for (NSDictionary *device in [self sortedDeviceList:_serviceDevices]) {
+    for (NSDictionary *item in [self sortedItemList:_serviceItems]) {
       PSSpecifier *switchSpecifier = [PSSpecifier
-          preferenceSpecifierNamed:device[@"name"]
+          preferenceSpecifierNamed:item[@"name"]
                             target:self
                                set:@selector(setPreferenceValue:
-                                             forDeviceSpecifier:)
-                               get:@selector(readDevicePreferenceValue:)
+                                             forItemSpecifier:)
+                               get:@selector(readItemPreferenceValue:)
                             detail:nil
                               cell:PSSwitchCell
                               edit:nil];
-      switchSpecifier.identifier = device[@"id"];
+      switchSpecifier.identifier = item[@"id"];
       [switchSpecifier setProperty:@PUSHER_PREFS_NOTIFICATION
                             forKey:@"PostNotification"];
       [switchSpecifier setProperty:@YES forKey:@"enabled"];
@@ -176,34 +181,34 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
   return _specifiers;
 }
 
-- (NSArray *)sortedDeviceList:(NSArray *)devices {
-  return [devices sortedArrayUsingComparator:^NSComparisonResult(
-                      NSDictionary *device1, NSDictionary *device2) {
-    return [device1[@"name"] localizedCaseInsensitiveCompare:device2[@"name"]];
+- (NSArray *)sortedItemList:(NSArray *)items {
+  return [items sortedArrayUsingComparator:^NSComparisonResult(
+                      NSDictionary *item1, NSDictionary *item2) {
+    return [item1[@"name"] localizedCaseInsensitiveCompare:item2[@"name"]];
   }];
 }
 
 - (void)setPreferenceValue:(id)value
-        forDeviceSpecifier:(PSSpecifier *)specifier {
-  for (NSMutableDictionary *device in _serviceDevices) {
-    if (XEq(device[@"id"], specifier.identifier)) {
-      device[@"enabled"] = value;
+          forItemSpecifier:(PSSpecifier *)specifier {
+  for (NSMutableDictionary *item in _serviceItems) {
+    if (XEq(item[@"id"], specifier.identifier)) {
+      item[@"enabled"] = value;
     } else if (_onlyAllowOne) {
       // all others must be off
-      device[@"enabled"] = @NO;
+      item[@"enabled"] = @NO;
     }
   }
   // reload specifiers because likely turned other switch off
   if (_onlyAllowOne) {
     [self reloadSpecifiers];
   }
-  [self saveServiceDevices];
+  [self saveServiceItems];
 }
 
-- (id)readDevicePreferenceValue:(PSSpecifier *)specifier {
-  for (NSDictionary *device in _serviceDevices) {
-    if (XEq(device[@"id"], specifier.identifier)) {
-      return device[@"enabled"];
+- (id)readItemPreferenceValue:(PSSpecifier *)specifier {
+  for (NSDictionary *item in _serviceItems) {
+    if (XEq(item[@"id"], specifier.identifier)) {
+      return item[@"enabled"];
     }
   }
   return @NO;
@@ -277,7 +282,7 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
             NSMutableArray *serviceDevices =
                 [(NSArray *)json[@"devices"] mutableCopy];
             NSMutableArray *serviceDevicesToRemove = [NSMutableArray new];
-            for (NSDictionary *device in _serviceDevices) {
+            for (NSDictionary *device in _serviceItems) {
               if (![serviceDevices containsObject:device[@"id"]]) {
                 [serviceDevicesToRemove addObject:device];
               } else {
@@ -285,20 +290,128 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
               }
             }
             for (NSString *device in serviceDevices) {
-              [_serviceDevices addObject:[@{
+              [_serviceItems addObject:[@{
                                  @"name" : device,
                                  @"id" : device,
                                  @"enabled" : @NO
                                } mutableCopy]];
             }
             for (NSDictionary *device in serviceDevicesToRemove) {
-              [_serviceDevices removeObject:device];
+              [_serviceItems removeObject:device];
             }
             [serviceDevicesToRemove release];
 
-            [self saveServiceDevices];
+            [self saveServiceItems];
 
             XLog(@"Saved devices");
+
+            // Reload specifiers on current screen
+            dispatch_async(dispatch_get_main_queue(), ^{
+              [self reloadSpecifiers];
+            });
+
+          } else {
+            id handler = ^(UIAlertAction *action) {
+              [self.navigationController popViewControllerAnimated:YES];
+            };
+            NSString *msg;
+            if (data.length == 0 && error == nil) {
+              msg = @"Server did not respond. Please check your internet "
+                    @"connection or try again later.";
+            } else if (error) {
+              msg = error.localizedDescription;
+            } else {
+              msg = @"Unknown Error. Contact Developer.";
+            }
+            UIAlertController *alert = XAlertTitle(@"Network Error", msg);
+            [alert addAction:XAlertBtnHandler(@"Ok", handler)];
+            dispatch_async(dispatch_get_main_queue(), ^{
+              [self presentViewController:alert animated:YES completion:nil];
+            });
+          }
+
+          [self hideActivityIndicator];
+        }] resume];
+}
+
+- (void)updatePushoverSounds {
+  NSString *pushoverToken = _prefs[NSPPreferencePushoverTokenKey] ?: @"";
+  NSMutableURLRequest *request = [NSMutableURLRequest
+       requestWithURL:[NSURL URLWithString:XStr(@"https://api.pushover.net/1/"
+                                                @"sounds.json?token=%@",
+                                                pushoverToken)]
+          cachePolicy:NSURLRequestUseProtocolCachePolicy
+      timeoutInterval:10];
+  [request setHTTPMethod:@"GET"];
+  [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
+
+  // use async way to connect network
+  [[[NSURLSession sharedSession]
+      dataTaskWithRequest:request
+        completionHandler:^(NSData *data, NSURLResponse *response,
+                            NSError *error) {
+          if (data.length && error == nil) {
+            XLog(@"Success");
+            NSError *jsonError = nil;
+            NSDictionary *json =
+                [NSJSONSerialization JSONObjectWithData:data
+                                                options:kNilOptions
+                                                  error:&jsonError];
+            if (jsonError) {
+              XLog(@"JSON Error: %@", jsonError);
+            }
+            // 0 error, 1 success
+            int status = ((NSNumber *)json[@"status"]).intValue;
+            if (status == 0) {
+              XLog(@"Something went wrong");
+              NSArray *errors = (NSArray *)json[@"errors"];
+              NSString *title;
+              NSString *msg = @"";
+              if (errors == nil || errors.count == 0) {
+                title = @"Unknown Error";
+                msg = XStr(@"Server response: %@", json);
+              } else {
+                title = @"Server Error";
+                msg = XStr(@"%@", [errors componentsJoinedByString:@"\n"]);
+              }
+              UIAlertController *alert = XAlertTitle(title, msg);
+              id handler = ^(UIAlertAction *action) {
+                [self.navigationController popViewControllerAnimated:YES];
+              };
+              [alert addAction:XAlertBtnHandler(@"Ok", handler)];
+              dispatch_async(dispatch_get_main_queue(), ^{
+                [self presentViewController:alert animated:YES completion:nil];
+              });
+              [self hideActivityIndicator];
+              return;
+            }
+
+            NSMutableDictionary *serviceSounds =
+                [(NSDictionary *)json[@"sounds"] mutableCopy];
+
+            NSMutableArray *serviceSoundsToRemove = [NSMutableArray new];
+            for (NSDictionary *sound in _serviceItems) {
+              if (![serviceSounds.allKeys containsObject:sound[@"id"]]) {
+                [serviceSoundsToRemove addObject:sound];
+              } else {
+                [serviceSounds removeObjectForKey:sound[@"id"]];
+              }
+            }
+            for (NSString *soundID in serviceSounds.allKeys) {
+              [_serviceItems addObject:[@{
+                                @"name" : serviceSounds[soundID],
+                                @"id" : soundID,
+                                @"enabled" : @NO
+                              } mutableCopy]];
+            }
+            for (NSDictionary *sound in serviceSoundsToRemove) {
+              [_serviceItems removeObject:sound];
+            }
+            [serviceSoundsToRemove release];
+
+            [self saveServiceItems];
+
+            XLog(@"Saved sounds");
 
             // Reload specifiers on current screen
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -377,7 +490,7 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
                 [(NSArray *)json[@"devices"] mutableCopy];
 
             NSMutableArray *serviceDevicesToRemove = [NSMutableArray new];
-            for (NSDictionary *savedDevice in _serviceDevices) {
+            for (NSDictionary *savedDevice in _serviceItems) {
               NSDictionary *foundNewDevice = nil;
               for (NSDictionary *newDevice in serviceDevices) {
                 if (XEq(savedDevice[@"id"], newDevice[@"iden"])) {
@@ -400,20 +513,135 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
                 continue;
               }
               NSString *name = newDevice[@"nickname"] ?: newDevice[@"model"];
-              [_serviceDevices addObject:[@{
+              [_serviceItems addObject:[@{
                                  @"name" : name,
                                  @"id" : newDevice[@"iden"],
                                  @"enabled" : @NO
                                } mutableCopy]];
             }
             for (NSDictionary *savedDevice in serviceDevicesToRemove) {
-              [_serviceDevices removeObject:savedDevice];
+              [_serviceItems removeObject:savedDevice];
             }
             [serviceDevicesToRemove release];
 
-            [self saveServiceDevices];
+            [self saveServiceItems];
 
             XLog(@"Saved devices");
+
+            // Reload specifiers on current screen
+            dispatch_async(dispatch_get_main_queue(), ^{
+              [self reloadSpecifiers];
+            });
+
+          } else {
+            id handler = ^(UIAlertAction *action) {
+              [self.navigationController popViewControllerAnimated:YES];
+            };
+            NSString *msg;
+            if (data.length == 0 && error == nil) {
+              msg = @"Server did not respond. Please check your internet "
+                    @"connection or try again later.";
+            } else if (error) {
+              msg = error.localizedDescription;
+            } else {
+              msg = @"Unknown Error. Contact Developer.";
+            }
+            UIAlertController *alert = XAlertTitle(@"Network Error", msg);
+            [alert addAction:XAlertBtnHandler(@"Ok", handler)];
+            dispatch_async(dispatch_get_main_queue(), ^{
+              [self presentViewController:alert animated:YES completion:nil];
+            });
+          }
+
+          [self hideActivityIndicator];
+        }] resume];
+}
+
+- (void)updatePushbulletSounds {
+  NSString *pushbulletToken = _prefs[NSPPreferencePushbulletTokenKey] ?: @"";
+  NSMutableURLRequest *request = [NSMutableURLRequest
+       requestWithURL:[NSURL
+                          URLWithString:@"https://api.pushbullet.com/v2/sounds"]
+          cachePolicy:NSURLRequestUseProtocolCachePolicy
+      timeoutInterval:10];
+  [request setHTTPMethod:@"GET"];
+  [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
+  [request setValue:pushbulletToken forHTTPHeaderField:@"Access-Token"];
+
+  // use async way to connect network
+  [[[NSURLSession sharedSession]
+      dataTaskWithRequest:request
+        completionHandler:^(NSData *data, NSURLResponse *response,
+                            NSError *error) {
+          if (data.length && error == nil) {
+            XLog(@"Success");
+            NSError *jsonError = nil;
+            NSDictionary *json =
+                [NSJSONSerialization JSONObjectWithData:data
+                                                options:kNilOptions
+                                                  error:&jsonError];
+            if (jsonError) {
+              XLog(@"JSON Error: %@", jsonError);
+            }
+
+            NSDictionary *error = (NSDictionary *)json[@"error"];
+            if (error) {
+              XLog(@"Something went wrong");
+              NSString *title = @"Server Error";
+              NSString *msg = error[@"message"] ?: @"Unknown Error";
+              UIAlertController *alert = XAlertTitle(title, msg);
+              id handler = ^(UIAlertAction *action) {
+                [self.navigationController popViewControllerAnimated:YES];
+              };
+              [alert addAction:XAlertBtnHandler(@"Ok", handler)];
+              dispatch_async(dispatch_get_main_queue(), ^{
+                [self presentViewController:alert animated:YES completion:nil];
+              });
+              [self hideActivityIndicator];
+              return;
+            }
+
+            NSMutableArray *serviceSounds =
+                [(NSArray *)json[@"sounds"] mutableCopy];
+
+            NSMutableArray *serviceSoundsToRemove = [NSMutableArray new];
+            for (NSDictionary *savedSound in _serviceItems) {
+              NSDictionary *foundNewSound = nil;
+              for (NSDictionary *newSound in serviceSounds) {
+                if (XEq(savedSound[@"id"], newSound[@"iden"])) {
+                  foundNewSound = newSound;
+                  break;
+                }
+              }
+              if (foundNewSound) {
+                // prevent from adding later because already exists
+                [serviceSounds removeObject:foundNewSound];
+              } else {
+                [serviceSoundsToRemove addObject:savedSound];
+              }
+            }
+
+            for (NSDictionary *newSound in serviceSounds) {
+              // pushable deprecated
+              if ((newSound[@"active"] &&
+                   !((NSNumber *)newSound[@"active"]).boolValue)) {
+                continue;
+              }
+              NSString *name = newSound[@"nickname"] ?: newSound[@"model"];
+              [_serviceItems addObject:[@{
+                                @"name" : name,
+                                @"id" : newSound[@"iden"],
+                                @"enabled" : @NO
+                              } mutableCopy]];
+            }
+            for (NSDictionary *savedSound in serviceSoundsToRemove) {
+              [_serviceItems removeObject:savedSound];
+            }
+            [serviceSoundsToRemove release];
+
+            [self saveServiceItems];
+
+            XLog(@"Saved sounds");
 
             // Reload specifiers on current screen
             dispatch_async(dispatch_get_main_queue(), ^{

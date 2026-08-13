@@ -6,19 +6,6 @@
 #import "../helpers.h"
 #import <notify.h>
 
-static int countAppIDsWithPrefix(NSDictionary *prefs, NSString *prefix) {
-  int count = 0;
-  for (id key in prefs.allKeys) {
-    if (![key isKindOfClass:NSString.class]) {
-      continue;
-    }
-    if ([key hasPrefix:prefix] && ((NSNumber *)prefs[key]).boolValue) {
-      count += 1;
-    }
-  }
-  return count;
-}
-
 @implementation NSPServiceController
 
 - (id)initWithService:(NSString *)service
@@ -118,8 +105,12 @@ static int countAppIDsWithPrefix(NSDictionary *prefs, NSString *prefix) {
         if (XEq(specifier.name, @"App List")) {
           specifier.name = XStr(
               @"%@ (%d total)", specifier.name,
-              countAppIDsWithPrefix(
-                  prefs, [specifier propertyForKey:@"ALSettingsKeyPrefix"]));
+              [NSPSharedSpecifiers
+                  countAppIDsWithPrefix:
+                      prefs
+                                 prefix:[specifier
+                                            propertyForKey:
+                                                @"ALSettingsKeyPrefix"]]);
           [specifier setProperty:self forKey:@"psListRef"];
         } else if (XEq(specifier.name, @"App Customization")) {
           NSString *prefsKey =
