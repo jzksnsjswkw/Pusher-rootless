@@ -9,6 +9,12 @@ else
 	TARGET = iphone:clang:14.5:13.7
 endif
 
+# IMPORTANT: On roothide devices always build with
+#   make package THEOS_PACKAGE_SCHEME=roothide
+# Without an explicit scheme the Preferences bundle is linked without the
+# @loader_path/.jbroot rpath and AltList.framework fails to load at runtime
+# ("Library not loaded: @rpath/AltList.framework/AltList").
+
 include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = Pusher

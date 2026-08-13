@@ -2,5 +2,6 @@
 
 @interface NSPAppListController : ATLApplicationListMultiSelectionController {
   NSString* _prefix;
+  NSString* _service;
 }
 @end

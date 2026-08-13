@@ -1,4 +1,4 @@
-#import "../NSPushServiceBase.h"
+#import "../NSPushService.h"
 #import <Foundation/Foundation.h>
 
 @interface NSPBarkService : NSPushServiceBase

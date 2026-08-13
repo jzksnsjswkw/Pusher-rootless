@@ -30,11 +30,6 @@
       [specifier setProperty:_service forKey:@"service"];
       [specifier setProperty:[specifier propertyForKey:@"key"]
                       forKey:@"globalKey"];
-      if (!_isCustomService) {
-        [specifier setProperty:XStr(@"%@%@", _service,
-                                    [specifier propertyForKey:@"key"])
-                        forKey:@"key"];
-      }
       // if finds value that is truthy, not all are synchronized globally
       if (synchronizedWithGlobal) {
         BOOL foundTruthy = NO;
@@ -50,10 +45,13 @@
                 nil;
           }
         } else {
-          foundTruthy =
+          NSDictionary* builtInServices =
               [NSPSharedSpecifiers
                   getPreference:(__bridge CFStringRef)
-                                    [specifier propertyForKey:@"key"]] != nil;
+                                    NSPPreferenceBuiltInServicesKey]
+                  ?: @{};
+          NSDictionary* serviceObj = builtInServices[_service] ?: @{};
+          foundTruthy = serviceObj[[specifier propertyForKey:@"key"]] != nil;
         }
         synchronizedWithGlobal = !foundTruthy;
       }

@@ -80,9 +80,13 @@
   _defaultImage = [DEFAULT_IMAGE retain];
   _serviceImages = [[NSMutableDictionary new] retain];
 
+  NSDictionary* builtInServices =
+      (NSDictionary*)_prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
+
   for (NSString* service in _services) {
-    NSString* enabledKey = XStr(@"%@Enabled", service);
-    if (_prefs[enabledKey] && ((NSNumber*)_prefs[enabledKey]).boolValue) {
+    NSDictionary* serviceObj = builtInServices[service] ?: @{};
+    if (serviceObj[NSPPreferenceServiceEnabledKey] &&
+        ((NSNumber*)serviceObj[NSPPreferenceServiceEnabledKey]).boolValue) {
       [_data[@"Enabled"] addObject:service];
     } else {
       [_data[@"Disabled"] addObject:service];
@@ -235,14 +239,21 @@
       [_table isEditing] ? _addNewServiceBarButtonItem : nil;
   if (![_table isEditing]) {
     // Save
+    NSMutableDictionary* builtInServices = [(
+        [NSPSharedSpecifiers
+            getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey]
+            ?: @{}) mutableCopy];
     for (NSString* service in _services) {
-      NSString* enabledKey = XStr(@"%@Enabled", service);
-      [NSPSharedSpecifiers
-          setPreference:(__bridge CFStringRef)enabledKey
-                  value:(__bridge CFNumberRef)
-                            @([_data[@"Enabled"] containsObject:service])
-           shouldNotify:NO];
+      NSMutableDictionary* serviceObj =
+          [(builtInServices[service] ?: @{}) mutableCopy];
+      serviceObj[NSPPreferenceServiceEnabledKey] =
+          @([_data[@"Enabled"] containsObject:service]);
+      builtInServices[service] = serviceObj;
     }
+    [NSPSharedSpecifiers
+        setPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey
+                value:(__bridge CFPropertyListRef)builtInServices
+         shouldNotify:NO];
     for (NSString* customService in _customServices.allKeys) {
       NSNumber* customServiceEnabled =
           @([_data[@"Enabled"] containsObject:customService]);

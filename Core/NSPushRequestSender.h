@@ -10,9 +10,7 @@
 
 - (void)sendRequestWithURLString:(NSString*)urlString
                         infoDict:(NSDictionary*)infoDict
-                     credentials:(NSDictionary*)credentials
-                      dynamicKey:(NSString*)dynamicKey
-                        authType:(PusherAuthorizationType)authType
+                         headers:(NSDictionary*)headers
                           method:(NSString*)method
                        logString:(NSString*)logString
                          service:(NSString*)service
