@@ -2,7 +2,7 @@
 
 @interface NSPushServiceManager : NSObject
 
-+ (Class)serviceClassForName:(NSString *)name;
-+ (NSArray *)builtinServiceNames;
++ (Class)serviceClassForName:(NSString*)name;
++ (NSArray*)builtinServiceNames;
 
 @end

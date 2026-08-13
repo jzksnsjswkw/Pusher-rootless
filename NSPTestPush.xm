@@ -17,7 +17,7 @@
 
 - (id)init {
   if (self = [super init]) {
-    CPDistributedMessagingCenter *messagingCenter =
+    CPDistributedMessagingCenter* messagingCenter =
         [CPDistributedMessagingCenter centerNamed:PUSHER_MESSAGING_CENTER_NAME];
     [messagingCenter runServerOnCurrentThread];
     [messagingCenter
@@ -28,26 +28,26 @@
   return self;
 }
 
-- (NSDictionary *)handleMessageNamed:(NSString *)name
-                        withUserInfo:(NSDictionary *)userInfo {
-  NSString *service = userInfo[@"service"];
-  BBServer *bbServer = [BBServer pusherSharedInstance];
+- (NSDictionary*)handleMessageNamed:(NSString*)name
+                       withUserInfo:(NSDictionary*)userInfo {
+  NSString* service = userInfo[@"service"];
+  BBServer* bbServer = [BBServer pusherSharedInstance];
   if (service == nil || ![service isKindOfClass:NSString.class] ||
       service.length < 1 || bbServer == nil ||
       ![bbServer isKindOfClass:BBServer.class]) {
     return @{@"success" : @NO};
   }
 
-  BBBulletin *bulletin = [BBBulletin new];
+  BBBulletin* bulletin = [BBBulletin new];
   bulletin.title = PUSHER_TEST_NOTIFICATION_TITLE;
   bulletin.subtitle = PUSHER_TEST_NOTIFICATION_SUBTITLE;
   bulletin.message = PUSHER_TEST_NOTIFICATION_MESSAGE;
   bulletin.date = [NSDate date];
   bulletin.sectionID = PUSHER_TEST_NOTIFICATION_SECTION_ID;
 
-  NSURL *attachmentURL =
+  NSURL* attachmentURL =
       [NSURL fileURLWithPath:XStr(@"%@/icon@3x.png", PUSHER_BUNDLE_PATH)];
-  BBAttachmentMetadata *attachment;
+  BBAttachmentMetadata* attachment;
   // iOS 14
   if ([[%c(BBAttachmentMetadata) alloc]
         respondsToSelector:@selector(_initWithType:URL:identifier:uniformType:thumbnailGeneratorUserInfo:thumbnailHidden:hiddenFromDefaultExpandedView:)]) {

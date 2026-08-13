@@ -60,9 +60,9 @@
       PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
   _prefs = @{};
   if (keyList) {
-    _prefs = (NSDictionary *)CFPreferencesCopyMultiple(
-        keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-        kCFPreferencesAnyHost);
+    _prefs = (NSDictionary*)CFPreferencesCopyMultiple(keyList, PUSHER_APP_ID,
+                                                      kCFPreferencesCurrentUser,
+                                                      kCFPreferencesAnyHost);
     if (!_prefs) {
       _prefs = @{};
     }
@@ -74,15 +74,15 @@
       [@{@"Enabled" : [NSMutableArray new], @"Disabled" : [NSMutableArray new]}
           mutableCopy];
   _services = [BUILTIN_PUSHER_SERVICES retain];
-  _customServices = [(NSDictionary *)(_prefs[NSPPreferenceCustomServicesKey]
-                                          ?: @{}) mutableCopy];
+  _customServices = [(NSDictionary*)(_prefs[NSPPreferenceCustomServicesKey]
+                                         ?: @{}) mutableCopy];
 
   _defaultImage = [DEFAULT_IMAGE retain];
   _serviceImages = [[NSMutableDictionary new] retain];
 
-  for (NSString *service in _services) {
-    NSString *enabledKey = XStr(@"%@Enabled", service);
-    if (_prefs[enabledKey] && ((NSNumber *)_prefs[enabledKey]).boolValue) {
+  for (NSString* service in _services) {
+    NSString* enabledKey = XStr(@"%@Enabled", service);
+    if (_prefs[enabledKey] && ((NSNumber*)_prefs[enabledKey]).boolValue) {
       [_data[@"Enabled"] addObject:service];
     } else {
       [_data[@"Disabled"] addObject:service];
@@ -94,12 +94,12 @@
   }
 
   // make deep mutable and preload service images
-  for (NSString *customService in _customServices.allKeys) {
+  for (NSString* customService in _customServices.allKeys) {
     _customServices[customService] =
         [(_customServices[customService] ?: @{}) mutableCopy];
     if (_customServices[customService] &&
         _customServices[customService][@"Enabled"] &&
-        ((NSNumber *)_customServices[customService][@"Enabled"]).boolValue) {
+        ((NSNumber*)_customServices[customService][@"Enabled"]).boolValue) {
       [_data[@"Enabled"] addObject:customService];
     } else {
       [_data[@"Disabled"] addObject:customService];
@@ -121,27 +121,27 @@
 - (void)viewDidAppear:(BOOL)animated {
   [super viewDidAppear:animated];
   if (!_prefs[@"ServiceListTutorialShown"] ||
-      !((NSNumber *)_prefs[@"ServiceListTutorialShown"]).boolValue) {
+      !((NSNumber*)_prefs[@"ServiceListTutorialShown"]).boolValue) {
     [self showTutorial];
   }
 }
 
 - (void)showTutorial {
-  UIWindow *window = nil;
-  NSSet *scenes = [UIApplication sharedApplication].connectedScenes;
-  for (UIScene *scene in scenes) {
-      if (scene.activationState == UISceneActivationStateForegroundActive) {
-          UIWindowScene *windowScene = (UIWindowScene *)scene;
-          for (UIWindow *win in windowScene.windows) {
-              if (win.isKeyWindow) {
-                  window = win;
-                  break;
-              }
-          }
-          if (window != nil) {
-              break;
-          }
+  UIWindow* window = nil;
+  NSSet* scenes = [UIApplication sharedApplication].connectedScenes;
+  for (UIScene* scene in scenes) {
+    if (scene.activationState == UISceneActivationStateForegroundActive) {
+      UIWindowScene* windowScene = (UIWindowScene*)scene;
+      for (UIWindow* win in windowScene.windows) {
+        if (win.isKeyWindow) {
+          window = win;
+          break;
+        }
       }
+      if (window != nil) {
+        break;
+      }
+    }
   }
   // for (UIWindow *win in [UIApplication sharedApplication].windows) {
   //     if (win.isKeyWindow) {
@@ -150,12 +150,12 @@
   //     }
   // }
   // UIWindow *window = [UIApplication sharedApplication].keyWindow;
-  UIView *tutorialView = [[UIView alloc] initWithFrame:window.bounds];
+  UIView* tutorialView = [[UIView alloc] initWithFrame:window.bounds];
   tutorialView.alpha = 0.f;
   tutorialView.backgroundColor = [UIColor colorWithWhite:0.f alpha:0.9f];
 
   // Label setup
-  UILabel *label = [UILabel new];
+  UILabel* label = [UILabel new];
   label.font = [UIFont fontWithName:@"HelveticaNeue-Thin"
                                size:UIFont.systemFontSize * 1.5f];
   label.textColor = UIColor.whiteColor;
@@ -198,7 +198,7 @@
                    }];
 
   // Add touch action after a second
-  UITapGestureRecognizer *tapGestureRecognizer = [[UITapGestureRecognizer alloc]
+  UITapGestureRecognizer* tapGestureRecognizer = [[UITapGestureRecognizer alloc]
       initWithTarget:self
               action:@selector(dismissTutorial:)];
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1.f * NSEC_PER_SEC),
@@ -212,13 +212,13 @@
                                value:(__bridge CFNumberRef) @YES
                         shouldNotify:NO];
   CFRelease(tutorialKeyRef);
-  NSMutableDictionary *mutablePrefs = [_prefs mutableCopy];
+  NSMutableDictionary* mutablePrefs = [_prefs mutableCopy];
   mutablePrefs[@"ServiceListTutorialShown"] = @YES;
   _prefs = [mutablePrefs copy];
 }
 
-- (void)dismissTutorial:(UITapGestureRecognizer *)tapGestureRecognizer {
-  UIView *tutorialView = tapGestureRecognizer.view;
+- (void)dismissTutorial:(UITapGestureRecognizer*)tapGestureRecognizer {
+  UIView* tutorialView = tapGestureRecognizer.view;
   [UIView animateWithDuration:0.3
       animations:^{
         tutorialView.alpha = 0.f;
@@ -228,23 +228,23 @@
       }];
 }
 
-- (void)toggleEditing:(UIBarButtonItem *)barButtonItem {
+- (void)toggleEditing:(UIBarButtonItem*)barButtonItem {
   [_table setEditing:![_table isEditing] animated:YES];
   barButtonItem.title = [_table isEditing] ? @"Done" : @"Edit";
   self.navigationItem.leftBarButtonItem =
       [_table isEditing] ? _addNewServiceBarButtonItem : nil;
   if (![_table isEditing]) {
     // Save
-    for (NSString *service in _services) {
-      NSString *enabledKey = XStr(@"%@Enabled", service);
-      [NSPSharedSpecifiers setPreference:(__bridge CFStringRef)enabledKey
-                                   value:(__bridge CFNumberRef)
-                                             @([_data[@"Enabled"]
-                                                 containsObject:service])
-                            shouldNotify:NO];
+    for (NSString* service in _services) {
+      NSString* enabledKey = XStr(@"%@Enabled", service);
+      [NSPSharedSpecifiers
+          setPreference:(__bridge CFStringRef)enabledKey
+                  value:(__bridge CFNumberRef)
+                            @([_data[@"Enabled"] containsObject:service])
+           shouldNotify:NO];
     }
-    for (NSString *customService in _customServices.allKeys) {
-      NSNumber *customServiceEnabled =
+    for (NSString* customService in _customServices.allKeys) {
+      NSNumber* customServiceEnabled =
           @([_data[@"Enabled"] containsObject:customService]);
       if (!_customServices[customService]) {
         _customServices[customService] =
@@ -259,14 +259,14 @@
 }
 
 - (void)addNewService {
-  UIAlertController *alert = XAlertTitle(@"Add Custom Service", nil);
-  [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
+  UIAlertController* alert = XAlertTitle(@"Add Custom Service", nil);
+  [alert addTextFieldWithConfigurationHandler:^(UITextField* textField) {
     textField.placeholder = @"Service Name";
   }];
   [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
                                             style:UIAlertActionStyleCancel
                                           handler:nil]];
-  id handler = ^(UIAlertAction *action) {
+  id handler = ^(UIAlertAction* action) {
     if (!alert || !alert.textFields ||
         ![alert.textFields isKindOfClass:NSArray.class]) {
       XLog(@"alert or alert.textFields nil: %@ %@", alert,
@@ -277,14 +277,14 @@
       XLog(@"No text fields found");
       return;
     }
-    UITextField *textField = alert.textFields[0];
+    UITextField* textField = alert.textFields[0];
     if (!textField || !textField.text ||
         ![textField.text isKindOfClass:NSString.class]) {
       XLog(@"textField or textField.text nil: %@ %@", textField,
            textField ? textField.text : nil);
       return;
     }
-    NSString *newServiceName = [[textField.text
+    NSString* newServiceName = [[textField.text
         stringByTrimmingCharactersInSet:[NSCharacterSet
                                             whitespaceAndNewlineCharacterSet]]
         retain];
@@ -294,10 +294,10 @@
     }
     if ([_customServices.allKeys containsObject:newServiceName] ||
         [_services containsObject:newServiceName]) {
-      id existsHandler = ^(UIAlertAction *existsAction) {
+      id existsHandler = ^(UIAlertAction* existsAction) {
         [self addNewService];
       };
-      UIAlertController *existsAlert =
+      UIAlertController* existsAlert =
           XAlertTitle(@"Error", @"A service with that name already exists.");
       [existsAlert addAction:XAlertBtnHandler(@"Ok", existsHandler)];
       [self presentViewController:existsAlert animated:YES completion:nil];
@@ -309,12 +309,12 @@
     [_data[@"Disabled"]
         sortUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
 
-    UIImage *defaultImage = _defaultImage;
+    UIImage* defaultImage = _defaultImage;
     if (!defaultImage || ![defaultImage isKindOfClass:UIImage.class]) {
       defaultImage = DEFAULT_IMAGE;
     }
 
-    NSString *imageName = XStr(@"CustomService_%@", newServiceName);
+    NSString* imageName = XStr(@"CustomService_%@", newServiceName);
     _serviceImages[newServiceName] =
         [UIImage imageNamed:imageName inBundle:PUSHER_BUNDLE] ?: defaultImage;
     [_table reloadSections:[NSIndexSet indexSetWithIndex:1]
@@ -326,16 +326,16 @@
 }
 
 - (void)saveCustomServices {
-  [NSPSharedSpecifiers setPreference:
-                            (__bridge CFStringRef)NSPPreferenceCustomServicesKey
-                               value:(__bridge CFPropertyListRef)_customServices
-                        shouldNotify:YES];
+  [NSPSharedSpecifiers
+      setPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey
+              value:(__bridge CFPropertyListRef)_customServices
+       shouldNotify:YES];
 }
 
-- (void)tableView:(UITableView *)table
-    didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+- (void)tableView:(UITableView*)table
+    didSelectRowAtIndexPath:(NSIndexPath*)indexPath {
   [table deselectRowAtIndexPath:indexPath animated:YES];
-  NSString *currService = _data[_sections[indexPath.section]][indexPath.row];
+  NSString* currService = _data[_sections[indexPath.section]][indexPath.row];
   BOOL isCustomService = [_customServices.allKeys containsObject:currService];
   if (table.editing) {
     if (isCustomService) {
@@ -343,7 +343,7 @@
       [self renameService:currService];
     }
   } else {
-    NSPServiceController *controller;
+    NSPServiceController* controller;
     if ([_loadedServiceControllers.allKeys containsObject:currService]) {
       controller = _loadedServiceControllers[currService];
     } else {
@@ -357,48 +357,48 @@
   }
 }
 
-- (NSInteger)tableView:(UITableView *)table
+- (NSInteger)tableView:(UITableView*)table
     numberOfRowsInSection:(NSInteger)section {
-  return ((NSArray *)_data[_sections[section]]).count;
+  return ((NSArray*)_data[_sections[section]]).count;
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)table {
+- (NSInteger)numberOfSectionsInTableView:(UITableView*)table {
   return _sections.count;
 }
 
-- (NSString *)tableView:(UITableView *)tableView
+- (NSString*)tableView:(UITableView*)tableView
     titleForHeaderInSection:(NSInteger)section {
   return _sections[section];
 }
 
-- (BOOL)tableView:(UITableView *)tableView
-    shouldIndentWhileEditingRowAtIndexPath:(NSIndexPath *)indexPath {
+- (BOOL)tableView:(UITableView*)tableView
+    shouldIndentWhileEditingRowAtIndexPath:(NSIndexPath*)indexPath {
   return NO;
 }
 
-- (UITableViewCell *)tableView:(UITableView *)table
-         cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-  UITableViewCell *cell =
+- (UITableViewCell*)tableView:(UITableView*)table
+        cellForRowAtIndexPath:(NSIndexPath*)indexPath {
+  UITableViewCell* cell =
       [table dequeueReusableCellWithIdentifier:@"ServiceCell"
                                   forIndexPath:indexPath];
-  NSString *service = _data[_sections[indexPath.section]][indexPath.row];
+  NSString* service = _data[_sections[indexPath.section]][indexPath.row];
   cell.textLabel.text = service;
   cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
   cell.imageView.image = _serviceImages[service];
   return cell;
 }
 
-- (BOOL)tableView:(UITableView *)table
-    canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
+- (BOOL)tableView:(UITableView*)table
+    canMoveRowAtIndexPath:(NSIndexPath*)indexPath {
   return YES;
 }
 
-- (void)tableView:(UITableView *)table
-    moveRowAtIndexPath:(NSIndexPath *)sourceIndexPath
-           toIndexPath:(NSIndexPath *)destinationIndexPath {
+- (void)tableView:(UITableView*)table
+    moveRowAtIndexPath:(NSIndexPath*)sourceIndexPath
+           toIndexPath:(NSIndexPath*)destinationIndexPath {
   _lastTargetService = nil;
   _lastTargetIndexPath = nil;
-  NSString *service =
+  NSString* service =
       _data[_sections[sourceIndexPath.section]][sourceIndexPath.row];
   [_data[_sections[sourceIndexPath.section]]
       removeObjectAtIndex:sourceIndexPath.row];
@@ -407,19 +407,19 @@
            atIndex:destinationIndexPath.row];
 }
 
-- (UITableViewCellEditingStyle)tableView:(UITableView *)table
-           editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath {
-  NSString *service = _data[_sections[indexPath.section]][indexPath.row];
+- (UITableViewCellEditingStyle)tableView:(UITableView*)table
+           editingStyleForRowAtIndexPath:(NSIndexPath*)indexPath {
+  NSString* service = _data[_sections[indexPath.section]][indexPath.row];
   if ([_customServices.allKeys containsObject:service]) {
     return UITableViewCellEditingStyleDelete;
   }
   return UITableViewCellEditingStyleNone;
 }
 
-- (void)tableView:(UITableView *)table
+- (void)tableView:(UITableView*)table
     commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
-     forRowAtIndexPath:(NSIndexPath *)indexPath {
-  NSString *service = _data[_sections[indexPath.section]][indexPath.row];
+     forRowAtIndexPath:(NSIndexPath*)indexPath {
+  NSString* service = _data[_sections[indexPath.section]][indexPath.row];
   if (editingStyle == UITableViewCellEditingStyleDelete &&
       [_customServices.allKeys containsObject:service]) {
     [_customServices removeObjectForKey:service];
@@ -431,20 +431,20 @@
   }
 }
 
-- (NSIndexPath *)tableView:(UITableView *)tableView
-    targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
+- (NSIndexPath*)tableView:(UITableView*)tableView
+    targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath*)sourceIndexPath
                          toProposedIndexPath:
-                             (NSIndexPath *)proposedDestinationIndexPath {
+                             (NSIndexPath*)proposedDestinationIndexPath {
   if (sourceIndexPath.section == proposedDestinationIndexPath.section) {
     return sourceIndexPath;
   }
-  NSString *service =
+  NSString* service =
       _data[_sections[sourceIndexPath.section]][sourceIndexPath.row];
   if (_lastTargetService && XEq(service, _lastTargetService)) {
     return _lastTargetIndexPath;
   }
   _lastTargetService = service;
-  NSArray *tempArray =
+  NSArray* tempArray =
       [[_data
         [_sections
          [proposedDestinationIndexPath
@@ -456,22 +456,22 @@
   return _lastTargetIndexPath;
 }
 
-- (void)renameService:(NSString *)currService {
+- (void)renameService:(NSString*)currService {
 
-  UIAlertController *alert = XAlertTitle(XStr(@"Rename %@", currService), nil);
-  [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
+  UIAlertController* alert = XAlertTitle(XStr(@"Rename %@", currService), nil);
+  [alert addTextFieldWithConfigurationHandler:^(UITextField* textField) {
     textField.placeholder = @"Service Name";
     textField.text = currService;
   }];
   [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
                                             style:UIAlertActionStyleCancel
                                           handler:nil]];
-  id handler = ^(UIAlertAction *action) {
-    UITextField *textField = alert.textFields[0];
+  id handler = ^(UIAlertAction* action) {
+    UITextField* textField = alert.textFields[0];
     if (!textField || !textField.text) {
       return;
     }
-    NSString *newServiceName = [textField.text
+    NSString* newServiceName = [textField.text
         stringByTrimmingCharactersInSet:[NSCharacterSet
                                             whitespaceAndNewlineCharacterSet]];
     if (newServiceName.length < 1 || XEq(newServiceName, currService)) {
@@ -479,10 +479,10 @@
     }
     if ([_customServices.allKeys containsObject:newServiceName] ||
         [_services containsObject:newServiceName]) {
-      id existsHandler = ^(UIAlertAction *existsAction) {
+      id existsHandler = ^(UIAlertAction* existsAction) {
         [self renameService:currService];
       };
-      UIAlertController *existsAlert =
+      UIAlertController* existsAlert =
           XAlertTitle(XStr(@"Rename %@", currService),
                       @"A service with that name already exists.");
       [existsAlert addAction:XAlertBtnHandler(@"Ok", existsHandler)];
@@ -501,9 +501,9 @@
     // Get preferences
     CFArrayRef keyList = CFPreferencesCopyKeyList(
         PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-    NSMutableDictionary *newPrefs = [NSMutableDictionary new];
+    NSMutableDictionary* newPrefs = [NSMutableDictionary new];
     if (keyList) {
-      newPrefs = [(NSDictionary *)CFPreferencesCopyMultiple(
+      newPrefs = [(NSDictionary*)CFPreferencesCopyMultiple(
           keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
           kCFPreferencesAnyHost) mutableCopy];
       if (!newPrefs) {
@@ -512,28 +512,28 @@
       CFRelease(keyList);
     }
 
-    NSDictionary *keysToMigrate = @{
+    NSDictionary* keysToMigrate = @{
       NSPPreferenceCustomServiceCustomAppsKey(currService) :
           NSPPreferenceCustomServiceCustomAppsKey(newServiceName)
     };
 
-    NSDictionary *prefixesToMigrate = @{
+    NSDictionary* prefixesToMigrate = @{
       NSPPreferenceCustomServiceBLPrefix(currService) :
           NSPPreferenceCustomServiceBLPrefix(newServiceName)
     };
 
-    NSMutableArray *keysToRemove =
+    NSMutableArray* keysToRemove =
         [NSMutableArray arrayWithArray:keysToMigrate.allKeys];
 
-    for (NSString *oldKey in keysToMigrate.allKeys) {
-      NSString *newKey = keysToMigrate[oldKey];
+    for (NSString* oldKey in keysToMigrate.allKeys) {
+      NSString* newKey = keysToMigrate[oldKey];
       newPrefs[newKey] = [newPrefs[oldKey] copy];
       [newPrefs removeObjectForKey:oldKey];
     }
 
-    for (NSString *oldPrefix in prefixesToMigrate.allKeys) {
-      NSString *newPrefix = prefixesToMigrate[oldPrefix];
-      NSMutableArray *foundPrefixKeys = [NSMutableArray new];
+    for (NSString* oldPrefix in prefixesToMigrate.allKeys) {
+      NSString* newPrefix = prefixesToMigrate[oldPrefix];
+      NSMutableArray* foundPrefixKeys = [NSMutableArray new];
       for (id key in newPrefs.allKeys) {
         if (![key isKindOfClass:NSString.class]) {
           continue;
@@ -542,8 +542,8 @@
           [foundPrefixKeys addObject:key];
         }
       }
-      for (NSString *oldKey in foundPrefixKeys) {
-        NSString *newKey =
+      for (NSString* oldKey in foundPrefixKeys) {
+        NSString* newKey =
             [oldKey stringByReplacingOccurrencesOfString:oldPrefix
                                               withString:newPrefix];
         newPrefs[newKey] = [newPrefs[oldKey] copy];
@@ -557,8 +557,8 @@
                              kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
     notify_post(PUSHER_PREFS_NOTIFICATION);
 
-    NSString *currSection =
-        ((NSNumber *)_customServices[newServiceName][@"Enabled"]).boolValue
+    NSString* currSection =
+        ((NSNumber*)_customServices[newServiceName][@"Enabled"]).boolValue
             ? @"Enabled"
             : @"Disabled";
     [_data[currSection] removeObject:currService];
@@ -574,7 +574,7 @@
   [self presentViewController:alert animated:YES completion:nil];
 }
 
-- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
+- (void)scrollViewWillBeginDragging:(UIScrollView*)scrollView {
   [self.view endEditing:YES];
 }
 

@@ -3,13 +3,13 @@
 
 @implementation NSPCustomService
 
-+ (NSString *)serviceName {
++ (NSString*)serviceName {
   // custom services are keyed by config.name in NSPushServiceManager
   return nil;
 }
 
-+ (PusherAuthorizationType)authTypeForConfig:(NSPushServiceConfig *)config {
-  NSNumber *authMethod = config.rawPrefs[@"authenticationMethod"];
++ (PusherAuthorizationType)authTypeForConfig:(NSPushServiceConfig*)config {
+  NSNumber* authMethod = config.rawPrefs[@"authenticationMethod"];
   if (!authMethod) {
     return PusherAuthorizationTypeNone;
   }
@@ -23,17 +23,17 @@
   }
 }
 
-+ (NSDictionary *)credentialsForConfig:(NSPushServiceConfig *)config {
++ (NSDictionary*)credentialsForConfig:(NSPushServiceConfig*)config {
   PusherAuthorizationType authType = [self authTypeForConfig:config];
   if (authType == PusherAuthorizationTypeCredentials) {
-    NSString *paramName = config.rawPrefs[@"paramName"];
+    NSString* paramName = config.rawPrefs[@"paramName"];
     if (paramName && paramName.length > 0) {
       return @{paramName : config.rawPrefs[@"key"] ?: @""};
     }
     return @{@"key" : config.rawPrefs[@"key"] ?: @""};
   }
   if (authType == PusherAuthorizationTypeHeader) {
-    NSString *paramName = config.rawPrefs[@"paramName"];
+    NSString* paramName = config.rawPrefs[@"paramName"];
     return @{
       @"headerName" : (paramName && paramName.length > 0) ? paramName
                                                           : @"Access-Token",

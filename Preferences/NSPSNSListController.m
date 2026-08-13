@@ -3,7 +3,7 @@
 
 @implementation NSPSNSListController
 
-- (NSArray *)specifiers {
+- (NSArray*)specifiers {
   if (!_specifiers) {
     _specifiers = [[self loadSpecifiersFromPlistName:@"SNS"
                                               target:self] retain];
@@ -21,12 +21,12 @@
     _service = [[self.specifier propertyForKey:@"service"] retain];
     _isCustomService =
         [self.specifier propertyForKey:@"isCustomService"] &&
-        ((NSNumber *)[self.specifier propertyForKey:@"isCustomService"])
+        ((NSNumber*)[self.specifier propertyForKey:@"isCustomService"])
             .boolValue;
 
     // synchronized if all values are nil
     BOOL synchronizedWithGlobal = YES;
-    for (PSSpecifier *specifier in self.specifiers) {
+    for (PSSpecifier* specifier in self.specifiers) {
       [specifier setProperty:_service forKey:@"service"];
       [specifier setProperty:[specifier propertyForKey:@"key"]
                       forKey:@"globalKey"];
@@ -39,10 +39,10 @@
       if (synchronizedWithGlobal) {
         BOOL foundTruthy = NO;
         if (_isCustomService) {
-          NSDictionary *customServices =
+          NSDictionary* customServices =
               [NSPSharedSpecifiers
-                  getPreference:
-                      (__bridge CFStringRef)NSPPreferenceCustomServicesKey]
+                  getPreference:(__bridge CFStringRef)
+                                    NSPPreferenceCustomServicesKey]
                   ?: @{};
           if (customServices[_service]) {
             foundTruthy =
@@ -59,7 +59,7 @@
       }
     }
 
-    PSSpecifier *synchronizedGroup = [PSSpecifier emptyGroupSpecifier];
+    PSSpecifier* synchronizedGroup = [PSSpecifier emptyGroupSpecifier];
     [synchronizedGroup
         setProperty:@"Synchronizes all values with the global preferences. "
                     @"Modifying any of these settings will override that "
@@ -86,8 +86,8 @@
   }
 }
 
-- (void)synchronizeWithGlobal:(PSSpecifier *)specifier {
-  for (PSSpecifier *spec in self.specifiers) {
+- (void)synchronizeWithGlobal:(PSSpecifier*)specifier {
+  for (PSSpecifier* spec in self.specifiers) {
     if ([spec propertyForKey:@"key"]) { // only if has key because group
                                         // specifiers dont matter for example
       [spec performSetterWithValue:nil];
@@ -99,21 +99,21 @@
   [self reloadSpecifier:specifier animated:YES];
 }
 
-- (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
+- (void)setPreferenceValue:(id)value specifier:(PSSpecifier*)specifier {
   if (!_isService) {
     [super setPreferenceValue:value specifier:specifier];
   }
   if (value && [specifier.identifier
                    containsString:@"SufficientNotificationSettingsIsAnd"]) {
     // if val is bool value true, set allow notifications on, else turn it off
-    PSSpecifier *allowNotificationsSpecifier =
+    PSSpecifier* allowNotificationsSpecifier =
         [self specifierForID:@"Allow Notifications"];
     if (allowNotificationsSpecifier) {
       [allowNotificationsSpecifier performSetterWithValue:value];
       [self reloadSpecifier:allowNotificationsSpecifier animated:YES];
     }
-    if (!((NSNumber *)value).boolValue) {
-      PSSpecifier *requireANWithORSpecifier =
+    if (!((NSNumber*)value).boolValue) {
+      PSSpecifier* requireANWithORSpecifier =
           [self specifierForID:@"Require Allow Notifications with OR"];
       if (requireANWithORSpecifier) {
         [requireANWithORSpecifier performSetterWithValue:@YES];
@@ -138,7 +138,7 @@
   }
 }
 
-- (id)readPreferenceValue:(PSSpecifier *)specifier {
+- (id)readPreferenceValue:(PSSpecifier*)specifier {
   if (!_isService) {
     return [super readPreferenceValue:specifier];
   }

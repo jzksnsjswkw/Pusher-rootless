@@ -2,7 +2,8 @@
 
 typedef void (^PickerCallback)(id appIdOrIds);
 
-@interface NSPAppMultiSelectionController : ATLApplicationListMultiSelectionController {
+@interface NSPAppMultiSelectionController
+    : ATLApplicationListMultiSelectionController {
   PickerCallback callback;
 }
 @property(nonatomic, copy) PickerCallback callback;

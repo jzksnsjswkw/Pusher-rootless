@@ -1,0 +1,9 @@
+# Pusher project formatting - LLVM style, 2-space indent, 80 cols
+BasedOnStyle: LLVM
+IndentWidth: 2
+ColumnLimit: 80
+SortIncludes: true
+PointerAlignment: Left
+ObjCBinPackProtocolList: Auto
+ObjCSpaceAfterProperty: false
+BreakBeforeBraces: Attach

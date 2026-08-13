@@ -1,14 +1,14 @@
 #import "NSPushFilter.h"
-#import "NSPushServiceConfig.h"
 #import "NSPushConfigSnapshot.h"
+#import "NSPushServiceConfig.h"
 #import "global.h"
 #import "helpers.h"
 
 @implementation NSPushFilter
 
-+ (NSString *)globalReasonIfAnyWithServer:(BBServer *)server
-                                  bulletin:(BBBulletin *)bulletin
-                                    config:(NSPushConfigSnapshot *)config {
++ (NSString*)globalReasonIfAnyWithServer:(BBServer*)server
+                                bulletin:(BBBulletin*)bulletin
+                                  config:(NSPushConfigSnapshot*)config {
   XLog(@"-------Bulletin------- %@", bulletin.sectionID);
   if (!config.enabled) {
     return XStr(@"Pusher %@abled", config.enabled ? @"En" : @"Dis");
@@ -31,7 +31,7 @@
     return @"Server is nil, it shouldn't be";
   }
 
-  BBSectionInfo *sectionInfo =
+  BBSectionInfo* sectionInfo =
       [server _sectionInfoForSectionID:bulletin.sectionID effective:YES];
   if (!sectionInfo) {
     return @"Section info is nil, it shouldn't be";
@@ -43,7 +43,7 @@
                 config.enabledServiceNames);
   }
 
-  for (NSString *service in config.enabledServiceNames) {
+  for (NSString* service in config.enabledServiceNames) {
     id serviceConfig = config.serviceConfigs[service];
     if (!serviceConfig ||
         ![serviceConfig isKindOfClass:NSPushServiceConfig.class]) {
@@ -54,10 +54,10 @@
   return nil;
 }
 
-+ (NSString *)appListReasonIfAnyWithConfig:(NSPushServiceConfig *)config
-                                     appID:(NSString *)appID {
-  NSPushServiceConfig *serviceConfig = (NSPushServiceConfig *)config;
-  NSArray *serviceAppList = serviceConfig.appList;
++ (NSString*)appListReasonIfAnyWithConfig:(NSPushServiceConfig*)config
+                                    appID:(NSString*)appID {
+  NSPushServiceConfig* serviceConfig = (NSPushServiceConfig*)config;
+  NSArray* serviceAppList = serviceConfig.appList;
   BOOL appListContainsApp =
       [serviceAppList containsObject:appID.lowercaseString];
   BOOL appListIsBlacklist = serviceConfig.appListIsBlacklist;
@@ -68,16 +68,16 @@
   return nil;
 }
 
-+ (NSString *)snsReasonIfAnyWithSNS:(NSArray *)sns
-                        sectionInfo:(BBSectionInfo *)sectionInfo
-                              isAnd:(BOOL)isAnd
-                  requireANWithOR:(BOOL)requireANWithOR {
++ (NSString*)snsReasonIfAnyWithSNS:(NSArray*)sns
+                       sectionInfo:(BBSectionInfo*)sectionInfo
+                             isAnd:(BOOL)isAnd
+                   requireANWithOR:(BOOL)requireANWithOR {
   if (!isAnd && requireANWithOR && !sectionInfo.allowsNotifications) {
     return @"'OR' and 'Require Allow Notifications with OR' both on, but Allow "
            @"Notifications is disabled in this app's settings.";
   }
 
-  for (NSString *key in sns) {
+  for (NSString* key in sns) {
     BOOL sufficient = YES;
     if (XEq(key, PUSHER_SUFFICIENT_ALLOW_NOTIFICATIONS_KEY)) {
       sufficient = sectionInfo.allowsNotifications;
@@ -112,13 +112,13 @@
   return nil;
 }
 
-+ (NSString *)deviceReasonIfAnyWithWhenToPush:(int)whenToPush
-                                   whatNetwork:(int)whatNetwork {
++ (NSString*)deviceReasonIfAnyWithWhenToPush:(int)whenToPush
+                                 whatNetwork:(int)whatNetwork {
   BOOL deviceIsLocked =
-      ((SBLockScreenManager *)[NSClassFromString(@"SBLockScreenManager")
-                                  sharedInstance])
+      ((SBLockScreenManager*)[NSClassFromString(@"SBLockScreenManager")
+           sharedInstance])
           .isUILocked;
-  NSString *wifiName =
+  NSString* wifiName =
       [[NSClassFromString(@"SBWiFiManager") sharedInstance] currentNetworkName];
   BOOL onWiFi = wifiName != nil;
   if ((whatNetwork == PUSHER_WHAT_NETWORK_WIFI_ONLY && !onWiFi) ||

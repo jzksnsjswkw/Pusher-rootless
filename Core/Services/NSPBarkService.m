@@ -1,15 +1,15 @@
 #import "NSPBarkService.h"
-#import "../NSPushServiceConfig.h"
 #import "../NSPBulletinContext.h"
+#import "../NSPushServiceConfig.h"
 
 @implementation NSPBarkService
 
-+ (NSString *)serviceName {
++ (NSString*)serviceName {
   return PUSHER_SERVICE_BARK;
 }
 
-+ (NSString *)URLStringForConfig:(NSPushServiceConfig *)config {
-  NSString *serverURL = config.rawPrefs[@"serverURL"];
++ (NSString*)URLStringForConfig:(NSPushServiceConfig*)config {
+  NSString* serverURL = config.rawPrefs[@"serverURL"];
   if (serverURL && serverURL.length > 0) {
     if ([serverURL hasSuffix:@"/"]) {
       return [serverURL stringByAppendingString:@"REPLACE_KEY"];
@@ -19,12 +19,9 @@
   return PUSHER_SERVICE_BARK_URL;
 }
 
-+ (NSDictionary *)infoDictForBulletinContext:(NSPBulletinContext *)context
-                                      config:(NSPushServiceConfig *)config {
-  return @{
-    @"title" : context.title ?: @"",
-    @"body" : context.message ?: @""
-  };
++ (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context
+                                     config:(NSPushServiceConfig*)config {
+  return @{@"title" : context.title ?: @"", @"body" : context.message ?: @""};
 }
 
 @end

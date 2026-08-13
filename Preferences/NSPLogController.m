@@ -1,8 +1,7 @@
-#import <MobileCoreServices/LSApplicationProxy.h>
 #import "NSPLogController.h"
 #import "NSPAppSelectionController.h"
 #import "UIImageIcon.h"
-
+#import <MobileCoreServices/LSApplicationProxy.h>
 
 #define SEGMENTED_CONTROL_TAG 673
 #define NETWORK_RESPONSE_ITEMS @[ @"Any", @"Success", @"No Data", @"Error" ]
@@ -10,7 +9,7 @@
 
 #define EXPANDED_TEXT_VIEW_TAG 674
 
-static NSPLogController *logControllerSharedInstance = nil;
+static NSPLogController* logControllerSharedInstance = nil;
 static void logsUpdated() {
   if (logControllerSharedInstance &&
       [logControllerSharedInstance isKindOfClass:NSPLogController.class] &&
@@ -20,16 +19,16 @@ static void logsUpdated() {
   }
 }
 
-static NSDictionary *getLogPreferences() {
+static NSDictionary* getLogPreferences() {
   CFPreferencesSynchronize(PUSHER_LOG_ID, kCFPreferencesCurrentUser,
                            kCFPreferencesAnyHost);
   CFArrayRef keyList = CFPreferencesCopyKeyList(
       PUSHER_LOG_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-  NSDictionary *prefs = @{};
+  NSDictionary* prefs = @{};
   if (keyList) {
-    prefs = (NSDictionary *)CFPreferencesCopyMultiple(keyList, PUSHER_LOG_ID,
-                                                      kCFPreferencesCurrentUser,
-                                                      kCFPreferencesAnyHost);
+    prefs = (NSDictionary*)CFPreferencesCopyMultiple(keyList, PUSHER_LOG_ID,
+                                                     kCFPreferencesCurrentUser,
+                                                     kCFPreferencesAnyHost);
     if (!prefs) {
       prefs = @{};
     }
@@ -47,29 +46,29 @@ static NSDictionary *getLogPreferences() {
 }
 
 - (void)showAppFilterTutorial {
-  UIWindow *window = nil;
-  NSSet *scenes = [UIApplication sharedApplication].connectedScenes;
-  for (UIScene *scene in scenes) {
-      if (scene.activationState == UISceneActivationStateForegroundActive) {
-          UIWindowScene *windowScene = (UIWindowScene *)scene;
-          for (UIWindow *win in windowScene.windows) {
-              if (win.isKeyWindow) {
-                  window = win;
-                  break;
-              }
-          }
-          if (window != nil) {
-              break;
-          }
+  UIWindow* window = nil;
+  NSSet* scenes = [UIApplication sharedApplication].connectedScenes;
+  for (UIScene* scene in scenes) {
+    if (scene.activationState == UISceneActivationStateForegroundActive) {
+      UIWindowScene* windowScene = (UIWindowScene*)scene;
+      for (UIWindow* win in windowScene.windows) {
+        if (win.isKeyWindow) {
+          window = win;
+          break;
+        }
       }
+      if (window != nil) {
+        break;
+      }
+    }
   }
   // UIWindow *window = [UIApplication sharedApplication].keyWindow;
-  UIView *tutorialView = [[UIView alloc] initWithFrame:window.bounds];
+  UIView* tutorialView = [[UIView alloc] initWithFrame:window.bounds];
   tutorialView.alpha = 0.f;
   tutorialView.backgroundColor = [UIColor colorWithWhite:0.f alpha:0.9f];
 
   // Label setup
-  UILabel *label = [UILabel new];
+  UILabel* label = [UILabel new];
   label.font = [UIFont fontWithName:@"HelveticaNeue-Thin"
                                size:UIFont.systemFontSize * 1.5f];
   label.textColor = UIColor.whiteColor;
@@ -112,7 +111,7 @@ static NSDictionary *getLogPreferences() {
                    }];
 
   // Add touch action after a second
-  UITapGestureRecognizer *tapGestureRecognizer = [[UITapGestureRecognizer alloc]
+  UITapGestureRecognizer* tapGestureRecognizer = [[UITapGestureRecognizer alloc]
       initWithTarget:self
               action:@selector(dismissTutorial:)];
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1.f * NSEC_PER_SEC),
@@ -130,8 +129,8 @@ static NSDictionary *getLogPreferences() {
   CFRelease(tutorialKeyRef);
 }
 
-- (void)dismissTutorial:(UITapGestureRecognizer *)tapGestureRecognizer {
-  UIView *tutorialView = tapGestureRecognizer.view;
+- (void)dismissTutorial:(UITapGestureRecognizer*)tapGestureRecognizer {
+  UIView* tutorialView = tapGestureRecognizer.view;
   [UIView animateWithDuration:0.3
       animations:^{
         tutorialView.alpha = 0.f;
@@ -181,12 +180,12 @@ static NSDictionary *getLogPreferences() {
       (__bridge CFStringRef)_logEnabledKey, PUSHER_APP_ID,
       kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
   _logEnabled =
-      logEnabledRef ? ((__bridge NSNumber *)logEnabledRef).boolValue : YES;
+      logEnabledRef ? ((__bridge NSNumber*)logEnabledRef).boolValue : YES;
 
   [self updateLogAndReload];
 }
 
-- (void)updateLogEnabled:(UISwitch *)logEnabledSwitch {
+- (void)updateLogEnabled:(UISwitch*)logEnabledSwitch {
   _logEnabled = logEnabledSwitch.isOn;
   CFPreferencesSetValue((__bridge CFStringRef)_logEnabledKey,
                         (__bridge CFNumberRef) @(_logEnabled), PUSHER_APP_ID,
@@ -196,7 +195,7 @@ static NSDictionary *getLogPreferences() {
   notify_post(PUSHER_PREFS_NOTIFICATION);
 }
 
-- (void)updateGlobalOnly:(UISwitch *)globalOnlySwitch {
+- (void)updateGlobalOnly:(UISwitch*)globalOnlySwitch {
   _filteredGlobalOnly = globalOnlySwitch.isOn;
   [self updateLogAndReload];
 }
@@ -207,7 +206,7 @@ static NSDictionary *getLogPreferences() {
 }
 
 - (void)updateLog {
-  NSDictionary *prefs = getLogPreferences();
+  NSDictionary* prefs = getLogPreferences();
 
   _truncatedIndexPaths = [NSMutableArray new];
 
@@ -251,22 +250,22 @@ static NSDictionary *getLogPreferences() {
   _firstLogSection = _data.count;
   _expandedIndexPaths = [NSMutableArray new];
 
-  NSArray *prefsLog = nil;
+  NSArray* prefsLog = nil;
   if (_global && !_filteredGlobalOnly) {
-    NSMutableArray *allLogs = [NSMutableArray new];
+    NSMutableArray* allLogs = [NSMutableArray new];
     for (id key in prefs.allKeys) {
       if (![key isKindOfClass:NSString.class]) {
         continue;
       }
       // should be all but just in case change implementation later
       if ([key hasSuffix:@"Log"]) {
-        NSString *service = [key substringToIndex:((NSString *)key).length - 3];
-        NSArray *serviceLogs = (NSArray *)prefs[key];
+        NSString* service = [key substringToIndex:((NSString*)key).length - 3];
+        NSArray* serviceLogs = (NSArray*)prefs[key];
         if (!serviceLogs) {
           continue;
         }
-        for (NSDictionary *logSection in serviceLogs) {
-          NSMutableDictionary *newLogSection = [logSection mutableCopy];
+        for (NSDictionary* logSection in serviceLogs) {
+          NSMutableDictionary* newLogSection = [logSection mutableCopy];
           newLogSection[@"service"] = service;
           [allLogs addObject:newLogSection];
         }
@@ -280,12 +279,12 @@ static NSDictionary *getLogPreferences() {
   }
 
   // sort prefs log by timestamp
-  NSSortDescriptor *timestampDescriptor =
+  NSSortDescriptor* timestampDescriptor =
       [[NSSortDescriptor alloc] initWithKey:@"timestamp" ascending:NO];
   prefsLog = [prefsLog sortedArrayUsingDescriptors:@[ timestampDescriptor ]];
 
-  for (NSDictionary *logSection in prefsLog) {
-    NSString *logSectionAppID = logSection[@"appID"];
+  for (NSDictionary* logSection in prefsLog) {
+    NSString* logSectionAppID = logSection[@"appID"];
     // if app filter is on, skip if not same app
     if (_filteredAppID) {
       if (!logSectionAppID || !XEq(logSectionAppID, _filteredAppID)) {
@@ -293,28 +292,29 @@ static NSDictionary *getLogPreferences() {
       }
     }
 
-    NSString *sectionName = logSection[@"name"];
+    NSString* sectionName = logSection[@"name"];
     if (!sectionName) {
-      NSString *appName = @"Unknown App";
+      NSString* appName = @"Unknown App";
       if (logSectionAppID) {
-        LSApplicationProxy* appProxy = [LSApplicationProxy applicationProxyForIdentifier:logSectionAppID];
+        LSApplicationProxy* appProxy =
+            [LSApplicationProxy applicationProxyForIdentifier:logSectionAppID];
         appName = [appProxy localizedName];
         // appName = _appList.applications[logSectionAppID];
       }
 
-      NSDate *timestamp = logSection[@"timestamp"];
+      NSDate* timestamp = logSection[@"timestamp"];
       if (timestamp && [timestamp isKindOfClass:NSDate.class]) {
-        NSDateFormatter *dateFormatter = [NSDateFormatter new];
+        NSDateFormatter* dateFormatter = [NSDateFormatter new];
         dateFormatter.dateStyle = NSDateFormatterMediumStyle;
         dateFormatter.timeStyle = NSDateFormatterMediumStyle;
-        NSString *dateString = [dateFormatter stringFromDate:timestamp];
+        NSString* dateString = [dateFormatter stringFromDate:timestamp];
         sectionName = XStr(@"%@: %@", appName, dateString);
       } else {
         sectionName = XStr(@"%@: %@", appName, timestamp);
       }
     }
     // added only if global
-    NSString *logSectionService = logSection[@"service"];
+    NSString* logSectionService = logSection[@"service"];
     if (logSectionService) {
       if (XIsEmpty(logSectionService)) {
         sectionName = XStr(@"{GLOBAL} %@", sectionName);
@@ -322,13 +322,13 @@ static NSDictionary *getLogPreferences() {
         sectionName = XStr(@"[%@] %@", logSectionService, sectionName);
       }
     }
-    NSArray *logs = logSection[@"logs"] ?: @[];
+    NSArray* logs = logSection[@"logs"] ?: @[];
 
     if (_filteredNetworkResponse) {
       BOOL networkResponseFilterPasses = NO;
-      NSString *filterLogString =
+      NSString* filterLogString =
           XStr(@"Network Response: %@", _filteredNetworkResponse);
-      for (NSString *log in logs) {
+      for (NSString* log in logs) {
         if ([log containsString:filterLogString]) {
           networkResponseFilterPasses = YES;
           break;
@@ -351,22 +351,22 @@ static NSDictionary *getLogPreferences() {
   }
 }
 
-- (BOOL)tableView:(UITableView *)tableView
-    shouldHighlightRowAtIndexPath:(NSIndexPath *)indexPath {
+- (BOOL)tableView:(UITableView*)tableView
+    shouldHighlightRowAtIndexPath:(NSIndexPath*)indexPath {
   return (indexPath.section == _settingsSection &&
           indexPath.row == _clearLogRow) ||
          (indexPath.section == _filterSection &&
           indexPath.row == _appFilterRow);
 }
 
-- (BOOL)tableView:(UITableView *)tableView
-    canEditRowAtIndexPath:(NSIndexPath *)indexPath {
+- (BOOL)tableView:(UITableView*)tableView
+    canEditRowAtIndexPath:(NSIndexPath*)indexPath {
   return indexPath.section == _filterSection && indexPath.row == _appFilterRow;
 }
 
-- (void)tableView:(UITableView *)tableView
+- (void)tableView:(UITableView*)tableView
     commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
-     forRowAtIndexPath:(NSIndexPath *)indexPath {
+     forRowAtIndexPath:(NSIndexPath*)indexPath {
   if (indexPath.section == _filterSection && indexPath.row == _appFilterRow &&
       editingStyle == UITableViewCellEditingStyleDelete) {
     _filteredAppID = nil;
@@ -374,14 +374,14 @@ static NSDictionary *getLogPreferences() {
   }
 }
 
-- (void)tableView:(UITableView *)tableView
-    didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+- (void)tableView:(UITableView*)tableView
+    didSelectRowAtIndexPath:(NSIndexPath*)indexPath {
   [tableView deselectRowAtIndexPath:indexPath animated:YES];
 
   // Clear log button
   if (indexPath.section == 0 && indexPath.row == _clearLogRow) {
     if (_global) {
-      NSDictionary *prefs = getLogPreferences();
+      NSDictionary* prefs = getLogPreferences();
       for (id key in prefs.allKeys) {
         if (![key isKindOfClass:NSString.class]) {
           continue;
@@ -417,7 +417,7 @@ static NSDictionary *getLogPreferences() {
   } else if (indexPath.section == _filterSection &&
              indexPath.row == _appFilterRow) {
     // app filter
-    NSPAppSelectionController *appSelectionController =
+    NSPAppSelectionController* appSelectionController =
         [NSPAppSelectionController new];
     [appSelectionController setCallback:^(id appID) {
       _filteredAppID = [appID copy];
@@ -428,7 +428,7 @@ static NSDictionary *getLogPreferences() {
           kCFPreferencesAnyHost);
       CFRelease(tutorialKeyRef);
       BOOL tutorialShown =
-          tutorialShownRef ? ((__bridge NSNumber *)tutorialShownRef).boolValue
+          tutorialShownRef ? ((__bridge NSNumber*)tutorialShownRef).boolValue
                            : NO;
       if (!tutorialShown) {
         [self showAppFilterTutorial];
@@ -438,7 +438,8 @@ static NSDictionary *getLogPreferences() {
     // appSelectionController.selectingMultiple = NO;
     if (_filteredAppID) {
       appSelectionController.selectedAppID = _filteredAppID;
-      // appSelectionController.selectedAppIDs = [@[ _filteredAppID ] mutableCopy];
+      // appSelectionController.selectedAppIDs = [@[ _filteredAppID ]
+      // mutableCopy];
     }
     appSelectionController.useSearchBar = YES;
     [self.navigationController pushViewController:appSelectionController
@@ -446,21 +447,21 @@ static NSDictionary *getLogPreferences() {
   }
 }
 
-- (BOOL)tableView:(UITableView *)tableView
-    shouldShowMenuForRowAtIndexPath:(NSIndexPath *)indexPath {
+- (BOOL)tableView:(UITableView*)tableView
+    shouldShowMenuForRowAtIndexPath:(NSIndexPath*)indexPath {
   return indexPath.section >= _firstLogSection;
 }
 
-- (BOOL)tableView:(UITableView *)tableView
+- (BOOL)tableView:(UITableView*)tableView
      canPerformAction:(SEL)action
-    forRowAtIndexPath:(NSIndexPath *)indexPath
+    forRowAtIndexPath:(NSIndexPath*)indexPath
            withSender:(id)sender {
   return indexPath.section >= _firstLogSection && action == @selector(copy:);
 }
 
-- (void)tableView:(UITableView *)tableView
+- (void)tableView:(UITableView*)tableView
         performAction:(SEL)action
-    forRowAtIndexPath:(NSIndexPath *)indexPath
+    forRowAtIndexPath:(NSIndexPath*)indexPath
            withSender:(id)sender {
   if (indexPath.section < _firstLogSection || action != @selector(copy:)) {
     return;
@@ -471,23 +472,23 @@ static NSDictionary *getLogPreferences() {
       _data[_sections[indexPath.section]][indexPath.row];
 }
 
-- (NSString *)tableView:(UITableView *)tableView
+- (NSString*)tableView:(UITableView*)tableView
     titleForHeaderInSection:(NSInteger)section {
   return _sections[section];
 }
 
-- (NSInteger)tableView:(UITableView *)tableView
+- (NSInteger)tableView:(UITableView*)tableView
     numberOfRowsInSection:(NSInteger)section {
-  return ((NSArray *)_data[_sections[section]]).count;
+  return ((NSArray*)_data[_sections[section]]).count;
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+- (NSInteger)numberOfSectionsInTableView:(UITableView*)tableView {
   return _sections.count;
 }
 
-- (UITableViewCell *)tableView:(UITableView *)tableView
-         cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-  UITableViewCell *cell =
+- (UITableViewCell*)tableView:(UITableView*)tableView
+        cellForRowAtIndexPath:(NSIndexPath*)indexPath {
+  UITableViewCell* cell =
       [tableView dequeueReusableCellWithIdentifier:@"LogCell"
                                       forIndexPath:indexPath];
 
@@ -500,13 +501,13 @@ static NSDictionary *getLogPreferences() {
   cell.textLabel.textColor = nil;
   cell.tintColor = NSPusherManager.sharedController.activeTintColor;
 
-  UITextView *expandedTextView =
+  UITextView* expandedTextView =
       [cell.contentView viewWithTag:EXPANDED_TEXT_VIEW_TAG];
   if (expandedTextView) {
     [expandedTextView removeFromSuperview];
   }
 
-  UIView *segmentedControlView =
+  UIView* segmentedControlView =
       [cell.contentView viewWithTag:SEGMENTED_CONTROL_TAG];
   if (segmentedControlView) {
     [segmentedControlView removeFromSuperview];
@@ -522,7 +523,7 @@ static NSDictionary *getLogPreferences() {
     if (indexPath.row == _networkResponseRow ||
         indexPath.row == _endResultFilterRow) {
       BOOL isNetworkResponse = indexPath.row == _networkResponseRow;
-      UISegmentedControl *segmentedControl = nil;
+      UISegmentedControl* segmentedControl = nil;
       if (isNetworkResponse) {
         segmentedControl =
             [[UISegmentedControl alloc] initWithItems:NETWORK_RESPONSE_ITEMS];
@@ -575,18 +576,20 @@ static NSDictionary *getLogPreferences() {
     } else if (indexPath.row == _appFilterRow) {
       cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
       if (_filteredAppID) {
-        LSApplicationProxy* appProxy = [LSApplicationProxy applicationProxyForIdentifier:_filteredAppID];
-        cell.textLabel.text =
-            XStr(@"App Filter: %@", [appProxy localizedName]);
+        LSApplicationProxy* appProxy =
+            [LSApplicationProxy applicationProxyForIdentifier:_filteredAppID];
+        cell.textLabel.text = XStr(@"App Filter: %@", [appProxy localizedName]);
         cell.imageView.image = [UIImage
             _applicationIconImageForBundleIdentifier:_filteredAppID
                                               format:0
-                                              scale:[UIScreen mainScreen].scale];
-        // cell.imageView.image = [_appList iconOfSize:ALApplicationIconSizeSmall
+                                               scale:[UIScreen mainScreen]
+                                                         .scale];
+        // cell.imageView.image = [_appList
+        // iconOfSize:ALApplicationIconSizeSmall
         //                        forDisplayIdentifier:_filteredAppID];
       }
     } else if (indexPath.row == _globalOnlyRow) {
-      UISwitch *globalOnlySwitch = [UISwitch new];
+      UISwitch* globalOnlySwitch = [UISwitch new];
       globalOnlySwitch.on = _filteredGlobalOnly;
       [globalOnlySwitch addTarget:self
                            action:@selector(updateGlobalOnly:)
@@ -674,7 +677,7 @@ static NSDictionary *getLogPreferences() {
   }
 
   if (indexPath.section == 0 && indexPath.row == _logEnabledSwitchRow) {
-    UISwitch *logEnabledSwitch = [UISwitch new];
+    UISwitch* logEnabledSwitch = [UISwitch new];
     logEnabledSwitch.on = _logEnabled;
     [logEnabledSwitch addTarget:self
                          action:@selector(updateLogEnabled:)
@@ -685,8 +688,8 @@ static NSDictionary *getLogPreferences() {
   return cell;
 }
 
-- (void)tableView:(UITableView *)tableView
-    accessoryButtonTappedForRowWithIndexPath:(NSIndexPath *)indexPath {
+- (void)tableView:(UITableView*)tableView
+    accessoryButtonTappedForRowWithIndexPath:(NSIndexPath*)indexPath {
   if (indexPath.section < _firstLogSection) {
     return;
   }
@@ -704,7 +707,7 @@ static NSDictionary *getLogPreferences() {
   }
 }
 
-- (void)networkResponseFilterUpdated:(UISegmentedControl *)segmentedControl {
+- (void)networkResponseFilterUpdated:(UISegmentedControl*)segmentedControl {
   int idx = segmentedControl.selectedSegmentIndex;
   if (idx == 0) { // any
     _filteredNetworkResponse = nil;
@@ -714,7 +717,7 @@ static NSDictionary *getLogPreferences() {
   [self updateLogAndReload];
 }
 
-- (void)endResultFilterUpdated:(UISegmentedControl *)segmentedControl {
+- (void)endResultFilterUpdated:(UISegmentedControl*)segmentedControl {
   int idx = segmentedControl.selectedSegmentIndex;
   if (idx == 0) { // any
     _filteredEndResult = nil;
