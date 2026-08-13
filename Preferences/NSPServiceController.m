@@ -262,9 +262,18 @@
        willPresentNotification:(UNNotification*)notification
          withCompletionHandler:
              (void (^)(UNNotificationPresentationOptions))completionHandler {
-  completionHandler(UNNotificationPresentationOptionSound |
-                    UNNotificationPresentationOptionBanner |
-                    UNNotificationPresentationOptionBadge);
+  UNNotificationPresentationOptions options =
+      UNNotificationPresentationOptionSound |
+      UNNotificationPresentationOptionBadge;
+  if (@available(iOS 14.0, *)) {
+    options |= UNNotificationPresentationOptionBanner;
+  } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    options |= UNNotificationPresentationOptionAlert;
+#pragma clang diagnostic pop
+  }
+  completionHandler(options);
 }
 
 - (void)openPushoverAppBuild {

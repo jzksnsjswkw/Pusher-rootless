@@ -101,23 +101,27 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
   }
 
   if (XEq(method, @"GET")) {
+    // Only unreserved RFC 3986 characters are left unescaped so that
+    // '&', '=', '+', '#', '?', '/' etc. in keys/values can't corrupt the
+    // query string.
+    static NSCharacterSet* queryAllowedCharacterSet;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      queryAllowedCharacterSet = [NSCharacterSet
+          characterSetWithCharactersInString:@"abcdefghijklmnopqrstuvwxyz"
+                                             @"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                             @"0123456789"
+                                             @"-._~"];
+    });
     NSString* parameterString = @"";
     for (NSString* key in infoDictForRequest.allKeys) {
       NSString* value = XStrDefault(infoDictForRequest[key], @"");
       NSString* escapedKey =
-          [[[key stringByAddingPercentEncodingWithAllowedCharacters:
-                     NSCharacterSet.URLQueryAllowedCharacterSet]
-              stringByReplacingOccurrencesOfString:@"+"
-                                        withString:@"%2B"]
-              stringByReplacingOccurrencesOfString:@"="
-                                        withString:@"%3D"];
+          [key stringByAddingPercentEncodingWithAllowedCharacters:
+                   queryAllowedCharacterSet];
       NSString* escapedValue =
-          [[[value stringByAddingPercentEncodingWithAllowedCharacters:
-                       NSCharacterSet.URLQueryAllowedCharacterSet]
-              stringByReplacingOccurrencesOfString:@"+"
-                                        withString:@"%2B"]
-              stringByReplacingOccurrencesOfString:@"="
-                                        withString:@"%3D"];
+          [value stringByAddingPercentEncodingWithAllowedCharacters:
+                     queryAllowedCharacterSet];
       parameterString = XStr(@"%@%@%@=%@", parameterString,
                              (parameterString.length < 1 ? @"" : @"&"),
                              escapedKey, escapedValue);

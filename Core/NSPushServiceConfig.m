@@ -26,7 +26,7 @@
   return ((NSNumber*)self.rawPrefs[@"appListIsBlacklist"]).boolValue;
 }
 
-- (NSDictionary*)sns {
+- (NSArray*)sns {
   return self.rawPrefs[@"sns"];
 }
 
