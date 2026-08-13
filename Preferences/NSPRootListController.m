@@ -94,4 +94,8 @@
   [NSPusherManager.sharedController openTwitter:@"NoahSaso"];
 }
 
+- (void)openGitHub {
+  XUrl(@"https://github.com/jzksnsjswkw/Pusher-rootless");
+}
+
 @end

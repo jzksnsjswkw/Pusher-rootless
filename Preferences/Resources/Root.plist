@@ -67,11 +67,21 @@
 			<key>cell</key>
 			<string>PSButtonCell</string>
 			<key>label</key>
-			<string>Developer: @NoahSaso</string>
+			<string>Original Developer: @NoahSaso</string>
 			<key>icon</key>
 			<string>twitter</string>
 			<key>action</key>
 			<string>openTwitterNoahSaso</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Maintainer / GitHub</string>
+			<key>icon</key>
+			<string>github</string>
+			<key>action</key>
+			<string>openGitHub</string>
 		</dict>
 	</array>
 	<key>title</key>
