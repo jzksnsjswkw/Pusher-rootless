@@ -12,12 +12,21 @@
              appTitle:(NSString*)appTitle
       isCustomService:(BOOL)isCustomService {
   if (self = [super init]) {
-    _service = service;
-    _appID = appID;
+    // Copy: the caller (NSPCustomizeAppsController) passes strings owned by
+    // its own state, which may be deallocated after we push this controller.
+    _service = [service copy];
+    _appID = [appID copy];
     _appTitle = [appTitle copy];
     _isCustomService = isCustomService;
   }
   return self;
+}
+
+- (void)dealloc {
+  [_service release];
+  [_appID release];
+  [_appTitle release];
+  [super dealloc];
 }
 
 - (void)viewDidLoad {

@@ -3,7 +3,16 @@
 @implementation NSPTestPush
 
 + (void)load {
-  [self sharedInstance];
+  // Only register the CPDistributedMessagingCenter server in SpringBoard.
+  // The dylib also loads into Preferences (matching the plist filter), and if
+  // both processes registered the same message port, a respring race could let
+  // Preferences win and silently swallow test pushes (BBServer is only wired
+  // up in SpringBoard). Preferences can still send test messages, it just
+  // must not host the server.
+  if ([[[NSBundle mainBundle] bundleIdentifier]
+          isEqualToString:@"com.apple.springboard"]) {
+    [self sharedInstance];
+  }
 }
 
 + (id)sharedInstance {
@@ -55,8 +64,7 @@
                       _initWithType:1
                                 URL:attachmentURL
                          identifier:@"TestImage"
-                        // no idea what this is supposed to be
-                        uniformType:@"TestImageUniformType"
+                        uniformType:@"public.png"
          // no idea what this is supposed to be
          thumbnailGeneratorUserInfo:nil
                     thumbnailHidden:true

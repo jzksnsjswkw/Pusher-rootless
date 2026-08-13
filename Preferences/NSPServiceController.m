@@ -8,6 +8,17 @@
 
 @implementation NSPServiceController
 
+// _service and _image are borrowed references (assigned without retain in
+// initWithService:image:isCustom: and kept alive by the caller's
+// _loadedServiceControllers cache), so they must NOT be released here. Only
+// the owned ivars below are released.
+- (void)dealloc {
+  [_colorCube release];
+  [_uiColor release];
+  [_imageTitleView release];
+  [super dealloc];
+}
+
 - (id)initWithService:(NSString*)service
                 image:(UIImage*)image
              isCustom:(BOOL)isCustom {
@@ -28,11 +39,12 @@
 
   // [self setTitle:_service];
   if (!_imageTitleView) {
-    UILabel* label = [UILabel new];
+    UILabel* label = [[UILabel new] autorelease];
     label.text = _service;
     label.font = [UIFont boldSystemFontOfSize:17];
 
-    UIImageView* imageView = [[UIImageView alloc] initWithImage:_image];
+    UIImageView* imageView =
+        [[[UIImageView alloc] initWithImage:_image] autorelease];
 
     _imageTitleView =
         [[UIStackView alloc] initWithArrangedSubviews:@[ imageView, label ]];
@@ -50,8 +62,13 @@
     CCFlags flags =
         (CCFlags)(CCOnlyDistinctColors | CCAvoidWhite | CCAvoidBlack);
     NSArray* imgColors = [_colorCube extractColorsFromImage:_image flags:flags];
-    if (!imgColors.count)
+    if (!imgColors.count) {
+      // No color extracted: still restore the default tint so the UI doesn't
+      // keep the previous service's color.
+      [NSPusherManager.sharedController setActiveTintColor:nil];
+      [self tintUIToPusherColor];
       return;
+    }
     _uiColor = [imgColors[0] copy];
   }
 
@@ -91,9 +108,11 @@
         PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
     NSDictionary* prefs = @{};
     if (keyList) {
-      prefs = (NSDictionary*)CFPreferencesCopyMultiple(
+      // CFPreferencesCopyMultiple returns a +1 object. CFBridgingRelease is a no-op
+      // under MRC, so autorelease the +1 explicitly (local var, used immediately).
+      prefs = [(id)CFPreferencesCopyMultiple(
           keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-          kCFPreferencesAnyHost);
+          kCFPreferencesAnyHost) autorelease];
       if (!prefs) {
         prefs = @{};
       }
@@ -115,7 +134,12 @@
                         .count;
           }
           specifier.name = XStr(@"%@ (%d total)", specifier.name, count);
-          [specifier setProperty:self forKey:@"psListRef"];
+          // Store as a non-retaining NSValue: keeping a raw self here creates
+          // controller -> specifiers -> psListRef -> controller cycle and the
+          // controller is never deallocated.
+          [specifier
+              setProperty:[NSValue valueWithNonretainedObject:self]
+                   forKey:@"psListRef"];
         } else if (XEq(specifier.name, @"App Customization")) {
           NSDictionary* customApps = nil;
           if (_isCustom) {
@@ -129,32 +153,20 @@
           }
           specifier.name = XStr(@"%@ (%d total)", specifier.name,
                                 customApps ? (int)customApps.count : 0);
-          [specifier setProperty:self forKey:@"psListRef"];
+          // Non-retaining NSValue, see comment above.
+          [specifier
+              setProperty:[NSValue valueWithNonretainedObject:self]
+                   forKey:@"psListRef"];
         }
       }
     }
 
-    BOOL insertOnNext = NO;
-    BOOL inserted = NO;
-    int idx = 0;
-    for (PSSpecifier* specifier in allSpecifiers) {
-      if (insertOnNext && specifier.cellType == PSGroupCell) {
-        [self addObjectsFromArray:sharedSpecifiers
-                          atIndex:idx
-                          toArray:allSpecifiers];
-        inserted = YES;
-        break;
-      } else if (specifier.cellType == PSGroupCell &&
-                 XEq(specifier.identifier,
-                     @"Options")) { // insert at end of options group
-        insertOnNext = YES;
-      }
-      idx += 1;
-    }
-
-    if (!inserted) {
-      [allSpecifiers addObjectsFromArray:sharedSpecifiers];
-    }
+    // Shared specifiers (receiving devices, notification sounds, etc.) are
+    // appended at the end of the list. The old code tried to insert them
+    // inside an "Options" group by matching specifier.identifier == @"Options",
+    // but no plist group cell carries that identifier, so the branch was
+    // unreachable and the plain append below is the only path that ever ran.
+    [allSpecifiers addObjectsFromArray:sharedSpecifiers];
 
     NSArray* specialCells = @[ @(PSGroupCell), @(PSButtonCell), @(PSLinkCell) ];
 

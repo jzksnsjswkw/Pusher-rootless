@@ -7,6 +7,11 @@
 + (NSString*)stringForObject:(id)object
                   withPrefix:(NSString*)prefix
                 dontTruncate:(BOOL)dontTruncate;
++ (void)addToLogLockedForService:(NSString*)service
+                       bulletin:(BBBulletin*)bulletin
+                          label:(NSString*)label
+                         object:(id)object
+                   dontTruncate:(BOOL)dontTruncate;
 @end
 
 @implementation NSPushLog
@@ -64,6 +69,24 @@
                               label:(NSString*)label
                              object:(id)object
                        dontTruncate:(BOOL)dontTruncate {
+  // addToLogIfEnabledForService: can be reached concurrently from the main
+  // thread and from NSURLSession background completion queues (e.g. the WeChat
+  // service's token request); the read-modify-write of the log prefs must be
+  // serialized or log entries can be lost.
+  @synchronized(NSPushLog.class) {
+    [NSPushLog addToLogLockedForService:service
+                               bulletin:bulletin
+                                  label:label
+                                 object:object
+                           dontTruncate:dontTruncate];
+  }
+}
+
++ (void)addToLogLockedForService:(NSString*)service
+                        bulletin:(BBBulletin*)bulletin
+                           label:(NSString*)label
+                          object:(id)object
+                    dontTruncate:(BOOL)dontTruncate {
   // allow global service which is @"" so empty
   if (!XIsEmpty(service)) {
     id val = CFBridgingRelease(CFPreferencesCopyAppValue(

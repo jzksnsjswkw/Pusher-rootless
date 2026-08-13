@@ -55,6 +55,8 @@
                                                      config:config];
 
   NSNumber* curateData = config.rawPrefs[@"curateData"];
+  // curateData = curated single-field webhook format (value1-3, icon or date
+  // as value3); otherwise the whole info dict is JSON-serialized into value1.
   if (curateData && curateData.boolValue) {
     NSString* dateStr = [self dateStringForDate:context.bulletin.date
                                          config:config];

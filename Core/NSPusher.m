@@ -32,6 +32,8 @@
   _config = [NSPushPrefs loadSnapshot];
 }
 
+// Called from the BBServer hook every time a bulletin is published. Guards,
+// global prefs filter, loop prevention, then fan-out to all enabled services.
 - (void)handleBulletin:(BBBulletin*)bulletin {
   if (!bulletin) {
     XLog(@"Bulletin nil");
@@ -41,6 +43,8 @@
     bulletin.date = [NSDate date];
   }
 
+  // lastInterruptDate is nil when the bulletin was never actually presented
+  // (e.g. right after SpringBoard restarts and replays queued bulletins).
   if (!bulletin.lastInterruptDate) {
     XLog(@"Not forwarding, Last Interrupt Date: %@",
          bulletin.lastInterruptDate);
@@ -117,6 +121,8 @@
            : @""),
       bulletin.message ? bulletin.message : @"");
 
+  // Loop prevention: a forwarded push can itself produce a notification that
+  // would get forwarded again. Drop titles we have already seen recently.
   for (NSString* recentNotificationTitle in _recentNotificationTitles) {
     if (XEq(title, recentNotificationTitle)) {
       XLog(@"Prevented loop");
@@ -127,6 +133,7 @@
       return;
     }
   }
+  // Cap the history, then just reset it (keeps the check simple and bounded).
   if (_recentNotificationTitles.count >= 50) {
     [_recentNotificationTitles removeAllObjects];
   }
@@ -148,6 +155,9 @@
   }
 }
 
+// Per-service pipeline: look up the service class, skip loops back to the
+// service's own app, then apply app-list / SNS / device-condition filters
+// before building and sending the request.
 - (void)sendToService:(NSString*)service
              bulletin:(BBBulletin*)bulletin
                 appID:(NSString*)appID
@@ -162,6 +172,8 @@
   Class<NSPPushService> serviceClass =
       (Class<NSPPushService>)[NSPushServiceManager serviceClassForName:service];
 
+  // A push forwarded to a service whose own iOS app just generated the
+  // notification would bounce straight back and loop.
   if (!isTest && XEq(appID, [serviceClass loopPreventionAppID])) {
     XLog(@"Prevented loop from same app");
     [NSPushLog addToLogIfEnabledForService:service
@@ -228,6 +240,8 @@
       XLog(@"[S:%@,A:%@] Device Conditions ok", service, appID);
     }
 
+    // Per-app overrides (customApps) replace the service-wide prefs for this
+    // specific app.
     effectiveConfig = [serviceConfig effectiveConfigForAppID:appID];
   }
 
@@ -243,6 +257,8 @@
 
   NSString* method = XStrDefault(effectiveConfig.rawPrefs[@"method"], @"POST");
   NSDictionary* headers = [serviceClass headersForConfig:effectiveConfig];
+  // URL may resolve asynchronously (e.g. WeChat access token); send the
+  // request only once the final URL is known.
   [serviceClass
       URLStringForConfig:effectiveConfig
               completion:^(NSString* urlString) {

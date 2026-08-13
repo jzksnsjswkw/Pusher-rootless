@@ -20,14 +20,17 @@
                            kCFPreferencesAnyHost);
   CFArrayRef keyList = CFPreferencesCopyKeyList(
       PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-  NSDictionary* _prefs = @{};
+  // Local variable (not an ivar), named prefs to avoid shadowing confusion.
+  NSDictionary* prefs = @{};
   _selectedApplications = [NSMutableSet new];
   if (keyList) {
-    _prefs = (NSDictionary*)CFPreferencesCopyMultiple(keyList, PUSHER_APP_ID,
-                                                      kCFPreferencesCurrentUser,
-                                                      kCFPreferencesAnyHost);
-    if (!_prefs) {
-      _prefs = @{};
+    // CFPreferencesCopyMultiple returns a +1 object. CFBridgingRelease is a no-op
+      // under MRC, so autorelease the +1 explicitly (local var, used immediately).
+    prefs = [(id)CFPreferencesCopyMultiple(
+        keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
+        kCFPreferencesAnyHost) autorelease];
+    if (!prefs) {
+      prefs = @{};
     }
     CFRelease(keyList);
   }
@@ -41,17 +44,16 @@
         [NSPSharedSpecifiers builtInServiceAppListForService:_service];
     [_selectedApplications addObjectsFromArray:appList];
   } else {
-    for (id key in _prefs.allKeys) {
+    for (id key in prefs.allKeys) {
       if (![key isKindOfClass:NSString.class]) {
         continue;
       }
-      if ([key hasPrefix:_prefix] && ((NSNumber*)_prefs[key]).boolValue) {
+      if ([key hasPrefix:_prefix] && ((NSNumber*)prefs[key]).boolValue) {
         NSString* subKey = [key substringFromIndex:_prefix.length];
         [_selectedApplications addObject:subKey];
       }
     }
   }
-  NSLog(@"%@", _selectedApplications);
 }
 
 - (void)setApplicationEnabled:(NSNumber*)enabledNum

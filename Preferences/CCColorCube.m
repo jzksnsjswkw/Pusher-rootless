@@ -321,7 +321,13 @@ int neighbourIndices[27][3] = {{0, 0, 0},   {0, 0, 1},   {0, 0, -1},
 
 - (NSArray*)filterMaxima:(NSArray*)maxima tooCloseToColor:(UIColor*)color {
   // Get color components
-  const CGFloat* components = CGColorGetComponents(color.CGColor);
+  CGFloat r, g, b, a;
+  // getRed:green:blue:alpha: is safe for non-RGB color spaces (gray, pattern),
+  // unlike CGColorGetComponents which would read out of bounds for gray colors.
+  if (![color getRed:&r green:&g blue:&b alpha:&a]) {
+    // Can't compare in RGB space; don't filter anything out.
+    return maxima;
+  }
 
   NSMutableArray* filteredMaxima = [NSMutableArray array];
 
@@ -331,9 +337,9 @@ int neighbourIndices[27][3] = {{0, 0, 0},   {0, 0, 1},   {0, 0, -1},
     CCLocalMaximum* max1 = maxima[k];
 
     // Compute delta components
-    double redDelta = max1.red - components[0];
-    double greenDelta = max1.green - components[1];
-    double blueDelta = max1.blue - components[2];
+    double redDelta = max1.red - r;
+    double greenDelta = max1.green - g;
+    double blueDelta = max1.blue - b;
 
     // Compute delta in color space distance
     double delta = sqrt(redDelta * redDelta + greenDelta * greenDelta +

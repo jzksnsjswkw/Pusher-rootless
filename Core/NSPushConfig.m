@@ -55,7 +55,23 @@
 }
 
 - (NSPushServiceConfig*)effectiveConfigForAppID:(NSString*)appID {
-  NSDictionary* customApp = self.customApps[appID];
+  // appList matching is done against lowercased app IDs (see
+  // NSPushFilter.appListReasonIfAnyWithConfig:), so look up the per-app
+  // override case-insensitively too; otherwise a custom app entered with a
+  // different case silently never applies.
+  NSDictionary* customApp = nil;
+  NSString* lookupAppID = appID.lowercaseString;
+  if (self.customApps[lookupAppID]) {
+    customApp = self.customApps[lookupAppID];
+  } else {
+    // Also tolerate custom apps stored with the original (possibly mixed) case.
+    for (NSString* storedAppID in self.customApps) {
+      if ([storedAppID.lowercaseString isEqualToString:lookupAppID]) {
+        customApp = self.customApps[storedAppID];
+        break;
+      }
+    }
+  }
   if (!customApp) {
     return self;
   }

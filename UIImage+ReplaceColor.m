@@ -6,16 +6,29 @@
                         withColor:(UIColor*)targetColor {
 
   // components of the source color
-  const CGFloat* sourceComponents = CGColorGetComponents(sourceColor.CGColor);
+  CGFloat r, g, b, a;
+  // getRed:green:blue:alpha: handles non-RGB color spaces (gray, pattern)
+  // safely, unlike CGColorGetComponents which would read out of bounds or
+  // dereference NULL for those colors.
+  if (![sourceColor getRed:&r green:&g blue:&b alpha:&a]) {
+    return self;
+  }
   UInt8* source255Components = malloc(sizeof(UInt8) * 4);
-  for (int i = 0; i < 4; i++)
-    source255Components[i] = (UInt8)round(sourceComponents[i] * 255.0);
+  source255Components[0] = (UInt8)round(r * 255.0);
+  source255Components[1] = (UInt8)round(g * 255.0);
+  source255Components[2] = (UInt8)round(b * 255.0);
+  source255Components[3] = (UInt8)round(a * 255.0);
 
   // components of the target color
-  const CGFloat* targetComponents = CGColorGetComponents(targetColor.CGColor);
+  if (![targetColor getRed:&r green:&g blue:&b alpha:&a]) {
+    free(source255Components);
+    return self;
+  }
   UInt8* target255Components = malloc(sizeof(UInt8) * 4);
-  for (int i = 0; i < 4; i++)
-    target255Components[i] = (UInt8)round(targetComponents[i] * 255.0);
+  target255Components[0] = (UInt8)round(r * 255.0);
+  target255Components[1] = (UInt8)round(g * 255.0);
+  target255Components[2] = (UInt8)round(b * 255.0);
+  target255Components[3] = (UInt8)round(a * 255.0);
 
   // raw image reference
   CGImageRef rawImage = self.CGImage;

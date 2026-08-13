@@ -18,6 +18,7 @@
 
 + (NSDictionary*)headersForConfig:(NSPushServiceConfig*)config {
   NSNumber* authMethod = config.rawPrefs[@"authenticationMethod"];
+  // authMethod 1 = header auth: send key as a custom HTTP header.
   if (authMethod && authMethod.intValue == 1) {
     NSString* paramName = config.rawPrefs[@"paramName"];
     return @{
@@ -44,6 +45,7 @@
       [[super infoDictForBulletinContext:context config:config] mutableCopy];
 
   NSNumber* authMethod = config.rawPrefs[@"authenticationMethod"];
+  // authMethod 2 = body auth: embed key inside the JSON payload instead.
   if (authMethod && authMethod.intValue == 2) {
     NSString* paramName = config.rawPrefs[@"paramName"];
     if (paramName && paramName.length > 0) {
