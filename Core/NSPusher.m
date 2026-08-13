@@ -91,7 +91,7 @@
   }
 
   BOOL appListContainsApp =
-      [self.config.globalAppList containsObject:appID.lowercaseString];
+      [self.config.globalAppList containsObject:appID];
   if (self.config.globalAppListIsBlacklist == appListContainsApp) {
     XLog(@"[Global] Blocked by app list: %@", appID);
     [NSPushLog
@@ -122,19 +122,26 @@
       bulletin.message ? bulletin.message : @"");
 
   // Loop prevention: a forwarded push can itself produce a notification that
-  // would get forwarded again. Drop titles we have already seen recently.
+  // would get forwarded again. Count how many times this exact title already
+  // appeared in the recent window and only drop it once it repeats enough
+  // times (10 of the last 25) to look like a genuine loop, so a legitimate
+  // single duplicate isn't mistaken for one.
+  NSUInteger titleCount = 0;
   for (NSString* recentNotificationTitle in _recentNotificationTitles) {
     if (XEq(title, recentNotificationTitle)) {
-      XLog(@"Prevented loop");
-      [NSPushLog addToLogIfEnabledForService:@""
-                                    bulletin:bulletin
-                                       label:@"Prevented loop"
-                                      object:nil];
-      return;
+      titleCount++;
     }
   }
+  if (titleCount >= PUSHER_LOOP_PREVENTION_THRESHOLD) {
+    XLog(@"Prevented loop");
+    [NSPushLog addToLogIfEnabledForService:@""
+                                  bulletin:bulletin
+                                     label:@"Prevented loop"
+                                    object:nil];
+    return;
+  }
   // Cap the history, then just reset it (keeps the check simple and bounded).
-  if (_recentNotificationTitles.count >= 50) {
+  if (_recentNotificationTitles.count >= PUSHER_LOOP_PREVENTION_WINDOW) {
     [_recentNotificationTitles removeAllObjects];
   }
   [_recentNotificationTitles addObject:title];
@@ -245,40 +252,69 @@
     effectiveConfig = [serviceConfig effectiveConfigForAppID:appID];
   }
 
-  NSDictionary* infoDict =
-      [serviceClass infoDictForBulletinContext:[NSPBulletinContext
-                                                   contextWithBulletin:bulletin
-                                                                 appID:appID
-                                                               appName:appName
-                                                                 title:title
-                                                               message:message
-                                                                isTest:isTest]
-                                        config:effectiveConfig];
+  // Build and send on a background queue: the filter decision (above) is done
+  // on the main thread where the SpringBoard/BBServer objects live, but
+  // building the payload can do heavy work (decoding/shrinking the attachment
+  // image, generating the icon) that must not stall SpringBoard. Everything
+  // used below is thread-safe: NSPushLog and the request sender's retry map
+  // use @synchronized, NSURLSession and WeChat's token cache are safe to use
+  // from background queues, and bulletin/config are read-only model objects.
+  dispatch_async(
+      dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSDictionary* infoDict =
+            [serviceClass infoDictForBulletinContext:[NSPBulletinContext
+                                                         contextWithBulletin:
+                                                             bulletin
+                                                                      appID:appID
+                                                                    appName:
+                                                                        appName
+                                                                      title:title
+                                                                    message:message
+                                                                     isTest:isTest]
+                                              config:effectiveConfig];
 
-  NSString* method = XStrDefault(effectiveConfig.rawPrefs[@"method"], @"POST");
-  NSDictionary* headers = [serviceClass headersForConfig:effectiveConfig];
-  // URL may resolve asynchronously (e.g. WeChat access token); send the
-  // request only once the final URL is known.
-  [serviceClass
-      URLStringForConfig:effectiveConfig
-              completion:^(NSString* urlString) {
-                [[NSPushRequestSender sharedInstance]
-                    sendRequestWithURLString:urlString
-                                    infoDict:infoDict
-                                     headers:headers
-                                      method:method
-                                   logString:XStr(@"[S:%@,A:%@]", service,
-                                                  appName)
-                                     service:service
-                                    bulletin:bulletin];
-                XLog(@"[S:%@,T:%d,A:%@] Pushed", service, isTest, appName);
-                if (!isTest) {
-                  [NSPushLog addToLogIfEnabledForService:service
-                                                bulletin:bulletin
-                                                   label:@"Pushed"
-                                                  object:nil];
-                }
-              }];
+        NSString* method =
+            XStrDefault(effectiveConfig.rawPrefs[@"method"], @"POST");
+        NSDictionary* headers = [serviceClass headersForConfig:effectiveConfig];
+        // URL may resolve asynchronously (e.g. WeChat access token); send the
+        // request only once the final URL is known.
+        [serviceClass
+            URLStringForConfig:effectiveConfig
+                    completion:^(NSString* urlString) {
+                      if (!urlString) {
+                        // Service failed to build a URL (e.g. WeChat couldn't
+                        // fetch an access token); log the failure and skip the
+                        // send.
+                        XLog(@"[S:%@,A:%@] Failed to build URL", service,
+                             appName);
+                        if (!isTest) {
+                          [NSPushLog
+                              addToLogIfEnabledForService:service
+                                                 bulletin:bulletin
+                                                    label:@"Failed to build URL"
+                                                   object:nil];
+                        }
+                        return;
+                      }
+                      [[NSPushRequestSender sharedInstance]
+                          sendRequestWithURLString:urlString
+                                          infoDict:infoDict
+                                           headers:headers
+                                            method:method
+                                         logString:XStr(@"[S:%@,A:%@]", service,
+                                                        appName)
+                                           service:service
+                                          bulletin:bulletin];
+                      XLog(@"[S:%@,T:%d,A:%@] Pushed", service, isTest,
+                           appName);
+                      if (!isTest) {
+                        [NSPushLog addToLogIfEnabledForService:service
+                                                      bulletin:bulletin
+                                                         label:@"Pushed"
+                                                        object:nil];
+                      }
+                    }];
+      });
 }
 
 @end

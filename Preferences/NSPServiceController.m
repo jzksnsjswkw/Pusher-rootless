@@ -230,10 +230,16 @@
       [CPDistributedMessagingCenter centerNamed:PUSHER_MESSAGING_CENTER_NAME];
 
   // Two-way (wait for reply)
-  NSDictionary* reply;
-  reply = [messagingCenter
-      sendMessageAndReceiveReplyName:PUSHER_TEST_PUSH_MESSAGE_NAME
-                            userInfo:@{@"service" : _service}];
+  NSDictionary* reply = nil;
+  @try {
+    reply = [messagingCenter
+        sendMessageAndReceiveReplyName:PUSHER_TEST_PUSH_MESSAGE_NAME
+                              userInfo:@{@"service" : _service}];
+  } @catch (NSException* exception) {
+    // No server running (e.g. SpringBoard not yet respringed after install);
+    // treat as a failed send instead of crashing Preferences.
+    XLog(@"Test push exception: %@", exception);
+  }
 
   if (reply[@"success"] && ((NSNumber*)reply[@"success"]).boolValue) {
     [self displayNotification:XStr(@"%@Sent", PUSHER_TEST_PUSH_RESULT_PREFIX)];
@@ -258,9 +264,13 @@
        withCompletionHandler:^(NSError* error) {
          // XLog(@"addNotificationRequest error: %@", error.description);
          if (error) {
-           UIAlertController* alert = XAlert(message);
-           [alert addAction:XAlertBtn(@"Ok")];
-           [self presentViewController:alert animated:YES completion:nil];
+           // This completion handler runs on an arbitrary background queue;
+           // hop to the main thread before touching UIKit.
+           dispatch_async(dispatch_get_main_queue(), ^{
+             UIAlertController* alert = XAlert(message);
+             [alert addAction:XAlertBtn(@"Ok")];
+             [self presentViewController:alert animated:YES completion:nil];
+           });
          }
        }];
 }
