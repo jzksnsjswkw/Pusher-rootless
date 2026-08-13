@@ -8,17 +8,6 @@
 
 @implementation NSPServiceController
 
-// _service and _image are borrowed references (assigned without retain in
-// initWithService:image:isCustom: and kept alive by the caller's
-// _loadedServiceControllers cache), so they must NOT be released here. Only
-// the owned ivars below are released.
-- (void)dealloc {
-  [_colorCube release];
-  [_uiColor release];
-  [_imageTitleView release];
-  [super dealloc];
-}
-
 - (id)initWithService:(NSString*)service
                 image:(UIImage*)image
              isCustom:(BOOL)isCustom {
@@ -39,12 +28,11 @@
 
   // [self setTitle:_service];
   if (!_imageTitleView) {
-    UILabel* label = [[UILabel new] autorelease];
+    UILabel* label = [UILabel new];
     label.text = _service;
     label.font = [UIFont boldSystemFontOfSize:17];
 
-    UIImageView* imageView =
-        [[[UIImageView alloc] initWithImage:_image] autorelease];
+    UIImageView* imageView = [[UIImageView alloc] initWithImage:_image];
 
     _imageTitleView =
         [[UIStackView alloc] initWithArrangedSubviews:@[ imageView, label ]];
@@ -108,11 +96,9 @@
         PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
     NSDictionary* prefs = @{};
     if (keyList) {
-      // CFPreferencesCopyMultiple returns a +1 object. CFBridgingRelease is a no-op
-      // under MRC, so autorelease the +1 explicitly (local var, used immediately).
-      prefs = [(id)CFPreferencesCopyMultiple(
+      prefs = (__bridge_transfer NSDictionary*)CFPreferencesCopyMultiple(
           keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-          kCFPreferencesAnyHost) autorelease];
+          kCFPreferencesAnyHost);
       if (!prefs) {
         prefs = @{};
       }

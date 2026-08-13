@@ -10,12 +10,7 @@
 + (id)getPreference:(CFStringRef)keyRef {
   CFPropertyListRef val = CFPreferencesCopyValue(
       keyRef, PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-  // CFPreferencesCopyValue returns a +1 object. CFBridgingRelease is a no-op
-  // under MRC (this bundle is built without ARC), so it would NOT consume the
-  // +1 and every call would still leak one object. Autorelease the +1
-  // explicitly instead; all call sites use the result immediately within the
-  // current autorelease pool (e.g. ?: @{} then mutableCopy).
-  return val ? [(id)val autorelease] : nil;
+  return val ? (__bridge_transfer id)val : nil;
 }
 
 + (void)setPreference:(CFStringRef)keyRef

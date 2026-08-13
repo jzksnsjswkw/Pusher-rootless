@@ -10,10 +10,10 @@
 - (NSArray*)specifiers {
   if (!_specifiers) {
     _specifiers =
-        [[[[self loadSpecifiersFromPlistName:@"GlobalAppList" target:self]
+        [[[self loadSpecifiersFromPlistName:@"GlobalAppList" target:self]
             arrayByAddingObjectsFromArray:
                 [self loadSpecifiersFromPlistName:@"GlobalAndServices"
-                                           target:self]] mutableCopy] retain];
+                                           target:self]] mutableCopy];
 
     // Get preferences for counting
     CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
@@ -22,11 +22,9 @@
         PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
     NSDictionary* prefs = @{};
     if (keyList) {
-      // CFPreferencesCopyMultiple returns a +1 object. CFBridgingRelease is a no-op
-      // under MRC, so autorelease the +1 explicitly (local var, used immediately).
-      prefs = [(id)CFPreferencesCopyMultiple(
+      prefs = (__bridge_transfer NSDictionary*)CFPreferencesCopyMultiple(
           keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-          kCFPreferencesAnyHost) autorelease];
+          kCFPreferencesAnyHost);
       if (!prefs) {
         prefs = @{};
       }

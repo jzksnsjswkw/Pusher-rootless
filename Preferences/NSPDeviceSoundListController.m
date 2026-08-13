@@ -7,22 +7,6 @@
 
 @implementation NSPDeviceSoundListController
 
-- (void)dealloc {
-  // _onlyAllowOne/_isSound/_isCustomApp are scalars; everything else here is
-  // owned (alloc/retain in viewDidLoad or reassigned in viewWillAppear).
-  [_serviceItems release];
-  [_prefs release];
-  [_updateBn release];
-  [_activityIndicator release];
-  [_activityIndicatorBn release];
-  [_prefsKey release];
-  [_service release];
-  if (_customAppIDKey) {
-    [_customAppIDKey release];
-  }
-  [super dealloc];
-}
-
 - (void)viewDidLoad {
   [super viewDidLoad];
 
@@ -36,14 +20,13 @@
   _activityIndicatorBn =
       [[UIBarButtonItem alloc] initWithCustomView:_activityIndicator];
 
-  _prefsKey = [[self.specifier propertyForKey:@"prefsKey"] retain];
-  _service = [[self.specifier propertyForKey:@"service"] retain];
+  _prefsKey = [self.specifier propertyForKey:@"prefsKey"];
+  _service = [self.specifier propertyForKey:@"service"];
   _isSound = ((NSNumber*)[self.specifier propertyForKey:@"isSound"]).boolValue;
   _isCustomApp =
       ((NSNumber*)[self.specifier propertyForKey:@"isCustomApp"]).boolValue;
   if (_isCustomApp) {
-    _customAppIDKey =
-        [[self.specifier propertyForKey:@"customAppIDKey"] retain];
+    _customAppIDKey = [self.specifier propertyForKey:@"customAppIDKey"];
   }
 
   _onlyAllowOne = _isSound || XEq(_service, PUSHER_SERVICE_PUSHBULLET);
@@ -51,18 +34,6 @@
 
 - (void)viewWillAppear:(BOOL)animated {
   [super viewWillAppear:animated];
-
-  // Release the ivars this pass is about to reassign (viewWillAppear fires on
-  // every pop back). Must come after [super viewWillAppear:] — the parent's
-  // tintUIToPusherColor reloads the table and reads _serviceItems — and before
-  // the reassignments below. Do NOT touch _service/_prefsKey/_customAppIDKey/
-  // _updateBn/_activityIndicator/_activityIndicatorBn: set once in viewDidLoad.
-  if (_serviceItems) {
-    [_serviceItems release];
-  }
-  if (_prefs) {
-    [_prefs release];
-  }
 
   // End editing of previous view controller so updates prefs if editing text
   // field
@@ -82,13 +53,7 @@
       PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
   _prefs = @{};
   if (keyList) {
-    // CFPreferencesCopyMultiple returns a +1 object. Do NOT use
-    // CFBridgingRelease here: with the iOS 26.5 SDK it is an inline function
-    // that autoreleases its argument (it used to be a no-op cast macro), so
-    // the value would die when the autorelease pool drains and _prefs would
-    // dangle. A plain cast keeps the +1 owned; _prefs is released in the
-    // viewWillAppear release block above and in dealloc.
-    _prefs = (NSDictionary*)CFPreferencesCopyMultiple(
+    _prefs = (__bridge_transfer NSDictionary*)CFPreferencesCopyMultiple(
         keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
         kCFPreferencesAnyHost);
     if (!_prefs) {
@@ -351,7 +316,6 @@
             for (NSDictionary* device in serviceDevicesToRemove) {
               [_serviceItems removeObject:device];
             }
-            [serviceDevicesToRemove release];
 
             [self saveServiceItems];
 
@@ -467,7 +431,6 @@
             for (NSDictionary* sound in serviceSoundsToRemove) {
               [_serviceItems removeObject:sound];
             }
-            [serviceSoundsToRemove release];
 
             [self saveServiceItems];
 
@@ -590,7 +553,6 @@
             for (NSDictionary* savedDevice in serviceDevicesToRemove) {
               [_serviceItems removeObject:savedDevice];
             }
-            [serviceDevicesToRemove release];
 
             [self saveServiceItems];
 
@@ -713,7 +675,6 @@
             for (NSDictionary* savedSound in serviceSoundsToRemove) {
               [_serviceItems removeObject:savedSound];
             }
-            [serviceSoundsToRemove release];
 
             [self saveServiceItems];
 
