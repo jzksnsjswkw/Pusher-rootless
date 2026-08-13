@@ -7,7 +7,7 @@
 
 @implementation NSPGlobalSettingsListController
 
-- (NSArray *)specifiers {
+- (NSArray*)specifiers {
   if (!_specifiers) {
     _specifiers =
         [[[[self loadSpecifiersFromPlistName:@"GlobalAppList" target:self]
@@ -20,9 +20,9 @@
                              kCFPreferencesAnyHost);
     CFArrayRef keyList = CFPreferencesCopyKeyList(
         PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-    NSDictionary *prefs = @{};
+    NSDictionary* prefs = @{};
     if (keyList) {
-      prefs = (NSDictionary *)CFPreferencesCopyMultiple(
+      prefs = (NSDictionary*)CFPreferencesCopyMultiple(
           keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
           kCFPreferencesAnyHost);
       if (!prefs) {
@@ -31,17 +31,15 @@
       CFRelease(keyList);
     }
 
-    for (PSSpecifier *specifier in _specifiers) {
+    for (PSSpecifier* specifier in _specifiers) {
       if (specifier.cellType == PSLinkCell &&
           XEq(specifier.name, @"Global App List")) {
-        specifier.name =
-            XStr(@"%@ (%d total)", specifier.name,
-                 [NSPSharedSpecifiers
-                     countAppIDsWithPrefix:
-                         prefs
-                                    prefix:[specifier
-                                               propertyForKey:
-                                                   @"ALSettingsKeyPrefix"]]);
+        specifier.name = XStr(
+            @"%@ (%d total)", specifier.name,
+            [NSPSharedSpecifiers
+                countAppIDsWithPrefix:prefs
+                               prefix:[specifier propertyForKey:
+                                                     @"ALSettingsKeyPrefix"]]);
         [specifier setProperty:self forKey:@"psListRef"];
         break;
       }

@@ -1,21 +1,19 @@
 #define isBundle(z) [[[NSBundle mainBundle] bundleIdentifier] isEqualToString:z]
 
-#import "helpers.h"
-#import "global.h"
-#import "iOSVersion.m"
-#import "Core/NSPusher.h"
 #import "Core/NSPushServiceManager.h"
+#import "Core/NSPusher.h"
 #import "NSPTestPush.h"
+#import "global.h"
+#import "helpers.h"
+#import "iOSVersion.m"
 
-static void pusherPrefsChanged() {
-  [[NSPusher sharedInstance] reloadConfig];
-}
+static void pusherPrefsChanged() { [[NSPusher sharedInstance] reloadConfig]; }
 
 %group SB
 %hook BBServer
 
 %new
-+ (BBServer *)pusherSharedInstance {
++ (BBServer*)pusherSharedInstance {
   return [NSPusher sharedInstance].server;
 }
 
@@ -25,13 +23,18 @@ static void pusherPrefsChanged() {
 }
 
 %new
-- (void)sendBulletinToPusher:(BBBulletin *)bulletin {
+- (void)sendBulletinToPusher:(BBBulletin*)bulletin {
   [[NSPusher sharedInstance] handleBulletin:bulletin];
 }
 
 %new
-- (void)sendToPusherService:(NSString *)service bulletin:(BBBulletin *)bulletin appID:(NSString *)appID
-    appName:(NSString *)appName title:(NSString *)title message:(NSString *)message isTest:(BOOL)isTest {
+- (void)sendToPusherService:(NSString*)service
+                   bulletin:(BBBulletin*)bulletin
+                      appID:(NSString*)appID
+                    appName:(NSString*)appName
+                      title:(NSString*)title
+                    message:(NSString*)message
+                     isTest:(BOOL)isTest {
   [[NSPusher sharedInstance] sendToService:service
                                   bulletin:bulletin
                                      appID:appID
@@ -46,7 +49,9 @@ static void pusherPrefsChanged() {
 
 %group iOS10And11
 %hook BBServer
-- (void)publishBulletin:(BBBulletin *)bulletin destinations:(unsigned long long)arg2 alwaysToLockScreen:(BOOL)arg3 {
+- (void)publishBulletin:(BBBulletin*)bulletin
+           destinations:(unsigned long long)arg2
+     alwaysToLockScreen:(BOOL)arg3 {
   %orig;
   if ([self respondsToSelector:@selector(sendBulletinToPusher:)]) {
     [self sendBulletinToPusher:bulletin];
@@ -57,7 +62,8 @@ static void pusherPrefsChanged() {
 
 %group iOS12
 %hook BBServer
-- (void)publishBulletin:(BBBulletin *)bulletin destinations:(unsigned long long)arg2 {
+- (void)publishBulletin:(BBBulletin*)bulletin
+           destinations:(unsigned long long)arg2 {
   %orig;
   if ([self respondsToSelector:@selector(sendBulletinToPusher:)]) {
     [self sendBulletinToPusher:bulletin];
@@ -68,7 +74,8 @@ static void pusherPrefsChanged() {
 
 %group iOS13And14
 %hook BBServer
-- (void)publishBulletinRequest:(BBBulletin *)bulletin destinations:(unsigned long long)arg2 {
+- (void)publishBulletinRequest:(BBBulletin*)bulletin
+                  destinations:(unsigned long long)arg2 {
   %orig;
   if ([self respondsToSelector:@selector(sendBulletinToPusher:)]) {
     [self sendBulletinToPusher:bulletin];
@@ -80,7 +87,7 @@ static void pusherPrefsChanged() {
 %group Preferences
 %hook PSTableCell
 
-- (void)setIcon:(UIImage *)icon {
+- (void)setIcon:(UIImage*)icon {
   if (icon && self.superview &&
       [self.superview isKindOfClass:UITableView.class] &&
       self.superview.superview &&
@@ -104,27 +111,27 @@ static void pusherPrefsChanged() {
 %end // %group Preferences
 
 %ctor {
-  if (isBundle(@"com.apple.springboard")) {
+if (isBundle(@"com.apple.springboard")) {
 
-    if (SYSTEM_VERSION_LESS_THAN(@"12.0")) {
-      %init(iOS10And11);
-    } else if (SYSTEM_VERSION_LESS_THAN(@"13.0")) {
-      %init(iOS12);
-    } else {
-      %init(iOS13And14);
-    }
-
-    CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                             kCFPreferencesAnyHost);
-    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(),
-                                    NULL,
-                                    (CFNotificationCallback)pusherPrefsChanged,
-                                    CFSTR(PUSHER_PREFS_NOTIFICATION), NULL,
-                                    CFNotificationSuspensionBehaviorCoalesce);
-    pusherPrefsChanged();
-    [NSPTestPush load];
-    %init(SB);
-  } else if (isBundle(@"com.apple.Preferences")) {
-    %init(Preferences);
+  if (SYSTEM_VERSION_LESS_THAN(@"12.0")) {
+          %init(iOS10And11);
+  } else if (SYSTEM_VERSION_LESS_THAN(@"13.0")) {
+          %init(iOS12);
+  } else {
+          %init(iOS13And14);
   }
+
+  CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
+                           kCFPreferencesAnyHost);
+  CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(),
+                                  NULL,
+                                  (CFNotificationCallback)pusherPrefsChanged,
+                                  CFSTR(PUSHER_PREFS_NOTIFICATION), NULL,
+                                  CFNotificationSuspensionBehaviorCoalesce);
+  pusherPrefsChanged();
+  [NSPTestPush load];
+      %init(SB);
+} else if (isBundle(@"com.apple.Preferences")) {
+      %init(Preferences);
+}
 }

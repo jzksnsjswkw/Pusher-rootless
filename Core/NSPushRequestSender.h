@@ -1,6 +1,6 @@
-#import <Foundation/Foundation.h>
 #import "../global.h"
 #import <BulletinBoard/BBBulletin.h>
+#import <Foundation/Foundation.h>
 
 @class NSPBulletinContext;
 
@@ -8,14 +8,14 @@
 
 + (instancetype)sharedInstance;
 
-- (void)sendRequestWithURLString:(NSString *)urlString
-                        infoDict:(NSDictionary *)infoDict
-                     credentials:(NSDictionary *)credentials
-                      dynamicKey:(NSString *)dynamicKey
+- (void)sendRequestWithURLString:(NSString*)urlString
+                        infoDict:(NSDictionary*)infoDict
+                     credentials:(NSDictionary*)credentials
+                      dynamicKey:(NSString*)dynamicKey
                         authType:(PusherAuthorizationType)authType
-                          method:(NSString *)method
-                       logString:(NSString *)logString
-                         service:(NSString *)service
-                        bulletin:(BBBulletin *)bulletin;
+                          method:(NSString*)method
+                       logString:(NSString*)logString
+                         service:(NSString*)service
+                        bulletin:(BBBulletin*)bulletin;
 
 @end

@@ -1,8 +1,8 @@
 #import <MobileCoreServices/LSApplicationProxy.h>
 
-#import "NSPCustomizeAppsController.h"
 #import "NSPAppMultiSelectionController.h"
 #import "NSPCustomAppController.h"
+#import "NSPCustomizeAppsController.h"
 #import "NSPSharedSpecifiers.h"
 #import "UIImageIcon.h"
 
@@ -12,14 +12,14 @@
 
 @implementation NSPCustomizeAppsController
 
-- (void)setAppDefaults:(NSString *)appID {
+- (void)setAppDefaults:(NSString*)appID {
   if ([_customApps.allKeys containsObject:appID]) {
-    NSMutableDictionary *appDict =
-        [(NSDictionary *)_customApps[appID] mutableCopy];
+    NSMutableDictionary* appDict =
+        [(NSDictionary*)_customApps[appID] mutableCopy];
     appDict[@"enabled"] = @YES;
     _customApps[appID] = appDict;
   } else {
-    NSMutableDictionary *defaultDict = [@{@"enabled" : @YES} mutableCopy];
+    NSMutableDictionary* defaultDict = [@{@"enabled" : @YES} mutableCopy];
     if (XEq(_service, PUSHER_SERVICE_PUSHOVER) ||
         XEq(_service, PUSHER_SERVICE_PUSHBULLET)) {
       defaultDict[@"devices"] = _defaultDevices;
@@ -48,11 +48,11 @@
 }
 
 - (void)saveAppState {
-  NSArray *appIDs = _data[@"Apps"];
-  for (NSString *appID in appIDs) {
+  NSArray* appIDs = _data[@"Apps"];
+  for (NSString* appID in appIDs) {
     [self setAppDefaults:appID];
   }
-  for (NSString *appID in _customApps.allKeys) {
+  for (NSString* appID in _customApps.allKeys) {
     if (![appIDs containsObject:appID]) {
       [_customApps removeObjectForKey:appID];
     }
@@ -78,8 +78,7 @@
   _service = [[self.specifier propertyForKey:@"service"] retain];
   _isCustomService =
       [self.specifier propertyForKey:@"isCustomService"] &&
-      ((NSNumber *)[self.specifier propertyForKey:@"isCustomService"])
-          .boolValue;
+      ((NSNumber*)[self.specifier propertyForKey:@"isCustomService"]).boolValue;
   _prefsKey =
       [(_isCustomService
             ? NSPPreferenceCustomServiceCustomAppsKey(_service)
@@ -91,7 +90,8 @@
   _loadedAppControllers = [NSMutableDictionary new];
 
   CGRect tableFrame = self.view.bounds;
-  if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+  if ([[UIDevice currentDevice] userInterfaceIdiom] ==
+      UIUserInterfaceIdiomPad) {
     tableFrame = self.rootController.view.bounds;
   }
   _table = [[UITableView alloc] initWithFrame:tableFrame
@@ -117,7 +117,7 @@
   // field
   if (self.navigationController.viewControllers &&
       self.navigationController.viewControllers.count > 1) {
-    UIViewController *viewController =
+    UIViewController* viewController =
         self.navigationController
             .viewControllers[self.navigationController.viewControllers.count -
                              2];
@@ -129,11 +129,11 @@
   // Get preferences
   CFArrayRef keyList = CFPreferencesCopyKeyList(
       PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-  NSDictionary *prefs = @{};
+  NSDictionary* prefs = @{};
   if (keyList) {
-    prefs = (NSDictionary *)CFPreferencesCopyMultiple(keyList, PUSHER_APP_ID,
-                                                      kCFPreferencesCurrentUser,
-                                                      kCFPreferencesAnyHost);
+    prefs = (NSDictionary*)CFPreferencesCopyMultiple(keyList, PUSHER_APP_ID,
+                                                     kCFPreferencesCurrentUser,
+                                                     kCFPreferencesAnyHost);
     if (!prefs) {
       prefs = @{};
     }
@@ -185,7 +185,7 @@
               ?: @(PUSHER_DEFAULT_SHRINK_FACTOR)) copy];
   }
   if (_isCustomService) {
-    NSDictionary *customService =
+    NSDictionary* customService =
         (prefs[NSPPreferenceCustomServicesKey] ?: @{})[_service] ?: @{};
     _defaultIncludeIcon = [(
         customService[[self.specifier propertyForKey:@"defaultIncludeIconKey"]]
@@ -220,32 +220,34 @@
 
 - (void)updateTitle {
   self.specifier.name = XStr(@"%@ (%d total)", _label, (int)_customApps.count);
-  PSListController *listController =
-      (PSListController *)[self.specifier propertyForKey:@"psListRef"];
+  PSListController* listController =
+      (PSListController*)[self.specifier propertyForKey:@"psListRef"];
   if (listController) {
     [listController reloadSpecifier:self.specifier];
   }
 }
 
-- (void)sortAppIDArray:(NSMutableArray *)array {
-  [array sortUsingComparator:^NSComparisonResult(NSString *appID1,
-                                                 NSString *appID2) {
-    LSApplicationProxy* firstProxy = [LSApplicationProxy applicationProxyForIdentifier:appID1];
-    LSApplicationProxy* secondProxy = [LSApplicationProxy applicationProxyForIdentifier:appID2];
-    NSString *first = [firstProxy localizedName];
-    NSString *second = [secondProxy localizedName];
+- (void)sortAppIDArray:(NSMutableArray*)array {
+  [array sortUsingComparator:^NSComparisonResult(NSString* appID1,
+                                                 NSString* appID2) {
+    LSApplicationProxy* firstProxy =
+        [LSApplicationProxy applicationProxyForIdentifier:appID1];
+    LSApplicationProxy* secondProxy =
+        [LSApplicationProxy applicationProxyForIdentifier:appID2];
+    NSString* first = [firstProxy localizedName];
+    NSString* second = [secondProxy localizedName];
     return [first localizedCaseInsensitiveCompare:second];
   }];
 }
 
-- (void)toggleEditing:(UIBarButtonItem *)barButtonItem {
+- (void)toggleEditing:(UIBarButtonItem*)barButtonItem {
   [_table setEditing:![_table isEditing] animated:YES];
   barButtonItem.title = [_table isEditing] ? @"Done" : @"Edit";
 }
 
-- (void)addAppIDs:(NSArray *)appIDs {
-  NSMutableArray *nonOverlappingAppIDs = [NSMutableArray new];
-  for (NSString *appID in appIDs) {
+- (void)addAppIDs:(NSArray*)appIDs {
+  NSMutableArray* nonOverlappingAppIDs = [NSMutableArray new];
+  for (NSString* appID in appIDs) {
     if (![_data[@"Apps"] containsObject:appID]) {
       [nonOverlappingAppIDs addObject:appID];
     }
@@ -256,34 +258,35 @@
   [_table reloadData];
 }
 
-- (void)tableView:(UITableView *)table
-    didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+- (void)tableView:(UITableView*)table
+    didSelectRowAtIndexPath:(NSIndexPath*)indexPath {
   [table deselectRowAtIndexPath:indexPath animated:YES];
   // Non-App
   if (indexPath.section == 0) {
-    NSPAppMultiSelectionController *appSelectionController =
+    NSPAppMultiSelectionController* appSelectionController =
         [NSPAppMultiSelectionController new];
     [appSelectionController setCallback:^(id appIDs) {
-      [self addAppIDs:(NSArray *)appIDs];
+      [self addAppIDs:(NSArray*)appIDs];
     }];
     // appSelectionController.navItemTitle = @"Add Apps";
     // appSelectionController.rightButtonTitle = @"Add";
     // appSelectionController.selectingMultiple = YES;
     appSelectionController.useSearchBar = YES;
-    UINavigationController *navController = [[UINavigationController alloc]
+    UINavigationController* navController = [[UINavigationController alloc]
         initWithRootViewController:appSelectionController];
     navController.navigationBar.tintColor =
         NSPusherManager.sharedController.activeTintColor;
     [self presentViewController:navController animated:YES completion:nil];
     return;
   }
-  NSString *appID = _data[_sections[indexPath.section]][indexPath.row];
-  NSPCustomAppController *controller;
+  NSString* appID = _data[_sections[indexPath.section]][indexPath.row];
+  NSPCustomAppController* controller;
   if ([_loadedAppControllers.allKeys containsObject:appID]) {
     controller = _loadedAppControllers[appID];
   } else {
-    LSApplicationProxy* appProxy = [LSApplicationProxy applicationProxyForIdentifier:appID];
-    NSString *appTitle;
+    LSApplicationProxy* appProxy =
+        [LSApplicationProxy applicationProxyForIdentifier:appID];
+    NSString* appTitle;
     if (appProxy == nil) {
       appTitle = @"UNKNOWN APP";
     } else {
@@ -300,18 +303,18 @@
   [self pushController:controller];
 }
 
-- (NSInteger)tableView:(UITableView *)table
+- (NSInteger)tableView:(UITableView*)table
     numberOfRowsInSection:(NSInteger)section {
-  return ((NSArray *)_data[_sections[section]]).count;
+  return ((NSArray*)_data[_sections[section]]).count;
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)table {
+- (NSInteger)numberOfSectionsInTableView:(UITableView*)table {
   return _sections.count;
 }
 
-- (NSString *)tableView:(UITableView *)table
+- (NSString*)tableView:(UITableView*)table
     titleForHeaderInSection:(NSInteger)section {
-  NSString *title = _sections[section];
+  NSString* title = _sections[section];
   if (XEq(title, @"Apps") && [self tableView:table
                                  numberOfRowsInSection:section] == 0) {
     title = @"No Apps";
@@ -319,12 +322,12 @@
   return title;
 }
 
-- (UITableViewCell *)tableView:(UITableView *)table
-         cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-  UITableViewCell *cell =
+- (UITableViewCell*)tableView:(UITableView*)table
+        cellForRowAtIndexPath:(NSIndexPath*)indexPath {
+  UITableViewCell* cell =
       [table dequeueReusableCellWithIdentifier:@"CustomAppCell"
                                   forIndexPath:indexPath];
-  NSString *appID = _data[_sections[indexPath.section]][indexPath.row];
+  NSString* appID = _data[_sections[indexPath.section]][indexPath.row];
   cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
   cell.imageView.image = nil;
   // Non-App
@@ -332,55 +335,67 @@
     cell.textLabel.text = appID;
     return cell;
   }
-  LSApplicationProxy* firstProxy = [LSApplicationProxy applicationProxyForIdentifier:appID];
+  LSApplicationProxy* firstProxy =
+      [LSApplicationProxy applicationProxyForIdentifier:appID];
   cell.textLabel.text = [firstProxy localizedName];
   // cell.textLabel.text = _appList.applications[appID];
   cell.imageView.image = [UIImage
       _applicationIconImageForBundleIdentifier:appID
                                         format:0
-                                        scale:[UIScreen mainScreen].scale];
+                                         scale:[UIScreen mainScreen].scale];
   // cell.imageView.image = [_appList iconOfSize:ALApplicationIconSizeSmall
   //                        forDisplayIdentifier:appID];
   return cell;
 }
 
-- (UITableViewCellEditingStyle)tableView:(UITableView *)table
-           editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath {
+- (UITableViewCellEditingStyle)tableView:(UITableView*)table
+           editingStyleForRowAtIndexPath:(NSIndexPath*)indexPath {
   if (indexPath.section > 0) {
     return UITableViewCellEditingStyleDelete;
   }
   return UITableViewCellEditingStyleNone;
 }
 
-- (UISwipeActionsConfiguration *)tableView:(UITableView *)tableView 
-trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (indexPath.section == 0) {
-        return [UISwipeActionsConfiguration configurationWithActions:@[]];
-    }
-    
-    UIContextualAction *deleteAction = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive 
-                                                                                title:@"Delete" 
-                                                                              handler:^(UIContextualAction *action, UIView *sourceView, void (^completionHandler)(BOOL)) {
-                                                                                  [_data[_sections[indexPath.section]] removeObjectAtIndex:indexPath.row];
-                                                                                  [self saveAppState];
-                                                                                  
-                                                                                  [CATransaction begin];
-                                                                                  [tableView beginUpdates];
-                                                                                  if (((NSArray *)_data[_sections[indexPath.section]]).count == 0) {
-                                                                                      [CATransaction setCompletionBlock:^{
-                                                                                          [tableView reloadData];
-                                                                                      }];
-                                                                                  }
-                                                                                  [tableView deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
-                                                                                  [tableView endUpdates];
-                                                                                  [CATransaction commit];
-                                                                                  
-                                                                                  completionHandler(YES);
-                                                                              }];
-    
-    UISwipeActionsConfiguration *actions = [UISwipeActionsConfiguration configurationWithActions:@[deleteAction]];
-    actions.performsFirstActionWithFullSwipe = NO; // Set to NO if you don't want full swipe to perform the first action automatically
-    return actions;
+- (UISwipeActionsConfiguration*)tableView:(UITableView*)tableView
+    trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath*)indexPath {
+  if (indexPath.section == 0) {
+    return [UISwipeActionsConfiguration configurationWithActions:@[]];
+  }
+
+  UIContextualAction* deleteAction = [UIContextualAction
+      contextualActionWithStyle:UIContextualActionStyleDestructive
+                          title:@"Delete"
+                        handler:^(UIContextualAction* action,
+                                  UIView* sourceView,
+                                  void (^completionHandler)(BOOL)) {
+                          [_data[_sections[indexPath.section]]
+                              removeObjectAtIndex:indexPath.row];
+                          [self saveAppState];
+
+                          [CATransaction begin];
+                          [tableView beginUpdates];
+                          if (((NSArray*)_data[_sections[indexPath.section]])
+                                  .count == 0) {
+                            [CATransaction setCompletionBlock:^{
+                              [tableView reloadData];
+                            }];
+                          }
+                          [tableView
+                              deleteRowsAtIndexPaths:@[ indexPath ]
+                                    withRowAnimation:
+                                        UITableViewRowAnimationAutomatic];
+                          [tableView endUpdates];
+                          [CATransaction commit];
+
+                          completionHandler(YES);
+                        }];
+
+  UISwipeActionsConfiguration* actions =
+      [UISwipeActionsConfiguration configurationWithActions:@[ deleteAction ]];
+  actions.performsFirstActionWithFullSwipe =
+      NO; // Set to NO if you don't want full swipe to perform the first action
+          // automatically
+  return actions;
 }
 
 // - (NSArray *)tableView:(UITableView *)table
@@ -402,7 +417,8 @@ trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
 //                    // experience is TOP priority!11!!!1)
 //                    [CATransaction begin];
 //                    [table beginUpdates];
-//                    if (((NSArray *)_data[_sections[indexPath.section]]).count ==
+//                    if (((NSArray *)_data[_sections[indexPath.section]]).count
+//                    ==
 //                        0) {
 //                      [CATransaction setCompletionBlock:^{
 //                        [table reloadData];
@@ -417,8 +433,8 @@ trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
 //   return @[ deleteAction ];
 // }
 
-- (BOOL)tableView:(UITableView *)tableView
-    shouldIndentWhileEditingRowAtIndexPath:(NSIndexPath *)indexPath {
+- (BOOL)tableView:(UITableView*)tableView
+    shouldIndentWhileEditingRowAtIndexPath:(NSIndexPath*)indexPath {
   return indexPath.section > 0;
 }
 

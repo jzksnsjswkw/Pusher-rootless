@@ -4,6 +4,6 @@
 
 @interface NSPushPrefs : NSObject
 
-+ (NSPushConfigSnapshot *)loadSnapshot;
++ (NSPushConfigSnapshot*)loadSnapshot;
 
 @end

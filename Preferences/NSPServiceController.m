@@ -8,8 +8,8 @@
 
 @implementation NSPServiceController
 
-- (id)initWithService:(NSString *)service
-                image:(UIImage *)image
+- (id)initWithService:(NSString*)service
+                image:(UIImage*)image
              isCustom:(BOOL)isCustom {
   if (self = [super init]) {
     _service = service;
@@ -28,11 +28,11 @@
 
   // [self setTitle:_service];
   if (!_imageTitleView) {
-    UILabel *label = [UILabel new];
+    UILabel* label = [UILabel new];
     label.text = _service;
     label.font = [UIFont boldSystemFontOfSize:17];
 
-    UIImageView *imageView = [[UIImageView alloc] initWithImage:_image];
+    UIImageView* imageView = [[UIImageView alloc] initWithImage:_image];
 
     _imageTitleView =
         [[UIStackView alloc] initWithArrangedSubviews:@[ imageView, label ]];
@@ -49,7 +49,7 @@
   if (!_uiColor) {
     CCFlags flags =
         (CCFlags)(CCOnlyDistinctColors | CCAvoidWhite | CCAvoidBlack);
-    NSArray *imgColors = [_colorCube extractColorsFromImage:_image flags:flags];
+    NSArray* imgColors = [_colorCube extractColorsFromImage:_image flags:flags];
     if (!imgColors.count)
       return;
     _uiColor = [imgColors[0] copy];
@@ -60,19 +60,19 @@
   [self tintUIToPusherColor];
 }
 
-- (void)addObjectsFromArray:(NSArray *)source
+- (void)addObjectsFromArray:(NSArray*)source
                     atIndex:(int)idx
-                    toArray:(NSMutableArray *)dest {
+                    toArray:(NSMutableArray*)dest {
   for (id object in source) {
     [dest insertObject:object atIndex:idx];
     idx += 1;
   }
 }
 
-- (NSArray *)specifiers {
+- (NSArray*)specifiers {
   if (!_specifiers) {
-    NSMutableArray *allSpecifiers = nil;
-    NSArray *sharedSpecifiers = nil;
+    NSMutableArray* allSpecifiers = nil;
+    NSArray* sharedSpecifiers = nil;
 
     if (_isCustom) {
       allSpecifiers = [[NSPSharedSpecifiers getCustom:_service
@@ -89,9 +89,9 @@
                              kCFPreferencesAnyHost);
     CFArrayRef keyList = CFPreferencesCopyKeyList(
         PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-    NSDictionary *prefs = @{};
+    NSDictionary* prefs = @{};
     if (keyList) {
-      prefs = (NSDictionary *)CFPreferencesCopyMultiple(
+      prefs = (NSDictionary*)CFPreferencesCopyMultiple(
           keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
           kCFPreferencesAnyHost);
       if (!prefs) {
@@ -100,23 +100,22 @@
       CFRelease(keyList);
     }
 
-    for (PSSpecifier *specifier in allSpecifiers) {
+    for (PSSpecifier* specifier in allSpecifiers) {
       if (specifier.cellType == PSLinkCell) {
         if (XEq(specifier.name, @"App List")) {
-          specifier.name = XStr(
-              @"%@ (%d total)", specifier.name,
-              [NSPSharedSpecifiers
-                  countAppIDsWithPrefix:
-                      prefs
-                                 prefix:[specifier
-                                            propertyForKey:
-                                                @"ALSettingsKeyPrefix"]]);
+          specifier.name =
+              XStr(@"%@ (%d total)", specifier.name,
+                   [NSPSharedSpecifiers
+                       countAppIDsWithPrefix:prefs
+                                      prefix:[specifier
+                                                 propertyForKey:
+                                                     @"ALSettingsKeyPrefix"]]);
           [specifier setProperty:self forKey:@"psListRef"];
         } else if (XEq(specifier.name, @"App Customization")) {
-          NSString *prefsKey =
+          NSString* prefsKey =
               _isCustom ? NSPPreferenceCustomServiceCustomAppsKey(_service)
                         : NSPPreferenceBuiltInServiceCustomAppsKey(_service);
-          NSArray *customApps = (NSArray *)prefs[prefsKey];
+          NSArray* customApps = (NSArray*)prefs[prefsKey];
           specifier.name = XStr(@"%@ (%d total)", specifier.name,
                                 customApps ? (int)customApps.count : 0);
           [specifier setProperty:self forKey:@"psListRef"];
@@ -127,7 +126,7 @@
     BOOL insertOnNext = NO;
     BOOL inserted = NO;
     int idx = 0;
-    for (PSSpecifier *specifier in allSpecifiers) {
+    for (PSSpecifier* specifier in allSpecifiers) {
       if (insertOnNext && specifier.cellType == PSGroupCell) {
         [self addObjectsFromArray:sharedSpecifiers
                           atIndex:idx
@@ -146,15 +145,15 @@
       [allSpecifiers addObjectsFromArray:sharedSpecifiers];
     }
 
-    NSArray *specialCells = @[ @(PSGroupCell), @(PSButtonCell), @(PSLinkCell) ];
+    NSArray* specialCells = @[ @(PSGroupCell), @(PSButtonCell), @(PSLinkCell) ];
 
-    NSArray *globalSpecifiers =
+    NSArray* globalSpecifiers =
         [self loadSpecifiersFromPlistName:@"GlobalAndServices" target:self];
-    for (PSSpecifier *specifier in globalSpecifiers) {
+    for (PSSpecifier* specifier in globalSpecifiers) {
       [specifier setProperty:_service forKey:@"service"];
       if (specifier.cellType == PSSegmentCell) {
-        NSMutableArray *values = [specifier.values mutableCopy];
-        NSMutableArray *titles = [NSMutableArray arrayWithObject:@"Default"];
+        NSMutableArray* values = [specifier.values mutableCopy];
+        NSMutableArray* titles = [NSMutableArray arrayWithObject:@"Default"];
         for (id v in values) {
           [titles addObject:specifier.titleDictionary[v]];
         }
@@ -181,8 +180,8 @@
         [specifier setProperty:[specifier propertyForKey:@"customServiceKey"]
                         forKey:@"key"];
       } else {
-        specifier->setter = @selector(setPreferenceValue:
-                              forBuiltInServiceSpecifier:);
+        specifier->setter =
+            @selector(setPreferenceValue:forBuiltInServiceSpecifier:);
         specifier->getter = @selector(readBuiltInServicePreferenceValue:);
         [specifier setProperty:XStr(@"%@%@", _service,
                                     [specifier propertyForKey:@"key"])
@@ -192,8 +191,8 @@
     }
     [allSpecifiers addObjectsFromArray:globalSpecifiers];
 
-    PSSpecifier *sendTestNotificationGroup = [PSSpecifier emptyGroupSpecifier];
-    PSSpecifier *sendTestNotification =
+    PSSpecifier* sendTestNotificationGroup = [PSSpecifier emptyGroupSpecifier];
+    PSSpecifier* sendTestNotification =
         [PSSpecifier preferenceSpecifierNamed:@"Send Test Notification"
                                        target:self
                                           set:nil
@@ -214,21 +213,21 @@
   return _specifiers;
 }
 
-- (void)sendTestNotification:(PSSpecifier *)specifier {
+- (void)sendTestNotification:(PSSpecifier*)specifier {
   [self.view endEditing:YES];
 
   XLog(@"Sending test for %@", _service);
 
-  CPDistributedMessagingCenter *messagingCenter =
+  CPDistributedMessagingCenter* messagingCenter =
       [CPDistributedMessagingCenter centerNamed:PUSHER_MESSAGING_CENTER_NAME];
 
   // Two-way (wait for reply)
-  NSDictionary *reply;
+  NSDictionary* reply;
   reply = [messagingCenter
       sendMessageAndReceiveReplyName:PUSHER_TEST_PUSH_MESSAGE_NAME
                             userInfo:@{@"service" : _service}];
 
-  if (reply[@"success"] && ((NSNumber *)reply[@"success"]).boolValue) {
+  if (reply[@"success"] && ((NSNumber*)reply[@"success"]).boolValue) {
     [self displayNotification:XStr(@"%@Sent", PUSHER_TEST_PUSH_RESULT_PREFIX)];
   } else {
     [self displayNotification:XStr(@"%@Failed to Send",
@@ -236,22 +235,22 @@
   }
 }
 
-- (void)displayNotification:(NSString *)message {
-  UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+- (void)displayNotification:(NSString*)message {
+  UNMutableNotificationContent* content = [UNMutableNotificationContent new];
   content.title = kName;
   content.body = message;
 
-  UNNotificationRequest *request =
+  UNNotificationRequest* request =
       [UNNotificationRequest requestWithIdentifier:@"TestNotificationResult"
                                            content:content
                                            trigger:nil];
 
   [UNUserNotificationCenter.currentNotificationCenter
       addNotificationRequest:request
-       withCompletionHandler:^(NSError *error) {
+       withCompletionHandler:^(NSError* error) {
          // XLog(@"addNotificationRequest error: %@", error.description);
          if (error) {
-           UIAlertController *alert = XAlert(message);
+           UIAlertController* alert = XAlert(message);
            [alert addAction:XAlertBtn(@"Ok")];
            [self presentViewController:alert animated:YES completion:nil];
          }
@@ -259,8 +258,8 @@
 }
 
 // so that shows in foreground
-- (void)userNotificationCenter:(UNUserNotificationCenter *)center
-       willPresentNotification:(UNNotification *)notification
+- (void)userNotificationCenter:(UNUserNotificationCenter*)center
+       willPresentNotification:(UNNotification*)notification
          withCompletionHandler:
              (void (^)(UNNotificationPresentationOptions))completionHandler {
   completionHandler(UNNotificationPresentationOptionSound |
