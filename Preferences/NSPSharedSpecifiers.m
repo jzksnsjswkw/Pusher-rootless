@@ -1,19 +1,21 @@
 #import "NSPSharedSpecifiers.h"
-#import "NSPDeviceListController.h"
-#import "NSPSoundListController.h"
+#import "NSPDeviceSoundListController.h"
 
 #import "../global.h"
 #import "../helpers.h"
 #import <notify.h>
 
-static id getPreference(CFStringRef keyRef) {
+@implementation NSPSharedSpecifiers
+
++ (id)getPreference:(CFStringRef)keyRef {
   CFPropertyListRef val = CFPreferencesCopyValue(
       keyRef, PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
   return (__bridge id)val;
 }
 
-static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
-                          BOOL shouldNotify) {
++ (void)setPreference:(CFStringRef)keyRef
+                value:(CFPropertyListRef)val
+         shouldNotify:(BOOL)shouldNotify {
   CFPreferencesSetValue(keyRef, val, PUSHER_APP_ID, kCFPreferencesCurrentUser,
                         kCFPreferencesAnyHost);
   CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
@@ -24,7 +26,18 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
   }
 }
 
-@implementation NSPSharedSpecifiers
++ (int)countAppIDsWithPrefix:(NSDictionary *)prefs prefix:(NSString *)prefix {
+  int count = 0;
+  for (id key in prefs.allKeys) {
+    if (![key isKindOfClass:NSString.class]) {
+      continue;
+    }
+    if ([key hasPrefix:prefix] && ((NSNumber *)prefs[key]).boolValue) {
+      count += 1;
+    }
+  }
+  return count;
+}
 
 + (NSArray *)get:(NSString *)service
           withAppID:(NSString *)appID
@@ -183,7 +196,7 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
                                      target:nil
                                         set:nil
                                         get:nil
-                                     detail:NSPDeviceListController.class
+                                     detail:NSPDeviceSoundListController.class
                                        cell:PSLinkCell
                                        edit:nil];
   PSSpecifier *sounds =
@@ -191,7 +204,7 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
                                      target:nil
                                         set:nil
                                         get:nil
-                                     detail:NSPSoundListController.class
+                                     detail:NSPDeviceSoundListController.class
                                        cell:PSLinkCell
                                        edit:nil];
 
@@ -210,6 +223,9 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
   [devices setProperty:@(isCustomApp) forKey:@"isCustomApp"];
   [sounds setProperty:@(isCustomApp) forKey:@"isCustomApp"];
 
+  [devices setProperty:@NO forKey:@"isSound"];
+  [sounds setProperty:@YES forKey:@"isSound"];
+
   if (isCustomApp) {
     [devices setProperty:appID forKey:@"customAppIDKey"];
     [sounds setProperty:appID forKey:@"customAppIDKey"];
@@ -224,7 +240,7 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
                                      target:nil
                                         set:nil
                                         get:nil
-                                     detail:NSPDeviceListController.class
+                                     detail:NSPDeviceSoundListController.class
                                        cell:PSLinkCell
                                        edit:nil];
   [devices setProperty:PUSHER_SERVICE_PUSHBULLET forKey:@"service"];
@@ -233,6 +249,7 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
                                     : NSPPreferencePushbulletDevicesKey)
                 forKey:@"prefsKey"];
   [devices setProperty:@(isCustomApp) forKey:@"isCustomApp"];
+  [devices setProperty:@NO forKey:@"isSound"];
   if (isCustomApp) {
     [devices setProperty:appID forKey:@"customAppIDKey"];
   }
@@ -446,20 +463,25 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
       [specifier propertyForKey:@"isCustomApp"] &&
       ((NSNumber *)[specifier propertyForKey:@"isCustomApp"]).boolValue;
   if (isCustomApp) {
-    NSMutableDictionary *customApps = [(NSDictionary *)getPreference(
-        (__bridge CFStringRef)[specifier propertyForKey:@"customAppsKey"])
+    NSMutableDictionary *customApps = [(NSDictionary *)[NSPSharedSpecifiers
+        getPreference:(__bridge CFStringRef)
+                          [specifier propertyForKey:@"customAppsKey"]]
         mutableCopy];
     NSMutableDictionary *customApp =
         [(customApps[[specifier propertyForKey:@"customAppID"]]
               ?: @{}) mutableCopy];
     customApp[[specifier propertyForKey:@"customAppsPrefsKey"]] = value;
     customApps[[specifier propertyForKey:@"customAppID"]] = customApp;
-    setPreference(
-        (__bridge CFStringRef)[specifier propertyForKey:@"customAppsKey"],
-        (__bridge CFPropertyListRef)customApps, YES);
+    [NSPSharedSpecifiers
+        setPreference:(__bridge CFStringRef)
+                          [specifier propertyForKey:@"customAppsKey"]
+                 value:(__bridge CFPropertyListRef)customApps
+          shouldNotify:YES];
   } else {
-    setPreference((__bridge CFStringRef)[specifier propertyForKey:@"key"],
-                  (__bridge CFPropertyListRef)value, YES);
+    [NSPSharedSpecifiers setPreference:(__bridge CFStringRef)
+                                          [specifier propertyForKey:@"key"]
+                                 value:(__bridge CFPropertyListRef)value
+                          shouldNotify:YES];
   }
 }
 
@@ -469,18 +491,19 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
       ((NSNumber *)[specifier propertyForKey:@"isCustomApp"]).boolValue;
   if (isCustomApp) {
     NSDictionary *customApps =
-        getPreference(
-            (__bridge CFStringRef)[specifier propertyForKey:@"customAppsKey"])
+        [NSPSharedSpecifiers
+            getPreference:(__bridge CFStringRef)
+                              [specifier propertyForKey:@"customAppsKey"]]
             ?: @{};
     NSDictionary *customApp =
         customApps[[specifier propertyForKey:@"customAppID"]] ?: @{};
     return customApp[[specifier propertyForKey:@"customAppsPrefsKey"]];
   }
-  id value =
-      getPreference((__bridge CFStringRef)[specifier propertyForKey:@"key"]);
+  id value = [NSPSharedSpecifiers
+      getPreference:(__bridge CFStringRef)[specifier propertyForKey:@"key"]];
   NSString *globalKey = [specifier propertyForKey:@"globalKey"];
   if (!value && globalKey) {
-    value = getPreference((__bridge CFStringRef)globalKey);
+    value = [NSPSharedSpecifiers getPreference:(__bridge CFStringRef)globalKey];
   }
   return value ?: [specifier propertyForKey:@"default"];
 }
@@ -492,21 +515,27 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
       ((NSNumber *)[specifier propertyForKey:@"isCustomApp"]).boolValue;
   NSString *service = [specifier propertyForKey:@"service"];
   if (isCustomApp) {
-    NSMutableDictionary *customApps = [(NSDictionary *)getPreference(
-        (__bridge CFStringRef)NSPPreferenceCustomServiceCustomAppsKey(service))
-        mutableCopy];
+    NSMutableDictionary *customApps =
+        [(NSDictionary *)[NSPSharedSpecifiers
+            getPreference:(__bridge CFStringRef)
+                              NSPPreferenceCustomServiceCustomAppsKey(service)]
+            mutableCopy];
     NSMutableDictionary *customApp =
         [(customApps[[specifier propertyForKey:@"customAppID"]]
               ?: @{}) mutableCopy];
     customApp[[specifier propertyForKey:@"key"]] = value;
     customApps[[specifier propertyForKey:@"customAppID"]] = customApp;
-    setPreference(
-        (__bridge CFStringRef)NSPPreferenceCustomServiceCustomAppsKey(service),
-        (__bridge CFPropertyListRef)customApps, YES);
+    [NSPSharedSpecifiers
+        setPreference:(__bridge CFStringRef)
+                          NSPPreferenceCustomServiceCustomAppsKey(service)
+                 value:(__bridge CFPropertyListRef)customApps
+          shouldNotify:YES];
   } else {
     NSMutableDictionary *customServices =
-        [(getPreference((__bridge CFStringRef)NSPPreferenceCustomServicesKey)
-              ?: @{}) mutableCopy];
+        [([NSPSharedSpecifiers
+             getPreference:(__bridge CFStringRef)
+                               NSPPreferenceCustomServicesKey] ?: @{})
+            mutableCopy];
     NSMutableDictionary *customService =
         [(customServices[service] ?: @{}) mutableCopy];
     if (value) {
@@ -515,8 +544,10 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
       [customService removeObjectForKey:[specifier propertyForKey:@"key"]];
     }
     customServices[service] = customService;
-    setPreference((__bridge CFStringRef)NSPPreferenceCustomServicesKey,
-                  (__bridge CFPropertyListRef)customServices, YES);
+    [NSPSharedSpecifiers setPreference:(__bridge CFStringRef)
+                                          NSPPreferenceCustomServicesKey
+                                 value:(__bridge CFPropertyListRef)customServices
+                          shouldNotify:YES];
   }
 }
 
@@ -527,15 +558,17 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
   NSString *service = [specifier propertyForKey:@"service"];
   if (isCustomApp) {
     NSDictionary *customApps =
-        getPreference((__bridge CFStringRef)
-                          NSPPreferenceCustomServiceCustomAppsKey(service))
+        [NSPSharedSpecifiers
+            getPreference:(__bridge CFStringRef)
+                              NSPPreferenceCustomServiceCustomAppsKey(service)]
             ?: @{};
     NSDictionary *customApp =
         customApps[[specifier propertyForKey:@"customAppID"]] ?: @{};
     return customApp[[specifier propertyForKey:@"key"]];
   }
   NSDictionary *customServices =
-      getPreference((__bridge CFStringRef)NSPPreferenceCustomServicesKey)
+      [NSPSharedSpecifiers
+          getPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey]
           ?: @{};
   id d = [specifier propertyForKey:@"default"];
   if (!customServices[service]) {
@@ -544,7 +577,7 @@ static void setPreference(CFStringRef keyRef, CFPropertyListRef val,
     id value = customServices[service][[specifier propertyForKey:@"key"]];
     NSString *globalKey = [specifier propertyForKey:@"globalKey"];
     if (!value && globalKey) {
-      value = getPreference((__bridge CFStringRef)globalKey);
+      value = [NSPSharedSpecifiers getPreference:(__bridge CFStringRef)globalKey];
     }
     return value ?: d;
   }

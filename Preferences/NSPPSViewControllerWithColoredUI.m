@@ -1,4 +1,5 @@
 #import "NSPPSViewControllerWithColoredUI.h"
+#import "NSPColoredUI.h"
 
 @implementation NSPPSViewControllerWithColoredUI
 
@@ -7,17 +8,9 @@
   [self tintUIToPusherColor];
 }
 
+// override so we can dynamically set ui color later for each service to match icon
 - (void)tintUIToPusherColor {
-	UIColor *color = NSPusherManager.sharedController.activeTintColor;
-
-	UINavigationController *navController = self.navigationController;
-	if ([[UIDevice currentDevice] userInterfaceIdiom] != UIUserInterfaceIdiomPad) { navController = navController.navigationController; }
-	navController.navigationBar.tintColor = color;
-
-  [UISwitch appearanceWhenContainedInInstancesOfClasses:@[self.class]].tintColor = color;
-	[UISwitch appearanceWhenContainedInInstancesOfClasses:@[self.class]].onTintColor = color;
-	[UISegmentedControl appearanceWhenContainedInInstancesOfClasses:@[self.class]].tintColor = color;
-	[UISlider appearanceWhenContainedInInstancesOfClasses:@[self.class]].tintColor = color;
+  [self nsp_tintNavigationBarAndControls];
 }
 
 @end

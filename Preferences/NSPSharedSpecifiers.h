@@ -16,4 +16,7 @@
 + (id)readBuiltInServicePreferenceValue:(PSSpecifier *)specifier;
 + (void)setPreferenceValue:(id)value forCustomSpecifier:(PSSpecifier *)specifier;
 + (id)readCustomPreferenceValue:(PSSpecifier *)specifier;
++ (void)setPreference:(CFStringRef)keyRef value:(CFPropertyListRef)val shouldNotify:(BOOL)shouldNotify;
++ (id)getPreference:(CFStringRef)keyRef;
++ (int)countAppIDsWithPrefix:(NSDictionary *)prefs prefix:(NSString *)prefix;
 @end
