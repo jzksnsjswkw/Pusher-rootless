@@ -8,7 +8,7 @@
 @property(nonatomic, readwrite, copy) NSArray* globalAppList;
 @property(nonatomic, readwrite) BOOL snsIsAnd;
 @property(nonatomic, readwrite) BOOL snsRequireANWithOR;
-@property(nonatomic, readwrite, copy) NSDictionary* globalSNS;
+@property(nonatomic, readwrite, copy) NSArray* globalSNS;
 @property(nonatomic, readwrite, copy) NSDictionary* serviceConfigs;
 @property(nonatomic, readwrite, copy) NSArray* enabledServiceNames;
 @end
@@ -22,7 +22,7 @@
                       globalAppList:(NSArray*)globalAppList
                            snsIsAnd:(BOOL)snsIsAnd
                  snsRequireANWithOR:(BOOL)snsRequireANWithOR
-                          globalSNS:(NSDictionary*)globalSNS
+                          globalSNS:(NSArray*)globalSNS
                      serviceConfigs:(NSDictionary*)serviceConfigs
                 enabledServiceNames:(NSArray*)enabledServiceNames {
   NSPushConfigSnapshot* snapshot = [NSPushConfigSnapshot new];

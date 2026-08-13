@@ -41,7 +41,7 @@
   NSString* corpsecret = config.rawPrefs[@"corpsecret"];
   if (!corpid || !corpsecret) {
     if (completion) {
-      completion(nil);
+      completion(@""); // empty key to avoid nil crash in URL replacement
     }
     return; // fixes double-callback bug in the original
   }
@@ -66,7 +66,8 @@
                             NSError* error) {
           if (error) {
             if (completion) {
-              completion(nil);
+              completion(@""); // empty key to avoid nil crash in URL
+                               // replacement
             }
             return;
           }
@@ -75,7 +76,8 @@
               [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
           if (![jsonResponse[@"errcode"] isEqual:@(0)]) {
             if (completion) {
-              completion(nil);
+              completion(@""); // empty key to avoid nil crash in URL
+                               // replacement
             }
             return;
           }

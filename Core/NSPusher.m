@@ -200,7 +200,7 @@
     }
     XLog(@"[S:%@,A:%@] Doing SNS", service, appID);
     NSString* snsResponse =
-        [NSPushFilter snsReasonIfAnyWithSNS:serviceConfig.sns.allKeys
+        [NSPushFilter snsReasonIfAnyWithSNS:serviceConfig.sns
                                 sectionInfo:sectionInfo
                                       isAnd:serviceConfig.snsIsAnd
                             requireANWithOR:serviceConfig.snsRequireANWithOR];

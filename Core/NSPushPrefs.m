@@ -136,6 +136,8 @@ static NSString* getServiceURL(NSString* service, NSDictionary* options) {
     NSMutableDictionary* servicePrefs = [customService mutableCopy];
 
     servicePrefs[@"isCustomService"] = @YES;
+    servicePrefs[@"appListIsBlacklist"] =
+        servicePrefs[@"appListIsBlacklist"] ?: @YES;
     servicePrefs[@"appList"] =
         getAppIDsWithPrefix(prefs, NSPPreferenceCustomServiceBLPrefix(service));
     servicePrefs[@"whenToPush"] =
@@ -422,7 +424,7 @@ static NSString* getServiceURL(NSString* service, NSDictionary* options) {
                                      globalAppList:globalAppList
                                           snsIsAnd:snsIsAnd
                                 snsRequireANWithOR:snsRequireANWithOR
-                                         globalSNS:(NSDictionary*)globalSNS
+                                         globalSNS:globalSNS
                                     serviceConfigs:serviceConfigs
                                enabledServiceNames:enabledServiceNames];
 }

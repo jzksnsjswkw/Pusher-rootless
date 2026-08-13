@@ -11,7 +11,7 @@
 @property(nonatomic, readonly, copy) NSArray* globalAppList;
 @property(nonatomic, readonly) BOOL snsIsAnd;
 @property(nonatomic, readonly) BOOL snsRequireANWithOR;
-@property(nonatomic, readonly, copy) NSDictionary* globalSNS;
+@property(nonatomic, readonly, copy) NSArray* globalSNS;
 @property(nonatomic, readonly, copy) NSDictionary* serviceConfigs;
 @property(nonatomic, readonly, copy) NSArray* enabledServiceNames;
 
@@ -22,7 +22,7 @@
                       globalAppList:(NSArray*)globalAppList
                            snsIsAnd:(BOOL)snsIsAnd
                  snsRequireANWithOR:(BOOL)snsRequireANWithOR
-                          globalSNS:(NSDictionary*)globalSNS
+                          globalSNS:(NSArray*)globalSNS
                      serviceConfigs:(NSDictionary*)serviceConfigs
                 enabledServiceNames:(NSArray*)enabledServiceNames;
 
