@@ -8,6 +8,9 @@ Pusher_EXTRA_FRAMEWORKS = AltList
 Pusher_FRAMEWORKS = UIKit Foundation MobileCoreServices
 Pusher_PRIVATE_FRAMEWORKS = Preferences AppSupport
 Pusher_CFLAGS = -Wno-objc-property-no-attribute
+ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
+	Pusher_LDFLAGS += -rpath @loader_path/.jbroot/Library/Frameworks -rpath @loader_path/.jbroot/usr/lib
+endif
 
 include $(THEOS_MAKE_PATH)/bundle.mk
 
