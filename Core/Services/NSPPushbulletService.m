@@ -37,6 +37,10 @@
                                      config:(NSPushServiceConfig*)config {
   NSMutableArray* deviceIDs = [NSMutableArray new];
   for (NSDictionary* device in config.rawPrefs[@"devices"] ?: @[]) {
+    // Skip malformed entries so a missing "id" can't crash SpringBoard.
+    if (![device isKindOfClass:NSDictionary.class] || !device[@"id"]) {
+      continue;
+    }
     [deviceIDs addObject:device[@"id"]];
   }
 

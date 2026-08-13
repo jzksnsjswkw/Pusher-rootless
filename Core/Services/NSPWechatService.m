@@ -161,9 +161,17 @@ static void cacheWechatTokenForKey(NSString* cacheKey, NSString* token) {
             cacheWechatTokenForKey(cacheKey, token);
           }
           if (completion) {
+            if (!token || token.length == 0) {
+              // Failed to obtain an access token (network error or invalid
+              // corpid/corpsecret). Abort rather than firing a request with an
+              // empty token that is guaranteed to fail server-side; the caller
+              // logs this as an invalid URL and clears the retry state.
+              completion(nil);
+              return;
+            }
             completion([[PUSHER_SERVICE_WECHAT_URL
                 stringByReplacingOccurrencesOfString:@"REPLACE_DYNAMIC_KEY"
-                                          withString:token ?: @""] copy]);
+                                          withString:token] copy]);
           }
         }];
   [dataTask resume];

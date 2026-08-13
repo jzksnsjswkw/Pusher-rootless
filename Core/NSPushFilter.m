@@ -58,7 +58,7 @@
   NSPushServiceConfig* serviceConfig = (NSPushServiceConfig*)config;
   NSArray* serviceAppList = serviceConfig.appList;
   BOOL appListContainsApp =
-      [serviceAppList containsObject:appID.lowercaseString];
+      [serviceAppList containsObject:appID];
   BOOL appListIsBlacklist = serviceConfig.appListIsBlacklist;
   if (appListIsBlacklist == appListContainsApp) {
     return XStr(@"Blocked by app list (%@)",

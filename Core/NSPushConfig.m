@@ -132,7 +132,11 @@ static NSArray* getAppIDsWithPrefix(NSDictionary* prefs, NSString* prefix) {
     }
     if ([key hasPrefix:prefix] && ((NSNumber*)prefs[key]).boolValue) {
       NSString* subKey = [key substringFromIndex:prefix.length];
-      [keys addObject:subKey.lowercaseString];
+      // Keep the original case: app IDs are stored (GlobalBL-<appID> flat
+      // keys, AltList applicationIdentifier) in their exact bundle-ID case,
+      // and the matching side compares case-sensitively against
+      // bulletin.sectionID, which is also the original-case bundle ID.
+      [keys addObject:subKey];
     }
   }
   return keys;
@@ -283,10 +287,10 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
       serviceObj[NSPPreferenceServiceWhatNetworkKey] = v;
     v = prefs[XStr(@"%@SufficientNotificationSettingsIsAnd", service)];
     if (v)
-      serviceObj[NSPPreferenceServiceSNSIsAndKey] = v;
+      serviceObj[@"SufficientNotificationSettingsIsAnd"] = v;
     v = prefs[XStr(@"%@SNSORRequireAllowNotifications", service)];
     if (v)
-      serviceObj[NSPPreferenceServiceSNSRequireANWithORKey] = v;
+      serviceObj[@"SNSORRequireAllowNotifications"] = v;
 
     // SNS toggles
     NSDictionary* snsDefaults = PUSHER_SNS_KEYS;
@@ -523,9 +527,12 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
                   PUSHER_SEGMENT_CELL_DEFAULT
               ? @(whatNetwork)
               : (serviceObj[@"whatNetwork"] ?: @(whatNetwork))) copy];
-    servicePrefs[@"snsIsAnd"] = serviceObj[@"snsIsAnd"] ?: @(snsIsAnd);
+    servicePrefs[@"snsIsAnd"] =
+        (serviceObj[@"SufficientNotificationSettingsIsAnd"]
+             ?: (serviceObj[@"snsIsAnd"] ?: @(snsIsAnd)));
     servicePrefs[@"snsRequireANWithOR"] =
-        serviceObj[@"snsRequireANWithOR"] ?: @(snsRequireANWithOR);
+        (serviceObj[@"SNSORRequireAllowNotifications"]
+             ?: (serviceObj[@"snsRequireANWithOR"] ?: @(snsRequireANWithOR)));
     servicePrefs[@"sns"] = getSNSKeys(serviceObj, NSPPreferenceSNSPrefix, prefs,
                                       NSPPreferenceSNSPrefix);
 
@@ -537,6 +544,11 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
     NSArray* devices = serviceObj[@"devices"] ?: @[];
     NSMutableArray* enabledDevices = [NSMutableArray new];
     for (NSDictionary* device in devices) {
+      // Guard against malformed entries so SpringBoard can't crash on a
+      // missing/mistyped device dict.
+      if (![device isKindOfClass:NSDictionary.class]) {
+        continue;
+      }
       if (((NSNumber*)device[@"enabled"]).boolValue) {
         [enabledDevices addObject:device];
       }
@@ -546,6 +558,9 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
     NSArray* sounds = serviceObj[@"sounds"] ?: @[];
     NSMutableArray* enabledSounds = [NSMutableArray new];
     for (NSDictionary* sound in sounds) {
+      if (![sound isKindOfClass:NSDictionary.class] || !sound[@"id"]) {
+        continue;
+      }
       if (((NSNumber*)sound[@"enabled"]).boolValue) {
         [enabledSounds addObject:sound[@"id"]];
       }
@@ -565,6 +580,9 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
       NSArray* customAppDevices = customAppPrefs[@"devices"] ?: @[];
       NSMutableArray* customAppEnabledDevices = [NSMutableArray new];
       for (NSDictionary* customAppDevice in customAppDevices) {
+        if (![customAppDevice isKindOfClass:NSDictionary.class]) {
+          continue;
+        }
         if (((NSNumber*)customAppDevice[@"enabled"]).boolValue) {
           [customAppEnabledDevices addObject:customAppDevice];
         }
@@ -573,6 +591,10 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
       NSArray* customAppSounds = customAppPrefs[@"sounds"] ?: @[];
       NSMutableArray* customAppEnabledSounds = [NSMutableArray new];
       for (NSDictionary* customAppSound in customAppSounds) {
+        if (![customAppSound isKindOfClass:NSDictionary.class] ||
+            !customAppSound[@"id"]) {
+          continue;
+        }
         if (((NSNumber*)customAppSound[@"enabled"]).boolValue) {
           [customAppEnabledSounds addObject:customAppSound[@"id"]];
         }

@@ -435,6 +435,33 @@
     [_serviceImages removeObjectForKey:service];
     [self saveCustomServices];
 
+    // Also remove the service's flat pref keys (app list / custom apps) so a
+    // recreated service of the same name doesn't resurrect old data.
+    NSString* blPrefix = NSPPreferenceCustomServiceBLPrefix(service);
+    NSString* customAppsKey =
+        NSPPreferenceCustomServiceCustomAppsKey(service);
+    NSMutableDictionary* newPrefs = [_prefs mutableCopy];
+    NSMutableArray* keysToRemove = [NSMutableArray new];
+    for (NSString* key in _prefs.allKeys) {
+      if ([key hasPrefix:blPrefix]) {
+        [keysToRemove addObject:key];
+        [newPrefs removeObjectForKey:key];
+      }
+    }
+    if (newPrefs[customAppsKey]) {
+      [keysToRemove addObject:customAppsKey];
+      [newPrefs removeObjectForKey:customAppsKey];
+    }
+    if (keysToRemove.count) {
+      CFPreferencesSetMultiple(
+          (__bridge CFDictionaryRef)newPrefs, (__bridge CFArrayRef)keysToRemove,
+          PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+      CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
+                               kCFPreferencesAnyHost);
+      notify_post(PUSHER_PREFS_NOTIFICATION);
+      _prefs = [newPrefs copy];
+    }
+
     [table deleteRowsAtIndexPaths:@[ indexPath ]
                  withRowAnimation:UITableViewRowAnimationLeft];
   }

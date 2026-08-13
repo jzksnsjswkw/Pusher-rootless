@@ -114,7 +114,19 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
     });
     NSString* parameterString = @"";
     for (NSString* key in infoDictForRequest.allKeys) {
-      NSString* value = XStrDefault(infoDictForRequest[key], @"");
+      // GET URLs can't carry non-string values (NSNumber, the image marker
+      // @YES, etc.) as-is; stringify them so they survive in the query.
+      id rawValue = infoDictForRequest[key];
+      NSString* value;
+      if ([rawValue isKindOfClass:NSString.class]) {
+        value = (NSString*)rawValue;
+      } else if ([rawValue respondsToSelector:@selector(stringValue)]) {
+        value = [rawValue stringValue];
+      } else if (rawValue) {
+        value = [rawValue description];
+      } else {
+        value = @"";
+      }
       NSString* escapedKey =
           [key stringByAddingPercentEncodingWithAllowedCharacters:
                    queryAllowedCharacterSet];
@@ -220,7 +232,9 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
           NSString* retryKey = retryKeyForBulletinAndService(bulletin, service);
           NSNumber* retriesLeft = [self retriesLeftForRetryKey:retryKey];
 
-          if (data.length && error == nil) {
+          if (error == nil) {
+            // A body-less success (e.g. 204 or an empty 200) is still a
+            // successful response, so don't treat it as a failure here.
             NSString* dataStr =
                 [[NSString alloc] initWithData:data
                                       encoding:NSUTF8StringEncoding];
@@ -244,7 +258,11 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                   @"unchanged (your shrink factor may be less than 1.0)";
               // if last retry and has image, set image property to true
               // instead of image base64
-              if ([self retriesLeftForRetryKey:retryKey].intValue == 0) {
+              if ([self retriesLeftForRetryKey:retryKey].intValue == 0 ||
+                  imageShrinkFactor <= 1.0) {
+                // A shrink factor that can't shrink is as good as no shrink;
+                // drop the image so we don't re-send the same oversized
+                // payload until retries run out.
                 status = @"removed";
                 retryInfoDict[@"image"] = @YES;
               } else if (imageShrinkFactor > 1.0) {
@@ -340,12 +358,9 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                          forRetryKey:retryKey];
 
                 NSMutableDictionary* retryInfoDict = [infoDict mutableCopy];
-                // if last retry and has image, set image property to true
-                // instead of image base64
-                if (retryInfoDict[@"image"] &&
-                    [self retriesLeftForRetryKey:retryKey].intValue == 0) {
-                  retryInfoDict[@"image"] = @YES;
-                }
+                // NOTE: unlike the "request entity too large" path below, a
+                // transport-level error says nothing about the payload size,
+                // so retry with the image intact rather than dropping it.
 
                 XLog(@"%@ ----- Retrying. Try %d of %d -----", logString,
                      PUSHER_TRIES - (retriesLeft.intValue - 1), PUSHER_TRIES);
@@ -374,6 +389,16 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                                         bulletin:bulletin];
                 });
               } else {
+                // Retries exhausted with no successful response: log an honest
+                // final failure instead of silently clearing the retry state.
+                [NSPushLog addToLogIfEnabledForService:service
+                                              bulletin:bulletin
+                                                 label:@"Network Response: "
+                                                       @"Failed after all "
+                                                       @"retries"
+                                                object:error.description
+                                          dontTruncate:YES];
+                XLog(@"%@ Failed after all retries: %@", logString, error);
                 [self setRetriesLeft:nil forRetryKey:retryKey];
               }
             }
