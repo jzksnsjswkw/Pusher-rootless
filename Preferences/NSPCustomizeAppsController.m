@@ -78,41 +78,18 @@
   }
 }
 
-- (void)dealloc {
-  // _lastTargetAppID/_lastTargetIndexPath are borrowed references, not owned;
-  // everything else is retained/copied/alloc'd and must be released.
-  [_table release];
-  [_sections release];
-  [_data release];
-  [_service release];
-  [_prefsKey release];
-  [_customApps release];
-  [_label release];
-  [_defaultDevices release];
-  [_defaultSounds release];
-  [_defaultEventName release];
-  [_defaultIncludeIcon release];
-  [_defaultIncludeImage release];
-  [_defaultImageMaxWidth release];
-  [_defaultImageMaxHeight release];
-  [_defaultImageShrinkFactor release];
-  [_defaultCurateData release];
-  [_loadedAppControllers release];
-  [super dealloc];
-}
-
 - (void)viewDidLoad {
   [super viewDidLoad];
 
   // _appList = [ALApplicationList sharedApplicationList];
 
-  _service = [[self.specifier propertyForKey:@"service"] retain];
+  _service = [self.specifier propertyForKey:@"service"];
   _isCustomService =
       [self.specifier propertyForKey:@"isCustomService"] &&
       ((NSNumber*)[self.specifier propertyForKey:@"isCustomService"]).boolValue;
   _prefsKey =
-      [(_isCustomService ? NSPPreferenceCustomServiceCustomAppsKey(_service)
-                         : NSPPreferenceBuiltInServicesKey) retain];
+      (_isCustomService ? NSPPreferenceCustomServiceCustomAppsKey(_service)
+                        : NSPPreferenceBuiltInServicesKey);
 
   _lastTargetAppID = nil;
   _lastTargetIndexPath = nil;
@@ -143,26 +120,6 @@
 - (void)viewWillAppear:(BOOL)animated {
   [super viewWillAppear:animated];
 
-  // Release the ivars this pass is about to reassign (viewWillAppear fires on
-  // every pop back, so without this the previous values leak). Must come after
-  // [super viewWillAppear:] because the parent's tintUIToPusherColor reloads
-  // the table, reading these ivars. Do NOT touch _service/_prefsKey/
-  // _lastTargetAppID/_lastTargetIndexPath/_loadedAppControllers/_table: they
-  // are set once in viewDidLoad or are borrowed references.
-  [_customApps release];
-  [_label release];
-  [_defaultDevices release];
-  [_defaultSounds release];
-  [_defaultEventName release];
-  [_defaultIncludeIcon release];
-  [_defaultIncludeImage release];
-  [_defaultImageMaxWidth release];
-  [_defaultImageMaxHeight release];
-  [_defaultImageShrinkFactor release];
-  [_defaultCurateData release];
-  [_sections release];
-  [_data release];
-
   // End editing of previous view controller so updates prefs if editing text
   // field
   if (self.navigationController.viewControllers &&
@@ -181,11 +138,9 @@
       PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
   NSDictionary* prefs = @{};
   if (keyList) {
-    // CFPreferencesCopyMultiple returns a +1 object. CFBridgingRelease is a no-op
-      // under MRC, so autorelease the +1 explicitly (local var, used immediately).
-    prefs = [(id)CFPreferencesCopyMultiple(
+    prefs = (__bridge_transfer NSDictionary*)CFPreferencesCopyMultiple(
         keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-        kCFPreferencesAnyHost) autorelease];
+        kCFPreferencesAnyHost);
     if (!prefs) {
       prefs = @{};
     }
@@ -205,7 +160,7 @@
                         ?: @{}) mutableCopy];
   }
 
-  _label = [[self.specifier.name componentsSeparatedByString:@" ("][0] retain];
+  _label = [self.specifier.name componentsSeparatedByString:@" ("][0];
   [self updateTitle];
 
   if (XEq(_service, PUSHER_SERVICE_PUSHOVER) ||
@@ -267,7 +222,7 @@
               ?: @(PUSHER_DEFAULT_SHRINK_FACTOR)) copy];
   }
 
-  _sections = [@[ @"", @"Apps" ] retain];
+  _sections = @[ @"", @"Apps" ];
   _data = [@{
     @"" : @[ @"Add Apps" ],
     @"Apps" : [NSMutableArray new],

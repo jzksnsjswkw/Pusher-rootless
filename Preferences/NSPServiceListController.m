@@ -4,23 +4,6 @@
 
 @implementation NSPServiceListController
 
-- (void)dealloc {
-  // _lastTargetService / _lastTargetIndexPath are borrowed references
-  // (autoreleased / pointing into _data), NOT owned — releasing them here
-  // would over-release and crash.
-  [_serviceImages release];
-  [_prefs release];
-  [_table release];
-  [_sections release];
-  [_data release];
-  [_services release];
-  [_customServices release];
-  [_defaultImage release];
-  [_loadedServiceControllers release];
-  [_addNewServiceBarButtonItem release];
-  [super dealloc];
-}
-
 - (void)viewDidLoad {
   [super viewDidLoad];
 
@@ -63,31 +46,12 @@
   [NSPusherManager.sharedController setActiveTintColor:nil];
   [self tintUIToPusherColor];
 
-  // Release the ivars this pass is about to reassign, so returning to this
-  // page (viewWillAppear fires on every pop back) doesn't leak the previous
-  // values. Must come after [super viewWillAppear:] because the parent's
-  // tintUIToPusherColor reloads the table, which reads these ivars; releasing
-  // before that would be a use-after-free.
-  [_prefs release];
-  [_sections release];
-  [_data release];
-  [_services release];
-  [_customServices release];
-  [_defaultImage release];
-  [_serviceImages release];
-
   // Get preferences
   CFArrayRef keyList = CFPreferencesCopyKeyList(
       PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
   _prefs = @{};
   if (keyList) {
-    // CFPreferencesCopyMultiple returns a +1 object. Do NOT use
-    // CFBridgingRelease here: with the iOS 26.5 SDK it is an inline function
-    // that autoreleases its argument (it used to be a no-op cast macro), so
-    // the value would die when the autorelease pool drains mid-transition and
-    // _prefs would dangle. A plain cast keeps the +1 owned; _prefs is
-    // released in the viewWillAppear release block above and in dealloc.
-    _prefs = (NSDictionary*)CFPreferencesCopyMultiple(
+    _prefs = (__bridge_transfer NSDictionary*)CFPreferencesCopyMultiple(
         keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
         kCFPreferencesAnyHost);
     if (!_prefs) {
@@ -96,17 +60,15 @@
     CFRelease(keyList);
   }
 
-  _sections = [@[ @"Enabled", @"Disabled" ] retain];
+  _sections = @[ @"Enabled", @"Disabled" ];
   _data =
       [@{@"Enabled" : [NSMutableArray new], @"Disabled" : [NSMutableArray new]}
           mutableCopy];
-  _services = [BUILTIN_PUSHER_SERVICES retain];
+  _services = BUILTIN_PUSHER_SERVICES;
   _customServices = [(NSDictionary*)(_prefs[NSPPreferenceCustomServicesKey]
                                          ?: @{}) mutableCopy];
 
-  _defaultImage = [DEFAULT_IMAGE retain];
-  // Just [new], not [new] + retain: the extra retain made it +2 while dealloc
-  // and viewWillAppear only release it once, leaking it.
+  _defaultImage = DEFAULT_IMAGE;
   _serviceImages = [NSMutableDictionary new];
 
   NSDictionary* builtInServices =
@@ -299,11 +261,6 @@
 }
 
 - (void)addNewService {
-  // __unsafe_unretained: this file is compiled with MRC, so __weak is not
-  // available, and the handler only runs while the alert (and thus self) is
-  // alive, so a non-retaining reference is safe. Breaking the retain here
-  // prevents alert -> action -> handler -> alert cycles from leaking every
-  // Add/Rename dialog.
   __unsafe_unretained NSPServiceListController* weakSelf = self;
   UIAlertController* alert = XAlertTitle(@"Add Custom Service", nil);
   __unsafe_unretained UIAlertController* weakAlert = alert;
@@ -331,10 +288,9 @@
            textField ? textField.text : nil);
       return;
     }
-    NSString* newServiceName = [[textField.text
+    NSString* newServiceName = [textField.text
         stringByTrimmingCharactersInSet:[NSCharacterSet
-                                            whitespaceAndNewlineCharacterSet]]
-        retain];
+                                            whitespaceAndNewlineCharacterSet]];
     if (newServiceName.length < 1) {
       XLog(@"newServiceName empty");
       return;
@@ -511,9 +467,6 @@
 
 - (void)renameService:(NSString*)currService {
 
-  // __unsafe_unretained: MRC file, and the handler only runs while the alert
-  // and self are alive. Avoids alert -> action -> handler -> alert retain
-  // cycles.
   __unsafe_unretained NSPServiceListController* weakSelf = self;
   UIAlertController* alert = XAlertTitle(XStr(@"Rename %@", currService), nil);
   __unsafe_unretained UIAlertController* weakAlert = alert;
@@ -567,17 +520,11 @@
         PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
     NSMutableDictionary* newPrefs = nil;
     if (keyList) {
-      // CFPreferencesCopyMultiple returns a +1 object. CFBridgingRelease is a
-      // no-op under MRC, so hold the copy explicitly and release it after
-      // making our mutable working copy (otherwise both the source +1 and the
-      // pre-allocated newPrefs below leak).
-      NSDictionary* copiedPrefs = (NSDictionary*)CFPreferencesCopyMultiple(
-          keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-          kCFPreferencesAnyHost);
+      NSDictionary* copiedPrefs =
+          (__bridge_transfer NSDictionary*)CFPreferencesCopyMultiple(
+              keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
+              kCFPreferencesAnyHost);
       newPrefs = [copiedPrefs mutableCopy];
-      if (copiedPrefs) {
-        CFRelease(copiedPrefs);
-      }
       if (!newPrefs) {
         newPrefs = [NSMutableDictionary new];
       }
@@ -630,7 +577,6 @@
                              (__bridge CFArrayRef)keysToRemove, PUSHER_APP_ID,
                              kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
     notify_post(PUSHER_PREFS_NOTIFICATION);
-    [newPrefs release];
 
     NSString* currSection =
         ((NSNumber*)weakSelf->_customServices[newServiceName][@"Enabled"])

@@ -24,11 +24,9 @@
   NSDictionary* prefs = @{};
   _selectedApplications = [NSMutableSet new];
   if (keyList) {
-    // CFPreferencesCopyMultiple returns a +1 object. CFBridgingRelease is a no-op
-      // under MRC, so autorelease the +1 explicitly (local var, used immediately).
-    prefs = [(id)CFPreferencesCopyMultiple(
+    prefs = (__bridge_transfer NSDictionary*)CFPreferencesCopyMultiple(
         keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-        kCFPreferencesAnyHost) autorelease];
+        kCFPreferencesAnyHost);
     if (!prefs) {
       prefs = @{};
     }
@@ -71,7 +69,8 @@
                       forService:_service];
   } else {
     NSString* key = XStr(@"%@%@", _prefix, appID);
-    CFPreferencesSetValue((__bridge CFStringRef)key, @([enabledNum boolValue]),
+    CFPreferencesSetValue((__bridge CFStringRef)key,
+                          (__bridge CFNumberRef) @([enabledNum boolValue]),
                           PUSHER_APP_ID, kCFPreferencesCurrentUser,
                           kCFPreferencesAnyHost);
     CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,

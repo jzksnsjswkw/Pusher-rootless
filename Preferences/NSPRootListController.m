@@ -2,13 +2,6 @@
 
 @implementation NSPRootListController
 
-- (void)dealloc {
-  [_priorTintColor release];
-  [_headerImageView release];
-  [_headerContainer release];
-  [super dealloc];
-}
-
 - (void)viewDidLoad {
   [super viewDidLoad];
   if (!_priorTintColor) {
@@ -17,7 +10,7 @@
         UIUserInterfaceIdiomPad) {
       navController = navController.navigationController;
     }
-    _priorTintColor = [navController.navigationBar.tintColor retain];
+    _priorTintColor = navController.navigationBar.tintColor;
   }
 
   _showingHeader = NO;
@@ -91,8 +84,7 @@
 
 - (NSArray*)specifiers {
   if (!_specifiers) {
-    _specifiers = [[self loadSpecifiersFromPlistName:@"Root"
-                                              target:self] retain];
+    _specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
   }
 
   return _specifiers;

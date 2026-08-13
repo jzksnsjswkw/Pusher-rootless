@@ -3,16 +3,9 @@
 
 @implementation NSPSNSListController
 
-- (void)dealloc {
-  [_service release];
-  [_synchronizeSpecifier release];
-  [super dealloc];
-}
-
 - (NSArray*)specifiers {
   if (!_specifiers) {
-    _specifiers = [[self loadSpecifiersFromPlistName:@"SNS"
-                                              target:self] retain];
+    _specifiers = [self loadSpecifiersFromPlistName:@"SNS" target:self];
   }
 
   return _specifiers;
@@ -24,7 +17,7 @@
 
   _isService = (BOOL)[self.specifier propertyForKey:@"service"];
   if (_isService) {
-    _service = [[self.specifier propertyForKey:@"service"] retain];
+    _service = [self.specifier propertyForKey:@"service"];
     _isCustomService =
         [self.specifier propertyForKey:@"isCustomService"] &&
         ((NSNumber*)[self.specifier propertyForKey:@"isCustomService"])
@@ -72,7 +65,7 @@
              forKey:@"footerText"];
 
     _synchronizeSpecifier =
-        [[PSSpecifier preferenceSpecifierNamed:(synchronizedWithGlobal
+        [PSSpecifier preferenceSpecifierNamed:(synchronizedWithGlobal
                                                        ? @"Synchronized"
                                                        : @"Synchronize With Global")
                                        target:self
@@ -80,7 +73,7 @@
                                           get:nil
                                        detail:nil
                                          cell:PSButtonCell
-                                         edit:nil] retain];
+                                         edit:nil];
     [_synchronizeSpecifier setButtonAction:@selector(synchronizeWithGlobal:)];
     [_synchronizeSpecifier setProperty:@(!synchronizedWithGlobal)
                                 forKey:@"enabled"];

@@ -22,13 +22,6 @@
   return self;
 }
 
-- (void)dealloc {
-  [_service release];
-  [_appID release];
-  [_appTitle release];
-  [super dealloc];
-}
-
 - (void)viewDidLoad {
   [super viewDidLoad];
   self.navigationItem.title = _appTitle;
@@ -36,12 +29,12 @@
 
 - (NSArray*)specifiers {
   if (!_specifiers) {
-    _specifiers = [[[@[ [PSSpecifier groupSpecifierWithName:@"Customize"] ]
+    _specifiers = [[@[ [PSSpecifier groupSpecifierWithName:@"Customize"] ]
         arrayByAddingObjectsFromArray:[NSPSharedSpecifiers
                                                       get:_service
                                                 withAppID:_appID
                                           isCustomService:_isCustomService]]
-        mutableCopy] retain];
+        mutableCopy];
   }
 
   return _specifiers;
