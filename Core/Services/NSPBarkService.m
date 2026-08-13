@@ -5,6 +5,10 @@
 
 @implementation NSPBarkService
 
++ (void)load {
+  [NSPushServiceManager registerServiceClass:self forName:[self serviceName]];
+}
+
 + (NSString*)serviceName {
   return PUSHER_SERVICE_BARK;
 }

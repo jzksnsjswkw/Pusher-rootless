@@ -3,33 +3,29 @@
 #import "../helpers.h"
 #import "NSPushConfig.h"
 #import "NSPushSupport.h"
-#import "Services/NSPBarkService.h"
 #import "Services/NSPCustomService.h"
-#import "Services/NSPFeishuService.h"
-#import "Services/NSPIFTTTService.h"
-#import "Services/NSPPushbulletService.h"
-#import "Services/NSPPusherReceiverService.h"
-#import "Services/NSPPushoverService.h"
-#import "Services/NSPWechatService.h"
 #import <UIKit/UIKit.h>
 
 @implementation NSPushServiceManager
 
-+ (Class)serviceClassForName:(NSString*)name {
-  static NSDictionary* registry;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    registry = @{
-      PUSHER_SERVICE_PUSHOVER : NSPPushoverService.class,
-      PUSHER_SERVICE_PUSHBULLET : NSPPushbulletService.class,
-      PUSHER_SERVICE_IFTTT : NSPIFTTTService.class,
-      PUSHER_SERVICE_PUSHER_RECEIVER : NSPPusherReceiverService.class,
-      PUSHER_SERVICE_FEISHU : NSPFeishuService.class,
-      PUSHER_SERVICE_BARK : NSPBarkService.class,
-      PUSHER_SERVICE_WECHAT : NSPWechatService.class
-    };
+static NSMutableDictionary<NSString*, Class>* gServiceRegistry;
+static dispatch_once_t gServiceRegistryToken;
+
++ (void)registerServiceClass:(Class)serviceClass forName:(NSString*)name {
+  dispatch_once(&gServiceRegistryToken, ^{
+    gServiceRegistry = [NSMutableDictionary new];
   });
-  return registry[name] ?: NSPCustomService.class;
+  if (name.length > 0) {
+    gServiceRegistry[name] = serviceClass;
+  }
+}
+
++ (Class)serviceClassForName:(NSString*)name {
+  dispatch_once(&gServiceRegistryToken, ^{
+    gServiceRegistry = [NSMutableDictionary new];
+  });
+  Class cls = gServiceRegistry[name];
+  return cls ?: NSPCustomService.class;
 }
 
 + (NSArray*)builtinServiceNames {

@@ -1,8 +1,8 @@
 #import "../global.h"
 #import <Foundation/Foundation.h>
+#import "NSPushConfig.h"
 
 @class NSPBulletinContext;
-@class NSPushServiceConfig;
 
 @protocol NSPPushService <NSObject>
 
@@ -88,6 +88,7 @@
 
 @interface NSPushServiceManager : NSObject
 
++ (void)registerServiceClass:(Class)serviceClass forName:(NSString*)name;
 + (Class)serviceClassForName:(NSString*)name;
 + (NSArray*)builtinServiceNames;
 
