@@ -37,8 +37,12 @@ jobs:
         git clone https://github.com/opa334/AltList.git
         cd AltList
         chmod +x install_to_theos.sh && ./install_to_theos.sh
+        # install_to_theos.sh only installs the framework; the headers must be copied manually.
+        # AltList.h goes into $THEOS/include/ and all ATL headers into $THEOS/include/AltList/
+        # so that <AltList/AltList.h> and its inner <AltList/ATL*.h> imports resolve.
         mkdir -p $THEOS/include/AltList
-        cp AltList.h $THEOS/include/AltList/
+        cp AltList.h $THEOS/include/
+        cp *.h $THEOS/include/AltList/
         cd ..
 
     - name: Patch PSSpecifier (idempotent)
