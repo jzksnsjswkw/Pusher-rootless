@@ -3,9 +3,9 @@ THEOS_DEVICE_PORT=22
 
 FINALPACKAGE = 1
 ifeq ($(THEOS_PACKAGE_SCHEME),rootless)
-	TARGET = iphone:clang:16.5:14.5
+	TARGET = iphone:clang:16.5:15.0
 else ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
-	TARGET = iphone:clang:16.5:14.5
+	TARGET = iphone:clang:16.5:15.0
 else
 	TARGET = iphone:clang:14.5:13.7
 endif
@@ -25,6 +25,11 @@ Pusher_FRAMEWORKS = UIKit Foundation
 Pusher_PRIVATE_FRAMEWORKS = AppSupport BulletinBoard
 
 include $(THEOS_MAKE_PATH)/tweak.mk
+
+# Regenerate the built-in service list from each service's own header before
+# every build (the tweak and the Preferences bundle both consume it).
+before-all::
+	./scripts/generate_builtin_services.sh
 
 after-install::
 	install.exec "killall -9 SpringBoard"

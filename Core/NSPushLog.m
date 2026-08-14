@@ -1,5 +1,5 @@
 #import "NSPushLog.h"
-#import "global.h"
+#import "NSPushConstants.h"
 #import "helpers.h"
 #import <notify.h>
 

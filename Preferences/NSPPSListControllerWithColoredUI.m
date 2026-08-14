@@ -1,5 +1,7 @@
 #import "NSPPSListControllerWithColoredUI.h"
 #import "NSPColoredUI.h"
+#import "NSPusherManager.h"
+#import "../UIImage+ReplaceColor.h"
 
 @implementation NSPPSListControllerWithColoredUI
 

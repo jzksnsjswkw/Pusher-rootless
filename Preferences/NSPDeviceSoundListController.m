@@ -1,5 +1,6 @@
 #import "NSPDeviceSoundListController.h"
 
+#import "../Generated/BuiltinServices.generated.h"
 #import "../global.h"
 #import "../helpers.h"
 #import "NSPSharedSpecifiers.h"

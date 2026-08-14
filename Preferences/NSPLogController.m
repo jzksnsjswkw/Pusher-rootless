@@ -1,6 +1,7 @@
 #import "NSPLogController.h"
 #import "NSPAppSelectionController.h"
 #import "UIImageIcon.h"
+#import "NSPusherManager.h"
 #import <MobileCoreServices/LSApplicationProxy.h>
 
 #define SEGMENTED_CONTROL_TAG 673
