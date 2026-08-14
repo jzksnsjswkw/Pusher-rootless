@@ -254,8 +254,12 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
     MIGRATE_FIELD(NSPPreferenceServiceServerURLKey,
                   XStr(@"%@ServerURL", service));
     MIGRATE_FIELD(NSPPreferenceServiceDBNameKey, XStr(@"%@DBName", service));
-    MIGRATE_FIELD(NSPPreferenceServiceAppListIsBlacklistKey,
-                  XStr(@"%@AppListIsBlacklist", service));
+    // appListIsBlacklist defaults to YES; only a non-default NO is migrated,
+    // a YES value is dropped with the flat keys.
+    v = prefs[XStr(@"%@AppListIsBlacklist", service)];
+    if (v && !((NSNumber*)v).boolValue) {
+      serviceObj[NSPPreferenceServiceAppListIsBlacklistKey] = v;
+    }
     MIGRATE_FIELD(NSPPreferenceServiceIncludeIconKey,
                   XStr(@"%@IncludeIcon", service));
     MIGRATE_FIELD(NSPPreferenceServiceCurateDataKey,
@@ -505,6 +509,71 @@ static NSDictionary* migrateLegacyCustomServices(NSDictionary* prefs) {
   return newPrefs;
 }
 
+// Migrate the legacy flat global app-list keys (`GlobalBL-<appID>`=YES and
+// `GlobalAppListIsBlacklist`) into the nested Global = { appList : [...],
+// appListIsBlacklist : BOOL } object. This scans the top-level flat keys
+// instead of early-returning when Global already exists: flat keys written by
+// an older build can coexist with a stale Global and must still be folded in
+// and removed. A NO-value flat key is an orphan left by the old toggle
+// behavior (which wrote NO instead of removing the entry); it is dropped along
+// with the rest of the prefix.
+static NSDictionary* migrateLegacyGlobal(NSDictionary* prefs) {
+  NSMutableArray* keysToRemove = [NSMutableArray new];
+  NSMutableArray* flatAppIDs = [NSMutableArray new];
+  id isBlacklist = nil;
+  for (NSString* key in prefs.allKeys) {
+    if (![key isKindOfClass:NSString.class]) {
+      continue;
+    }
+    if ([key hasPrefix:NSPPreferenceGlobalBLPrefix]) {
+      if (((NSNumber*)prefs[key]).boolValue) {
+        [flatAppIDs addObject:[key substringFromIndex:NSPPreferenceGlobalBLPrefix.length]];
+      }
+      [keysToRemove addObject:key];
+    } else if ([key isEqualToString:@"GlobalAppListIsBlacklist"]) {
+      isBlacklist = prefs[key];
+      [keysToRemove addObject:key];
+    }
+  }
+  if (keysToRemove.count == 0) {
+    return prefs;
+  }
+
+  NSMutableDictionary* global = [([prefs[NSPPreferenceGlobalKey] isKindOfClass:NSDictionary.class]
+                                      ? prefs[NSPPreferenceGlobalKey]
+                                      : @{}) mutableCopy];
+  NSMutableArray* appList = [NSMutableArray
+      arrayWithArray:(global[NSPPreferenceServiceAppListKey] ?: @[])];
+  for (NSString* appID in flatAppIDs) {
+    if (![appList containsObject:appID]) {
+      [appList addObject:appID];
+    }
+  }
+  if (appList.count > 0) {
+    global[NSPPreferenceServiceAppListKey] = appList;
+  }
+  if (isBlacklist && !((NSNumber*)isBlacklist).boolValue) {
+    global[NSPPreferenceServiceAppListIsBlacklistKey] = isBlacklist;
+  } else if (isBlacklist) {
+    [global removeObjectForKey:NSPPreferenceServiceAppListIsBlacklistKey];
+  }
+
+  NSMutableDictionary* newPrefs = [prefs mutableCopy];
+  newPrefs[NSPPreferenceGlobalKey] = global;
+  for (NSString* key in keysToRemove) {
+    [newPrefs removeObjectForKey:key];
+  }
+
+  CFPreferencesSetMultiple((__bridge CFDictionaryRef)newPrefs,
+                           (__bridge CFArrayRef)keysToRemove, PUSHER_APP_ID,
+                           kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+  CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
+                           kCFPreferencesAnyHost);
+  notify_post(PUSHER_PREFS_NOTIFICATION);
+  XLog(@"Migrated legacy global prefs");
+  return newPrefs;
+}
+
 @implementation NSPushPrefs
 
 + (NSPushConfigSnapshot*)loadSnapshot {
@@ -525,6 +594,7 @@ static NSDictionary* migrateLegacyCustomServices(NSDictionary* prefs) {
 
   prefs = migrateLegacyBuiltInServices(prefs);
   prefs = migrateLegacyCustomServices(prefs);
+  prefs = migrateLegacyGlobal(prefs);
 
   BOOL enabled = YES;
   NSInteger whenToPush = PUSHER_WHEN_TO_PUSH_EITHER;
@@ -539,14 +609,20 @@ static NSDictionary* migrateLegacyCustomServices(NSDictionary* prefs) {
   whenToPush = val ? ((NSNumber*)val).intValue : PUSHER_WHEN_TO_PUSH_EITHER;
   val = prefs[@"WhatNetwork"];
   whatNetwork = val ? ((NSNumber*)val).intValue : PUSHER_WHAT_NETWORK_ANY;
-  val = prefs[@"GlobalAppListIsBlacklist"];
-  globalAppListIsBlacklist = val ? ((NSNumber*)val).boolValue : YES;
+  NSDictionary* global = prefs[NSPPreferenceGlobalKey];
+  NSArray* globalAppList = @[];
+  if ([global isKindOfClass:NSDictionary.class]) {
+    val = global[NSPPreferenceServiceAppListIsBlacklistKey];
+    globalAppListIsBlacklist = val ? ((NSNumber*)val).boolValue : YES;
+    NSArray* nestedAppList = global[NSPPreferenceServiceAppListKey];
+    if ([nestedAppList isKindOfClass:NSArray.class]) {
+      globalAppList = nestedAppList;
+    }
+  }
   val = prefs[@"SufficientNotificationSettingsIsAnd"];
   snsIsAnd = val ? ((NSNumber*)val).boolValue : YES;
   val = prefs[@"SNSORRequireAllowNotifications"];
   snsRequireANWithOR = val ? ((NSNumber*)val).boolValue : YES;
-  NSArray* globalAppList =
-      getAppIDsWithPrefix(prefs, NSPPreferenceGlobalBLPrefix);
 
   NSMutableDictionary* serviceConfigs = [NSMutableDictionary new];
   NSMutableArray* enabledServiceNames = [NSMutableArray new];
