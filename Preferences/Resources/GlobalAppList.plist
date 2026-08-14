@@ -24,6 +24,8 @@
 			<string>PSListItemsController</string>
 			<key>key</key>
 			<string>GlobalAppListIsBlacklist</string>
+			<key>customServiceKey</key>
+			<string>appListIsBlacklist</string>
 			<key>validTitles</key>
 			<array>
 				<string>Blacklist</string>
@@ -44,8 +46,6 @@
 			<string>app_list</string>
 			<key>label</key>
 			<string>Global App List</string>
-			<key>ALSettingsKeyPrefix</key>
-			<string>GlobalBL-</string>
 			<key>useSearchBar</key>
 			<true />
 			<key>alphabeticIndexingEnabled</key>

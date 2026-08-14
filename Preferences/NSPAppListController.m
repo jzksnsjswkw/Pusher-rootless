@@ -1,16 +1,13 @@
 #import "NSPAppListController.h"
 #include <Foundation/Foundation.h>
 
-#import "../global.h"
 #import "../helpers.h"
 #import "NSPSharedSpecifiers.h"
-#import <notify.h>
 
 @implementation NSPAppListController
 - (void)viewDidLoad {
   [super viewDidLoad];
 
-  _prefix = [self.specifier propertyForKey:@"ALSettingsKeyPrefix"];
   _service = [self.specifier propertyForKey:@"service"];
   _isCustomService =
       [self.specifier propertyForKey:@"isCustomService"] &&
@@ -19,31 +16,12 @@
 
 - (void)loadPreferences {
   // Get preferences
-  CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                           kCFPreferencesAnyHost);
-  CFArrayRef keyList = CFPreferencesCopyKeyList(
-      PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-  // Local variable (not an ivar), named prefs to avoid shadowing confusion.
-  NSDictionary* prefs = @{};
-  _selectedApplications = [NSMutableSet new];
-  if (keyList) {
-    prefs = (__bridge_transfer NSDictionary*)CFPreferencesCopyMultiple(
-        keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-        kCFPreferencesAnyHost);
-    if (!prefs) {
-      prefs = @{};
-    }
-    CFRelease(keyList);
-  }
-  _prefix = [self.specifier propertyForKey:@"ALSettingsKeyPrefix"];
   _service = [self.specifier propertyForKey:@"service"];
   _isCustomService =
       [self.specifier propertyForKey:@"isCustomService"] &&
       ((NSNumber*)[self.specifier propertyForKey:@"isCustomService"]).boolValue;
-  // Built-in and custom services store their app list as an array inside the
-  // service object (no ALSettingsKeyPrefix). Only the global app list uses the
-  // flat prefixed-key scheme.
-  if (_service && !_prefix) {
+  _selectedApplications = [NSMutableSet new];
+  if (_service) {
     NSArray* appList = _isCustomService
                            ? [NSPSharedSpecifiers
                                  customServiceAppListForService:_service]
@@ -51,15 +29,10 @@
                                  builtInServiceAppListForService:_service];
     [_selectedApplications addObjectsFromArray:appList];
   } else {
-    for (id key in prefs.allKeys) {
-      if (![key isKindOfClass:NSString.class]) {
-        continue;
-      }
-      if ([key hasPrefix:_prefix] && ((NSNumber*)prefs[key]).boolValue) {
-        NSString* subKey = [key substringFromIndex:_prefix.length];
-        [_selectedApplications addObject:subKey];
-      }
-    }
+    // The global app list lives nested under Global[appList]. Turning a
+    // switch off removes the entry (arrays hold only selected app IDs).
+    [_selectedApplications
+        addObjectsFromArray:[NSPSharedSpecifiers globalAppList]];
   }
 }
 
@@ -72,7 +45,7 @@
     [_selectedApplications removeObject:appID];
   }
 
-  if (_service && !_prefix) {
+  if (_service) {
     if (_isCustomService) {
       [NSPSharedSpecifiers
           setCustomServiceAppList:_selectedApplications.allObjects
@@ -83,14 +56,7 @@
                         forService:_service];
     }
   } else {
-    NSString* key = XStr(@"%@%@", _prefix, appID);
-    CFPreferencesSetValue((__bridge CFStringRef)key,
-                          (__bridge CFNumberRef) @([enabledNum boolValue]),
-                          PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                          kCFPreferencesAnyHost);
-    CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                             kCFPreferencesAnyHost);
-    notify_post(PUSHER_PREFS_NOTIFICATION);
+    [NSPSharedSpecifiers setGlobalAppList:_selectedApplications.allObjects];
   }
 }
 @end

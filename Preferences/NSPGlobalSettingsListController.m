@@ -1,45 +1,44 @@
 #import "NSPGlobalSettingsListController.h"
 #import "NSPSharedSpecifiers.h"
 
-#import "../global.h"
 #import "../helpers.h"
-#import <notify.h>
 
 @implementation NSPGlobalSettingsListController
 
 - (NSArray*)specifiers {
   if (!_specifiers) {
-    _specifiers =
-        [[[self loadSpecifiersFromPlistName:@"GlobalAppList" target:self]
-            arrayByAddingObjectsFromArray:
-                [self loadSpecifiersFromPlistName:@"GlobalAndServices"
-                                           target:self]] mutableCopy];
+    NSArray* appListSpecifiers =
+        [self loadSpecifiersFromPlistName:@"GlobalAppList" target:self];
+    NSArray* globalSettingsSpecifiers =
+        [self loadSpecifiersFromPlistName:@"GlobalAndServices" target:self];
 
-    // Get preferences for counting
-    CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                             kCFPreferencesAnyHost);
-    CFArrayRef keyList = CFPreferencesCopyKeyList(
-        PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-    NSDictionary* prefs = @{};
-    if (keyList) {
-      prefs = (__bridge_transfer NSDictionary*)CFPreferencesCopyMultiple(
-          keyList, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-          kCFPreferencesAnyHost);
-      if (!prefs) {
-        prefs = @{};
+    // Route the Global App List cells through nested storage
+    // (Global[appListIsBlacklist]). GlobalAndServices cells keep their native
+    // flat keys (WhenToPush/WhatNetwork) since those are the global defaults.
+    NSArray* specialCells = @[ @(PSGroupCell), @(PSButtonCell), @(PSLinkCell) ];
+    for (PSSpecifier* specifier in appListSpecifiers) {
+      if ([specialCells containsObject:@(specifier.cellType)]) {
+        continue;
       }
-      CFRelease(keyList);
+      specifier->setter = @selector(setPreferenceValue:forGlobalSpecifier:);
+      specifier->getter = @selector(readGlobalPreferenceValue:);
+      specifier.target = NSPSharedSpecifiers.class;
+      NSString* customServiceKey =
+          [specifier propertyForKey:@"customServiceKey"];
+      if (customServiceKey) {
+        [specifier setProperty:customServiceKey forKey:@"key"];
+      }
     }
+
+    _specifiers = [[appListSpecifiers
+        arrayByAddingObjectsFromArray:globalSettingsSpecifiers] mutableCopy];
 
     for (PSSpecifier* specifier in _specifiers) {
       if (specifier.cellType == PSLinkCell &&
           XEq(specifier.name, @"Global App List")) {
         specifier.name = XStr(
             @"%@ (%d total)", specifier.name,
-            [NSPSharedSpecifiers
-                countAppIDsWithPrefix:prefs
-                               prefix:[specifier propertyForKey:
-                                                     @"ALSettingsKeyPrefix"]]);
+            (int)[NSPSharedSpecifiers globalAppList].count);
         // Non-retaining NSValue to avoid controller -> specifier -> controller
         // retain cycle.
         [specifier
