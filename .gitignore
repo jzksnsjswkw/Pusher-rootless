@@ -4,3 +4,4 @@ obj/
 .vscode/
 .DS_Store
 Generated/
+.sisyphus/
