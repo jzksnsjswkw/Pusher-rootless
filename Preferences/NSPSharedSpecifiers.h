@@ -23,7 +23,10 @@
                 value:(CFPropertyListRef)val
          shouldNotify:(BOOL)shouldNotify;
 + (id)getPreference:(CFStringRef)keyRef;
-+ (int)countAppIDsWithPrefix:(NSDictionary*)prefs prefix:(NSString*)prefix;
++ (void)setPreferenceValue:(id)value forGlobalSpecifier:(PSSpecifier*)specifier;
++ (id)readGlobalPreferenceValue:(PSSpecifier*)specifier;
++ (NSArray*)globalAppList;
++ (void)setGlobalAppList:(NSArray*)appList;
 + (NSArray*)builtInServiceAppListForService:(NSString*)service;
 + (void)setBuiltInServiceAppList:(NSArray*)appList
                       forService:(NSString*)service;

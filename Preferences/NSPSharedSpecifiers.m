@@ -27,19 +27,6 @@
   }
 }
 
-+ (int)countAppIDsWithPrefix:(NSDictionary*)prefs prefix:(NSString*)prefix {
-  int count = 0;
-  for (id key in prefs.allKeys) {
-    if (![key isKindOfClass:NSString.class]) {
-      continue;
-    }
-    if ([key hasPrefix:prefix] && ((NSNumber*)prefs[key]).boolValue) {
-      count += 1;
-    }
-  }
-  return count;
-}
-
 + (NSArray*)get:(NSString*)service
           withAppID:(NSString*)appID
     isCustomService:(BOOL)isCustomService {
@@ -462,10 +449,16 @@
     customApps[[specifier propertyForKey:@"customAppID"]] = customApp;
     serviceObj[NSPPreferenceServiceCustomAppsKey] = customApps;
   } else {
-    if (value) {
-      serviceObj[[specifier propertyForKey:@"key"]] = value;
+    NSString* key = [specifier propertyForKey:@"key"];
+    // appListIsBlacklist defaults to YES, so a YES value is the default and is
+    // not stored (removing the entry keeps prefs clean; reads fall back to the
+    // default). Only non-default values are persisted.
+    if (value &&
+        !(XEq(key, NSPPreferenceServiceAppListIsBlacklistKey) &&
+          ((NSNumber*)value).boolValue)) {
+      serviceObj[key] = value;
     } else {
-      [serviceObj removeObjectForKey:[specifier propertyForKey:@"key"]];
+      [serviceObj removeObjectForKey:key];
     }
   }
 
@@ -552,6 +545,56 @@
        shouldNotify:YES];
 }
 
++ (NSArray*)globalAppList {
+  NSDictionary* global = [NSPSharedSpecifiers
+      getPreference:(__bridge CFStringRef)NSPPreferenceGlobalKey];
+  if (![global isKindOfClass:NSDictionary.class]) {
+    return @[];
+  }
+  NSArray* appList = global[NSPPreferenceServiceAppListKey];
+  return [appList isKindOfClass:NSArray.class] ? appList : @[];
+}
+
++ (void)setGlobalAppList:(NSArray*)appList {
+  NSMutableDictionary* global = [(
+      [NSPSharedSpecifiers
+          getPreference:(__bridge CFStringRef)NSPPreferenceGlobalKey] ?: @{})
+      mutableCopy];
+  global[NSPPreferenceServiceAppListKey] = appList;
+  [NSPSharedSpecifiers
+      setPreference:(__bridge CFStringRef)NSPPreferenceGlobalKey
+              value:(__bridge CFPropertyListRef)global
+       shouldNotify:YES];
+}
+
++ (void)setPreferenceValue:(id)value forGlobalSpecifier:(PSSpecifier*)specifier {
+  NSMutableDictionary* global = [(
+      [NSPSharedSpecifiers
+          getPreference:(__bridge CFStringRef)NSPPreferenceGlobalKey] ?: @{})
+      mutableCopy];
+  NSString* key = [specifier propertyForKey:@"key"];
+  // appListIsBlacklist defaults to YES; YES is the default so it is not
+  // stored (see setPreferenceValue:forBuiltInServiceSpecifier:).
+  if (value &&
+      !(XEq(key, NSPPreferenceServiceAppListIsBlacklistKey) &&
+        ((NSNumber*)value).boolValue)) {
+    global[key] = value;
+  } else {
+    [global removeObjectForKey:key];
+  }
+  [NSPSharedSpecifiers
+      setPreference:(__bridge CFStringRef)NSPPreferenceGlobalKey
+              value:(__bridge CFPropertyListRef)global
+       shouldNotify:YES];
+}
+
++ (id)readGlobalPreferenceValue:(PSSpecifier*)specifier {
+  NSDictionary* global = [NSPSharedSpecifiers
+      getPreference:(__bridge CFStringRef)NSPPreferenceGlobalKey];
+  id value = global[[specifier propertyForKey:@"key"]];
+  return value ?: [specifier propertyForKey:@"default"];
+}
+
 + (void)setPreferenceValue:(id)value
         forCustomSpecifier:(PSSpecifier*)specifier {
   BOOL isCustomApp =
@@ -585,10 +628,15 @@
             ?: @{}) mutableCopy];
     NSMutableDictionary* customService =
         [(customServices[service] ?: @{}) mutableCopy];
-    if (value) {
-      customService[[specifier propertyForKey:@"key"]] = value;
+    NSString* key = [specifier propertyForKey:@"key"];
+    // appListIsBlacklist defaults to YES; YES is the default so it is not
+    // stored (see setPreferenceValue:forBuiltInServiceSpecifier:).
+    if (value &&
+        !(XEq(key, NSPPreferenceServiceAppListIsBlacklistKey) &&
+          ((NSNumber*)value).boolValue)) {
+      customService[key] = value;
     } else {
-      [customService removeObjectForKey:[specifier propertyForKey:@"key"]];
+      [customService removeObjectForKey:key];
     }
     customServices[service] = customService;
     [NSPSharedSpecifiers
