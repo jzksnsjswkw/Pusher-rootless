@@ -22,18 +22,7 @@
   return PUSHER_SERVICE_PUSHBULLET_APP_ID;
 }
 
-+ (NSDictionary*)headersForConfig:(NSPushServiceConfig*)config {
-  return @{@"Access-Token" : config.rawPrefs[@"token"] ?: @""};
-}
-
-+ (NSString*)URLStringForConfig:(NSPushServiceConfig*)config {
-  NSString* key = config.rawPrefs[@"key"];
-  NSString* url = config.rawPrefs[@"url"] ?: @"";
-  return [url stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
-                                         withString:key ?: @""];
-}
-
-+ (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context
++ (NSPushRequest*)requestForBulletinContext:(NSPBulletinContext*)context
                                      config:(NSPushServiceConfig*)config {
   NSMutableArray* deviceIDs = [NSMutableArray new];
   for (NSDictionary* device in config.rawPrefs[@"devices"] ?: @[]) {
@@ -55,7 +44,9 @@
     infoDict[@"device_iden"] = firstDevice;
   }
 
-  return infoDict;
+  return [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
+                                     headers:@{@"Access-Token" : config.rawPrefs[@"token"] ?: @""}
+                                    infoDict:infoDict];
 }
 
 @end

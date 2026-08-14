@@ -1,5 +1,6 @@
 #import "NSPushRequestSender.h"
 #import "NSPushConstants.h"
+#import "NSPushRequest.h"
 #import "../helpers.h"
 #import "NSPushLog.h"
 #import "NSPushSupport.h"
@@ -7,13 +8,10 @@
 
 @interface NSPushRequestSender ()
 @property(nonatomic, strong) NSMutableDictionary* retriesLeft;
-- (void)sendAttemptWithURLString:(NSString*)urlString
-                        infoDict:(NSDictionary*)infoDict
-                         headers:(NSDictionary*)headers
-                          method:(NSString*)method
-                       logString:(NSString*)logString
-                         service:(NSString*)service
-                        bulletin:(BBBulletin*)bulletin;
+- (void)sendAttemptWithRequest:(NSPushRequest*)pushRequest
+                     logString:(NSString*)logString
+                       service:(NSString*)service
+                      bulletin:(BBBulletin*)bulletin;
 - (NSNumber*)retriesLeftForRetryKey:(NSString*)retryKey;
 - (void)setRetriesLeft:(NSNumber*)count forRetryKey:(NSString*)retryKey;
 @end
@@ -61,37 +59,28 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
   }
 }
 
-- (void)sendRequestWithURLString:(NSString*)urlString
-                        infoDict:(NSDictionary*)infoDict
-                         headers:(NSDictionary*)headers
-                          method:(NSString*)method
-                       logString:(NSString*)logString
-                         service:(NSString*)service
-                        bulletin:(BBBulletin*)bulletin {
+- (void)sendRequest:(NSPushRequest*)pushRequest
+          logString:(NSString*)logString
+            service:(NSString*)service
+           bulletin:(BBBulletin*)bulletin {
   NSString* retryKey = retryKeyForBulletinAndService(bulletin, service);
   [self setRetriesLeft:@(PUSHER_TRIES - 1) forRetryKey:retryKey];
-  [self sendAttemptWithURLString:urlString
-                        infoDict:infoDict
-                         headers:headers
-                          method:method
-                       logString:logString
-                         service:service
-                        bulletin:bulletin];
+  [self sendAttemptWithRequest:pushRequest
+                     logString:logString
+                       service:service
+                      bulletin:bulletin];
 }
 
-- (void)sendAttemptWithURLString:(NSString*)urlString
-                        infoDict:(NSDictionary*)infoDict
-                         headers:(NSDictionary*)headers
-                          method:(NSString*)method
-                       logString:(NSString*)logString
-                         service:(NSString*)service
-                        bulletin:(BBBulletin*)bulletin {
-  NSMutableDictionary* infoDictForRequest = [infoDict mutableCopy];
+- (void)sendAttemptWithRequest:(NSPushRequest*)pushRequest
+                     logString:(NSString*)logString
+                       service:(NSString*)service
+                      bulletin:(BBBulletin*)bulletin {
+  NSMutableDictionary* infoDictForRequest = [pushRequest.infoDict mutableCopy];
   if (infoDictForRequest[@"imageShrinkFactor"]) {
     [infoDictForRequest removeObjectForKey:@"imageShrinkFactor"];
   }
 
-  NSString* newUrlString = [urlString copy];
+  NSString* newUrlString = [pushRequest.urlString copy];
 
   if (infoDictForRequest[@"image"] &&
       [infoDictForRequest[@"image"] isKindOfClass:UIImage.class]) {
@@ -99,7 +88,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
         [NSPushImage base64RepresentationForImage:infoDictForRequest[@"image"]];
   }
 
-  if ([method caseInsensitiveCompare:@"GET"] == NSOrderedSame) {
+  if ([pushRequest.method caseInsensitiveCompare:@"GET"] == NSOrderedSame) {
     // Only unreserved RFC 3986 characters are left unescaped so that
     // '&', '=', '+', '#', '?', '/' etc. in keys/values can't corrupt the
     // query string.
@@ -174,18 +163,18 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
   [NSPushLog addToLogIfEnabledForService:service
                                 bulletin:bulletin
                                    label:@"Method"
-                                  object:method];
-  [request setHTTPMethod:method];
-  for (NSString* headerName in headers) {
-    [request setValue:headers[headerName] forHTTPHeaderField:headerName];
+                                  object:pushRequest.method];
+  [request setHTTPMethod:pushRequest.method];
+  for (NSString* headerName in pushRequest.headers) {
+    [request setValue:pushRequest.headers[headerName] forHTTPHeaderField:headerName];
     [NSPushLog addToLogIfEnabledForService:service
                                   bulletin:bulletin
                                      label:@"Header"
                                     object:XStr(@"%@: %@", headerName,
-                                                headers[headerName])];
+                                                pushRequest.headers[headerName])];
   }
 
-  if (XEq(method, @"POST")) {
+  if (XEq(pushRequest.method, @"POST")) {
     // replace image strings with shorter string
     NSMutableDictionary* infoDictForLog = [infoDictForRequest mutableCopy];
     for (NSString* prop in PUSHER_LOG_IMAGE_DATA_PROPERTIES) {
@@ -240,7 +229,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                                       encoding:NSUTF8StringEncoding];
             // if has retries left request entity too large and has base64
             // image string (not image set to true)
-            UIImage* image = infoDict[@"image"];
+            UIImage* image = pushRequest.infoDict[@"image"];
             if (image &&
                 [dataStr.lowercaseString
                     containsString:@"request entity too large"] &&
@@ -248,10 +237,10 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                 [image isKindOfClass:UIImage.class]) {
               [self setRetriesLeft:@(retriesLeft.intValue - 1)
                        forRetryKey:retryKey];
-              NSMutableDictionary* retryInfoDict = [infoDict mutableCopy];
+              NSMutableDictionary* retryInfoDict = [pushRequest.infoDict mutableCopy];
 
               CGFloat imageShrinkFactor =
-                  ((NSNumber*)infoDict[@"imageShrinkFactor"]
+                  ((NSNumber*)pushRequest.infoDict[@"imageShrinkFactor"]
                        ?: @(PUSHER_DEFAULT_SHRINK_FACTOR))
                       .floatValue;
               NSString* status =
@@ -304,13 +293,15 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                   DISPATCH_TIME_NOW,
                   (int64_t)(PUSHER_DELAY_BETWEEN_RETRIES * NSEC_PER_SEC));
               dispatch_after(delayTime, dispatch_get_main_queue(), ^(void) {
-                [self sendAttemptWithURLString:urlString
-                                      infoDict:retryInfoDict
-                                       headers:headers
-                                        method:method
-                                     logString:logString
-                                       service:service
-                                      bulletin:bulletin];
+                [self sendAttemptWithRequest:
+                          [NSPushRequest
+                              requestWithURLString:pushRequest.urlString
+                                           headers:pushRequest.headers
+                                          infoDict:retryInfoDict
+                                            method:pushRequest.method]
+                                    logString:logString
+                                      service:service
+                                     bulletin:bulletin];
               });
               return;
             }
@@ -357,7 +348,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                 [self setRetriesLeft:@(retriesLeft.intValue - 1)
                          forRetryKey:retryKey];
 
-                NSMutableDictionary* retryInfoDict = [infoDict mutableCopy];
+                NSMutableDictionary* retryInfoDict = [pushRequest.infoDict mutableCopy];
                 // NOTE: unlike the "request entity too large" path below, a
                 // transport-level error says nothing about the payload size,
                 // so retry with the image intact rather than dropping it.
@@ -380,13 +371,15 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                 dispatch_time_t delayTime = dispatch_time(
                     DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC));
                 dispatch_after(delayTime, dispatch_get_main_queue(), ^(void) {
-                  [self sendAttemptWithURLString:urlString
-                                        infoDict:retryInfoDict
-                                         headers:headers
-                                          method:method
-                                       logString:logString
-                                         service:service
-                                        bulletin:bulletin];
+                  [self sendAttemptWithRequest:
+                            [NSPushRequest
+                                requestWithURLString:pushRequest.urlString
+                                             headers:pushRequest.headers
+                                            infoDict:retryInfoDict
+                                              method:pushRequest.method]
+                                      logString:logString
+                                        service:service
+                                       bulletin:bulletin];
                 });
               } else {
                 // Retries exhausted with no successful response: log an honest

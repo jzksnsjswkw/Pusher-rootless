@@ -9,24 +9,35 @@
   return nil;
 }
 
-+ (NSString*)URLStringForConfig:(NSPushServiceConfig*)config {
-  NSString* key = config.rawPrefs[@"key"];
-  NSString* url = config.rawPrefs[@"url"] ?: @"";
-  return [url stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
-                                         withString:key ?: @""];
-}
++ (NSPushRequest*)requestForBulletinContext:(NSPBulletinContext*)context
+                                     config:(NSPushServiceConfig*)config {
+  NSMutableDictionary* infoDict =
+      [[self baseInfoDictForBulletinContext:context config:config] mutableCopy];
 
-+ (NSDictionary*)headersForConfig:(NSPushServiceConfig*)config {
   NSNumber* authMethod = config.rawPrefs[@"authenticationMethod"];
+  // authMethod 2 = body auth: embed key inside the JSON payload instead.
+  if (authMethod && authMethod.intValue == 2) {
+    NSString* paramName = config.rawPrefs[@"paramName"];
+    if (paramName && paramName.length > 0) {
+      infoDict[paramName] = config.rawPrefs[@"key"] ?: @"";
+    } else {
+      infoDict[@"key"] = config.rawPrefs[@"key"] ?: @"";
+    }
+  }
+
+  NSDictionary* headers = @{};
   // authMethod 1 = header auth: send key as a custom HTTP header.
   if (authMethod && authMethod.intValue == 1) {
     NSString* paramName = config.rawPrefs[@"paramName"];
-    return @{
+    headers = @{
       (paramName && paramName.length > 0) ? paramName : @"Access-Token"
           : config.rawPrefs[@"key"] ?: @""
     };
   }
-  return @{};
+
+  return [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
+                                     headers:headers
+                                    infoDict:infoDict];
 }
 
 + (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config {
@@ -37,24 +48,6 @@
 + (BOOL)shouldIncludeImageForConfig:(NSPushServiceConfig*)config {
   NSNumber* includeImage = config.rawPrefs[@"includeImage"];
   return includeImage && includeImage.boolValue;
-}
-
-+ (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context
-                                     config:(NSPushServiceConfig*)config {
-  NSMutableDictionary* data =
-      [[super infoDictForBulletinContext:context config:config] mutableCopy];
-
-  NSNumber* authMethod = config.rawPrefs[@"authenticationMethod"];
-  // authMethod 2 = body auth: embed key inside the JSON payload instead.
-  if (authMethod && authMethod.intValue == 2) {
-    NSString* paramName = config.rawPrefs[@"paramName"];
-    if (paramName && paramName.length > 0) {
-      data[paramName] = config.rawPrefs[@"key"] ?: @"";
-    } else {
-      data[@"key"] = config.rawPrefs[@"key"] ?: @"";
-    }
-  }
-  return data;
 }
 
 @end

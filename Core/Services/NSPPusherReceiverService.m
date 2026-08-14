@@ -13,11 +13,13 @@
   return PUSHER_SERVICE_PUSHER_RECEIVER;
 }
 
-+ (NSString*)URLStringForConfig:(NSPushServiceConfig*)config {
-  NSString* key = config.rawPrefs[@"key"];
-  NSString* url = config.rawPrefs[@"url"] ?: @"";
-  return [url stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
-                                         withString:key ?: @""];
++ (NSPushRequest*)requestForBulletinContext:(NSPBulletinContext*)context
+                                     config:(NSPushServiceConfig*)config {
+  return [NSPushRequest
+      requestWithURLString:[self replacedKeyURLStringForConfig:config]
+                   headers:@{@"x-apikey" : config.rawPrefs[@"key"] ?: @""}
+                  infoDict:[self baseInfoDictForBulletinContext:context
+                                                         config:config]];
 }
 
 + (NSString*)urlForEventName:(NSString*)eventName
@@ -55,10 +57,6 @@
     @"imageShrinkFactor" : appPrefs[@"imageShrinkFactor"]
         ?: @(PUSHER_DEFAULT_SHRINK_FACTOR)
   };
-}
-
-+ (NSDictionary*)headersForConfig:(NSPushServiceConfig*)config {
-  return @{@"x-apikey" : config.rawPrefs[@"key"] ?: @""};
 }
 
 + (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config {

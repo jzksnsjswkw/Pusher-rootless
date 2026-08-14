@@ -34,8 +34,9 @@
   return @{@"touser" : appPrefs[@"touser"] ?: @""};
 }
 
-+ (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context
-                                     config:(NSPushServiceConfig*)config {
++ (void)requestForBulletinContext:(NSPBulletinContext*)context
+                           config:(NSPushServiceConfig*)config
+                       completion:(void (^)(NSPushRequest* request))completion {
   NSString* touser = config.rawPrefs[@"touser"];
   // agentid and safe must be integers for the WeChat Work message/send API;
   // strings are rejected with an invalid-parameter error.
@@ -46,7 +47,7 @@
   } else if ([config.rawPrefs[@"agentID"] isKindOfClass:NSString.class]) {
     agentIDValue = ((NSString*)config.rawPrefs[@"agentID"]).integerValue;
   }
-  return @{
+  NSDictionary* infoDict = @{
     @"touser" : (touser && [touser length] != 0) ? touser : @"@all",
     @"msgtype" : @"text",
     @"agentid" : @(agentIDValue),
@@ -55,6 +56,87 @@
     },
     @"safe" : @0
   };
+
+  NSString* corpid = config.rawPrefs[@"corpid"];
+  NSString* corpsecret = config.rawPrefs[@"corpsecret"];
+  if (!corpid || !corpsecret) {
+    if (completion) {
+      // Missing credentials: abort rather than sending a request with an
+      // empty URL. Callers treat nil as "failed to build request" and skip
+      // the send, matching the token-fetch failure path below.
+      completion(nil);
+    }
+    return;
+  }
+
+  NSString* cacheKey = [NSString stringWithFormat:@"%@|%@", corpid, corpsecret];
+  BOOL cacheHit = NO;
+  NSString* cachedToken = cachedWechatTokenForKey(cacheKey, &cacheHit);
+  if (cacheHit) {
+    if (completion) {
+      completion([NSPushRequest
+          requestWithURLString:[[PUSHER_SERVICE_WECHAT_URL
+              stringByReplacingOccurrencesOfString:@"REPLACE_DYNAMIC_KEY"
+                                        withString:cachedToken] copy]
+                       headers:nil
+                      infoDict:infoDict]);
+    }
+    return;
+  }
+
+  NSString* reqUrl = @"https://qyapi.weixin.qq.com/cgi-bin/gettoken";
+  NSDictionary* params = @{@"corpid" : corpid, @"corpsecret" : corpsecret};
+  NSMutableArray* queryItems = [NSMutableArray array];
+  NSCharacterSet* allowed = [NSCharacterSet
+      characterSetWithCharactersInString:@"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij"
+                                         @"klmnopqrstuvwxyz0123456789-._~"];
+  for (NSString* key in params) {
+    NSString* encoded = [(NSString*)params[key]
+        stringByAddingPercentEncodingWithAllowedCharacters:allowed];
+    [queryItems addObject:[NSString stringWithFormat:@"%@=%@", key, encoded]];
+  }
+  NSString* queryString = [queryItems componentsJoinedByString:@"&"];
+  reqUrl = [reqUrl stringByAppendingFormat:@"?%@", queryString];
+  NSMutableURLRequest* request =
+      [NSMutableURLRequest requestWithURL:[NSURL URLWithString:reqUrl]];
+  [request setHTTPMethod:@"POST"];
+  [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
+  NSURLSession* session = [NSURLSession sharedSession];
+  NSURLSessionDataTask* dataTask = [session
+      dataTaskWithRequest:request
+        completionHandler:^(NSData* data, NSURLResponse* response,
+                            NSError* error) {
+          NSString* token = @"";
+          if (!error) {
+            NSDictionary* jsonResponse =
+                [NSJSONSerialization JSONObjectWithData:data
+                                                options:0
+                                                  error:nil];
+            if ([jsonResponse[@"errcode"] isEqual:@(0)]) {
+              token = jsonResponse[@"access_token"];
+            }
+          }
+          if (token && token.length > 0) {
+            cacheWechatTokenForKey(cacheKey, token);
+          }
+          if (completion) {
+            if (!token || token.length == 0) {
+              // Failed to obtain an access token (network error or invalid
+              // corpid/corpsecret). Abort rather than firing a request with an
+              // empty token that is guaranteed to fail server-side; the caller
+              // logs this as a failed request and clears the retry state.
+              completion(nil);
+              return;
+            }
+            completion([NSPushRequest
+                requestWithURLString:[[PUSHER_SERVICE_WECHAT_URL
+                    stringByReplacingOccurrencesOfString:@"REPLACE_DYNAMIC_KEY"
+                                              withString:token] copy]
+                             headers:nil
+                            infoDict:infoDict]);
+          }
+        }];
+  [dataTask resume];
 }
 
 // WeChat access_token is valid for ~7200 seconds. Cache it so we don't
@@ -100,81 +182,6 @@ static void cacheWechatTokenForKey(NSString* cacheKey, NSString* token) {
   @synchronized(wechatTokenCacheLock) {
     wechatTokenCache[cacheKey] = @{@"token" : token, @"expire" : expire};
   }
-}
-
-+ (void)URLStringForConfig:(NSPushServiceConfig*)config
-                completion:(void (^)(NSString* urlString))completion {
-  NSString* corpid = config.rawPrefs[@"corpid"];
-  NSString* corpsecret = config.rawPrefs[@"corpsecret"];
-  if (!corpid || !corpsecret) {
-    if (completion) {
-      completion(@""); // empty URL to avoid nil crash in request creation
-    }
-    return;
-  }
-
-  NSString* cacheKey = [NSString stringWithFormat:@"%@|%@", corpid, corpsecret];
-  BOOL cacheHit = NO;
-  NSString* cachedToken = cachedWechatTokenForKey(cacheKey, &cacheHit);
-  if (cacheHit) {
-    if (completion) {
-      completion([[PUSHER_SERVICE_WECHAT_URL
-          stringByReplacingOccurrencesOfString:@"REPLACE_DYNAMIC_KEY"
-                                    withString:cachedToken] copy]);
-    }
-    return;
-  }
-
-  NSString* reqUrl = @"https://qyapi.weixin.qq.com/cgi-bin/gettoken";
-  NSDictionary* params = @{@"corpid" : corpid, @"corpsecret" : corpsecret};
-  NSMutableArray* queryItems = [NSMutableArray array];
-  NSCharacterSet* allowed = [NSCharacterSet
-      characterSetWithCharactersInString:@"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij"
-                                         @"klmnopqrstuvwxyz0123456789-._~"];
-  for (NSString* key in params) {
-    NSString* encoded = [(NSString*)params[key]
-        stringByAddingPercentEncodingWithAllowedCharacters:allowed];
-    [queryItems addObject:[NSString stringWithFormat:@"%@=%@", key, encoded]];
-  }
-  NSString* queryString = [queryItems componentsJoinedByString:@"&"];
-  reqUrl = [reqUrl stringByAppendingFormat:@"?%@", queryString];
-  NSMutableURLRequest* request =
-      [NSMutableURLRequest requestWithURL:[NSURL URLWithString:reqUrl]];
-  [request setHTTPMethod:@"POST"];
-  [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
-  NSURLSession* session = [NSURLSession sharedSession];
-  NSURLSessionDataTask* dataTask = [session
-      dataTaskWithRequest:request
-        completionHandler:^(NSData* data, NSURLResponse* response,
-                            NSError* error) {
-          NSString* token = @"";
-          if (!error) {
-            NSDictionary* jsonResponse =
-                [NSJSONSerialization JSONObjectWithData:data
-                                                options:0
-                                                  error:nil];
-            if ([jsonResponse[@"errcode"] isEqual:@(0)]) {
-              token = jsonResponse[@"access_token"];
-            }
-          }
-          if (token && token.length > 0) {
-            cacheWechatTokenForKey(cacheKey, token);
-          }
-          if (completion) {
-            if (!token || token.length == 0) {
-              // Failed to obtain an access token (network error or invalid
-              // corpid/corpsecret). Abort rather than firing a request with an
-              // empty token that is guaranteed to fail server-side; the caller
-              // logs this as an invalid URL and clears the retry state.
-              completion(nil);
-              return;
-            }
-            completion([[PUSHER_SERVICE_WECHAT_URL
-                stringByReplacingOccurrencesOfString:@"REPLACE_DYNAMIC_KEY"
-                                          withString:token] copy]);
-          }
-        }];
-  [dataTask resume];
 }
 
 @end

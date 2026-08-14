@@ -42,10 +42,6 @@ static dispatch_once_t gServiceRegistryToken;
   return @"";
 }
 
-+ (NSDictionary*)headersForConfig:(NSPushServiceConfig*)config {
-  return @{};
-}
-
 + (NSDictionary*)extraPrefsForName:(NSString*)name
                       servicePrefs:(NSDictionary*)servicePrefs {
   return @{};
@@ -56,27 +52,31 @@ static dispatch_once_t gServiceRegistryToken;
   return @{};
 }
 
++ (NSString*)replacedKeyURLStringForConfig:(NSPushServiceConfig*)config {
+  NSString* key = config.rawPrefs[@"key"];
+  NSString* url = config.rawPrefs[@"url"] ?: @"";
+  return [url stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
+                                         withString:key ?: @""];
+}
+
 + (NSString*)urlForEventName:(NSString*)eventName
                       dbName:(NSString*)dbName
                    serverURL:(NSString*)serverURL {
   return @"";
 }
 
-+ (void)URLStringForConfig:(NSPushServiceConfig*)config
-                completion:(void (^)(NSString* urlString))completion {
-  completion([self URLStringForConfig:config]);
++ (void)requestForBulletinContext:(NSPBulletinContext*)context
+                           config:(NSPushServiceConfig*)config
+                       completion:(void (^)(NSPushRequest* request))completion {
+  completion([self requestForBulletinContext:context config:config]);
 }
 
-+ (NSString*)URLStringForConfig:(NSPushServiceConfig*)config {
-  // Abstract: subclasses must override the sync URL builder (or the async
++ (NSPushRequest*)requestForBulletinContext:(NSPBulletinContext*)context
+                                     config:(NSPushServiceConfig*)config {
+  // Abstract: subclasses must override the sync request builder (or the async
   // variant). Raising here fails loudly if a service forgets.
   [self doesNotRecognizeSelector:_cmd];
   return nil;
-}
-
-+ (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context
-                                     config:(NSPushServiceConfig*)config {
-  return [self baseInfoDictForBulletinContext:context config:config];
 }
 
 + (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config {
