@@ -1,4 +1,5 @@
 #import "NSPRootListController.h"
+#import "NSPusherManager.h"
 
 @implementation NSPRootListController
 

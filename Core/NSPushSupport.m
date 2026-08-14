@@ -1,5 +1,5 @@
 #import "NSPushSupport.h"
-#import "../global.h"
+#import "NSPBBServer.h"
 #import "../helpers.h"
 #import "iOSVersion.m"
 

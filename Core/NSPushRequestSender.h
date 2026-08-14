@@ -1,4 +1,4 @@
-#import "../global.h"
+#import "NSPushConstants.h"
 #import <BulletinBoard/BBBulletin.h>
 #import <Foundation/Foundation.h>
 

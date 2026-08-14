@@ -6,6 +6,8 @@
 #import "global.h"
 #import "helpers.h"
 #import "iOSVersion.m"
+#import "UIImage+ReplaceColor.h"
+#import "Preferences/NSPusherManager.h"
 
 static void pusherPrefsChanged() { [[NSPusher sharedInstance] reloadConfig]; }
 

@@ -1,3 +1,4 @@
+#import "NSPusherManager.h"
 #import "../global.h"
 #import "../helpers.h"
 

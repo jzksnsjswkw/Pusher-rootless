@@ -1,5 +1,9 @@
 include $(THEOS)/makefiles/common.mk
 
+# Keep the built-in service list in sync when building the bundle standalone.
+before-all::
+	../scripts/generate_builtin_services.sh
+
 BUNDLE_NAME = Pusher
 # Pusher_FILES = NSPRootListController.m NSPDeviceListController.m NSPServiceListController.m NSPServiceController.m NSPSharedSpecifiers.m NSPCustomAppController.m NSPCustomizeAppsController.m NSPAppSelectionController.m NSPSoundListController.m NSPSNSListController.m CCLocalMaximum.m CCColorCube.m NSPPSViewControllerWithColoredUI.m NSPPSListControllerWithColoredUI.m NSPAppListController.m NSPLogController.m ../UIImage+ReplaceColor.m NSPusherManager.m NSPGlobalSettingsListController.m
 Pusher_FILES = NSPRootListController.m NSPServiceListController.m NSPServiceController.m NSPSharedSpecifiers.m NSPCustomAppController.m NSPCustomizeAppsController.m NSPAppSelectionController.m NSPAppMultiSelectionController.m NSPDeviceSoundListController.m NSPSNSListController.m CCLocalMaximum.m CCColorCube.m NSPPSViewControllerWithColoredUI.m NSPPSListControllerWithColoredUI.m NSPColoredUI.m NSPAppListController.m NSPLogController.m ../UIImage+ReplaceColor.m NSPusherManager.m NSPGlobalSettingsListController.m

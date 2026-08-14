@@ -1,4 +1,4 @@
-#import "../global.h"
+#import "NSPushConstants.h"
 #import <Foundation/Foundation.h>
 #import "NSPushConfig.h"
 
@@ -90,6 +90,5 @@
 
 + (void)registerServiceClass:(Class)serviceClass forName:(NSString*)name;
 + (Class)serviceClassForName:(NSString*)name;
-+ (NSArray*)builtinServiceNames;
 
 @end

@@ -1,6 +1,7 @@
 #import "NSPushFilter.h"
 #import "NSPushConfig.h"
-#import "global.h"
+#import "NSPushConstants.h"
+#import "NSPBBServer.h"
 #import "helpers.h"
 
 @implementation NSPushFilter

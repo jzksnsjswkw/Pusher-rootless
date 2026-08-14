@@ -1,5 +1,5 @@
 #import "NSPushRequestSender.h"
-#import "../global.h"
+#import "NSPushConstants.h"
 #import "../helpers.h"
 #import "NSPushLog.h"
 #import "NSPushSupport.h"

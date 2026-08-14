@@ -1,9 +1,11 @@
 #import "NSPushService.h"
-#import "../global.h"
+#import "NSPushConstants.h"
+#import "NSPBBServer.h"
 #import "../helpers.h"
 #import "NSPushConfig.h"
 #import "NSPushSupport.h"
 #import "Services/NSPCustomService.h"
+#import "../Generated/BuiltinServices.generated.h"
 #import <UIKit/UIKit.h>
 
 @implementation NSPushServiceManager
@@ -26,10 +28,6 @@ static dispatch_once_t gServiceRegistryToken;
   });
   Class cls = gServiceRegistry[name];
   return cls ?: NSPCustomService.class;
-}
-
-+ (NSArray*)builtinServiceNames {
-  return BUILTIN_PUSHER_SERVICES;
 }
 
 @end
