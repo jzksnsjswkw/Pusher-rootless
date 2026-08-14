@@ -12,20 +12,13 @@
   return PUSHER_SERVICE_FEISHU;
 }
 
-+ (NSString*)URLStringForConfig:(NSPushServiceConfig*)config {
-  NSString* key = config.rawPrefs[@"key"];
-  NSString* url = config.rawPrefs[@"url"] ?: @"";
-  return [url stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
-                                         withString:key ?: @""];
-}
-
 + (NSString*)urlForEventName:(NSString*)eventName
                       dbName:(NSString*)dbName
                    serverURL:(NSString*)serverURL {
   return PUSHER_SERVICE_FEISHU_URL;
 }
 
-+ (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context
++ (NSPushRequest*)requestForBulletinContext:(NSPBulletinContext*)context
                                      config:(NSPushServiceConfig*)config {
   BBBulletin* bulletin = context.bulletin;
 
@@ -55,7 +48,12 @@
     }
   }
 
-  return @{@"msg_type" : @"text", @"content" : @{@"text" : message ?: @""}};
+  return [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
+                                     headers:nil
+                                    infoDict:@{
+                                      @"msg_type" : @"text",
+                                      @"content" : @{@"text" : message ?: @""}
+                                    }];
 }
 
 @end

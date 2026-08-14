@@ -13,11 +13,14 @@
   return PUSHER_SERVICE_BARK;
 }
 
-+ (NSString*)URLStringForConfig:(NSPushServiceConfig*)config {
-  NSString* key = config.rawPrefs[@"key"];
-  NSString* url = config.rawPrefs[@"url"] ?: @"";
-  return [url stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
-                                         withString:key ?: @""];
++ (NSPushRequest*)requestForBulletinContext:(NSPBulletinContext*)context
+                                     config:(NSPushServiceConfig*)config {
+  return [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
+                                     headers:nil
+                                    infoDict:@{
+                                      @"title" : context.title ?: @"",
+                                      @"body" : context.message ?: @""
+                                    }];
 }
 
 + (NSString*)urlForEventName:(NSString*)eventName
@@ -42,11 +45,6 @@
     @"serverURL" : servicePrefs[NSPPreferenceServiceServerURLKey]
         ?: @"https://api.day.app"
   };
-}
-
-+ (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context
-                                     config:(NSPushServiceConfig*)config {
-  return @{@"title" : context.title ?: @"", @"body" : context.message ?: @""};
 }
 
 @end

@@ -265,59 +265,55 @@
   // from background queues, and bulletin/config are read-only model objects.
   dispatch_async(
       dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        NSDictionary* infoDict =
-            [serviceClass infoDictForBulletinContext:[NSPBulletinContext
-                                                         contextWithBulletin:
-                                                             bulletin
-                                                                      appID:appID
-                                                                    appName:
-                                                                        appName
-                                                                      title:title
-                                                                    message:message
-                                                                     isTest:isTest]
-                                              config:effectiveConfig];
-
-        NSString* method =
-            XStrDefault(effectiveConfig.rawPrefs[@"method"], @"POST");
-        NSDictionary* headers = [serviceClass headersForConfig:effectiveConfig];
-        // URL may resolve asynchronously (e.g. WeChat access token); send the
-        // request only once the final URL is known.
+        NSPBulletinContext* context = [NSPBulletinContext
+            contextWithBulletin:bulletin
+                          appID:appID
+                        appName:appName
+                          title:title
+                        message:message
+                         isTest:isTest];
+        // The request may resolve asynchronously (e.g. WeChat access token);
+        // send it only once the final request is known.
         [serviceClass
-            URLStringForConfig:effectiveConfig
-                    completion:^(NSString* urlString) {
-                      if (!urlString) {
-                        // Service failed to build a URL (e.g. WeChat couldn't
-                        // fetch an access token); log the failure and skip the
-                        // send.
-                        XLog(@"[S:%@,A:%@] Failed to build URL", service,
-                             appName);
-                        if (!isTest) {
-                          [NSPushLog
-                              addToLogIfEnabledForService:service
-                                                 bulletin:bulletin
-                                                    label:@"Failed to build URL"
-                                                   object:nil];
-                        }
-                        return;
-                      }
-                      [[NSPushRequestSender sharedInstance]
-                          sendRequestWithURLString:urlString
-                                          infoDict:infoDict
-                                           headers:headers
-                                            method:method
-                                         logString:XStr(@"[S:%@,A:%@]", service,
-                                                        appName)
-                                           service:service
-                                          bulletin:bulletin];
-                      XLog(@"[S:%@,T:%d,A:%@] Pushed", service, isTest,
-                           appName);
-                      if (!isTest) {
-                        [NSPushLog addToLogIfEnabledForService:service
-                                                      bulletin:bulletin
-                                                         label:@"Pushed"
-                                                        object:nil];
-                      }
-                    }];
+            requestForBulletinContext:context
+                               config:effectiveConfig
+                           completion:^(NSPushRequest* request) {
+                             if (!request) {
+                               // Service failed to build a request (e.g. WeChat
+                               // couldn't fetch an access token); log the
+                               // failure and skip the send.
+                               XLog(@"[S:%@,A:%@] Failed to build request",
+                                    service, appName);
+                               if (!isTest) {
+                                 [NSPushLog
+                                     addToLogIfEnabledForService:service
+                                                        bulletin:bulletin
+                                                           label:
+                                                               @"Failed to "
+                                                               @"build request"
+                                                          object:nil];
+                               }
+                               return;
+                             }
+                             // The HTTP method is a per-service user pref;
+                             // apply it on top of the service's default.
+                             request.method = XStrDefault(
+                                 effectiveConfig.rawPrefs[@"method"], @"POST");
+                             [[NSPushRequestSender sharedInstance]
+                                 sendRequest:request
+                                   logString:XStr(@"[S:%@,A:%@]", service,
+                                                  appName)
+                                     service:service
+                                    bulletin:bulletin];
+                             XLog(@"[S:%@,T:%d,A:%@] Pushed", service, isTest,
+                                  appName);
+                             if (!isTest) {
+                               [NSPushLog addToLogIfEnabledForService:service
+                                                             bulletin:bulletin
+                                                                label:@"Pushed"
+                                                               object:nil];
+                             }
+                           }];
       });
 }
 

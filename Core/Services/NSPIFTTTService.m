@@ -13,13 +13,6 @@
   return PUSHER_SERVICE_IFTTT;
 }
 
-+ (NSString*)URLStringForConfig:(NSPushServiceConfig*)config {
-  NSString* key = config.rawPrefs[@"key"];
-  NSString* url = config.rawPrefs[@"url"] ?: @"";
-  return [url stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
-                                         withString:key ?: @""];
-}
-
 + (NSString*)urlForEventName:(NSString*)eventName
                       dbName:(NSString*)dbName
                    serverURL:(NSString*)serverURL {
@@ -49,33 +42,38 @@
   return includeIcon && includeIcon.boolValue;
 }
 
-+ (NSDictionary*)infoDictForBulletinContext:(NSPBulletinContext*)context
++ (NSPushRequest*)requestForBulletinContext:(NSPBulletinContext*)context
                                      config:(NSPushServiceConfig*)config {
   NSDictionary* data = [self baseInfoDictForBulletinContext:context
-                                                     config:config];
+                                                      config:config];
 
   NSNumber* curateData = config.rawPrefs[@"curateData"];
   // curateData = curated single-field webhook format (value1-3, icon or date
   // as value3); otherwise the whole info dict is JSON-serialized into value1.
+  NSDictionary* infoDict;
   if (curateData && curateData.boolValue) {
     NSString* dateStr = [self dateStringForDate:context.bulletin.date
                                          config:config];
-    return @{
+    infoDict = @{
       @"value1" : context.title ?: @"",
       @"value2" : context.message ?: @"",
       @"value3" : data[@"icon"] ?: dateStr
     };
+  } else {
+    id json = data;
+    NSData* jsonData = [NSJSONSerialization dataWithJSONObject:json
+                                                       options:0
+                                                         error:nil];
+    if (jsonData) {
+      json = [[NSString alloc] initWithData:jsonData
+                                   encoding:NSUTF8StringEncoding];
+    }
+    infoDict = @{@"value1" : json};
   }
 
-  id json = data;
-  NSData* jsonData = [NSJSONSerialization dataWithJSONObject:json
-                                                     options:0
-                                                       error:nil];
-  if (jsonData) {
-    json = [[NSString alloc] initWithData:jsonData
-                                 encoding:NSUTF8StringEncoding];
-  }
-  return @{@"value1" : json};
+  return [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
+                                     headers:nil
+                                    infoDict:infoDict];
 }
 
 @end
