@@ -1,5 +1,6 @@
 #import "NSPusher.h"
-#import "../global.h"
+#import "NSPushConstants.h"
+#import "NSPBBServer.h"
 #import "../helpers.h"
 #import "NSPushConfig.h"
 #import "NSPushFilter.h"
@@ -140,9 +141,12 @@
                                     object:nil];
     return;
   }
-  // Cap the history, then just reset it (keeps the check simple and bounded).
-  if (_recentNotificationTitles.count >= PUSHER_LOOP_PREVENTION_WINDOW) {
-    [_recentNotificationTitles removeAllObjects];
+  // Cap the history as a sliding window: drop the oldest entry once the
+  // window fills up, instead of clearing the whole array. Clearing would reset
+  // the duplicate count mid-loop, so a genuine loop (THRESHOLD repeats within
+  // the last WINDOW notifications) could never be detected.
+  while (_recentNotificationTitles.count >= PUSHER_LOOP_PREVENTION_WINDOW) {
+    [_recentNotificationTitles removeObjectAtIndex:0];
   }
   [_recentNotificationTitles addObject:title];
 
