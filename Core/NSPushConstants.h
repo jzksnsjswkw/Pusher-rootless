@@ -80,6 +80,12 @@
 // single top-level key: BuiltInServices[serviceName] = { field : value, ... }.
 #define NSPPreferenceBuiltInServicesKey @"BuiltInServices"
 
+// Global (non-service) settings that used to be flat keys now live in one
+// nested object under this key: Global = { appList : [...], appListIsBlacklist
+// : BOOL }. NSPPreferenceGlobalBLPrefix is kept only for migrating the legacy
+// flat `GlobalBL-<appID>` keys.
+#define NSPPreferenceGlobalKey @"Global"
+
 // Generic per-service field names (shared across all built-in services).
 #define NSPPreferenceServiceEnabledKey @"enabled"
 #define NSPPreferenceServiceTokenKey @"token"
