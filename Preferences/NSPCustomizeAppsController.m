@@ -5,7 +5,9 @@
 #import "NSPCustomizeAppsController.h"
 #import "NSPSharedSpecifiers.h"
 #import "UIImageIcon.h"
+#import "NSPusherManager.h"
 
+#import "../Generated/BuiltinServices.generated.h"
 #import "../global.h"
 #import "../helpers.h"
 #import <notify.h>
@@ -59,9 +61,18 @@
   }
   [self updateTitle];
   if (_isCustomService) {
-    [NSPSharedSpecifiers setPreference:(__bridge CFStringRef)_prefsKey
-                                 value:(__bridge CFPropertyListRef)_customApps
-                          shouldNotify:YES];
+    NSMutableDictionary* customServices = [(
+        [NSPSharedSpecifiers
+            getPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey]
+            ?: @{}) mutableCopy];
+    NSMutableDictionary* serviceObj =
+        [(customServices[_service] ?: @{}) mutableCopy];
+    serviceObj[NSPPreferenceServiceCustomAppsKey] = _customApps;
+    customServices[_service] = serviceObj;
+    [NSPSharedSpecifiers
+        setPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey
+                value:(__bridge CFPropertyListRef)customServices
+         shouldNotify:YES];
   } else {
     NSMutableDictionary* builtInServices = [(
         [NSPSharedSpecifiers
@@ -87,9 +98,6 @@
   _isCustomService =
       [self.specifier propertyForKey:@"isCustomService"] &&
       ((NSNumber*)[self.specifier propertyForKey:@"isCustomService"]).boolValue;
-  _prefsKey =
-      (_isCustomService ? NSPPreferenceCustomServiceCustomAppsKey(_service)
-                        : NSPPreferenceBuiltInServicesKey);
 
   _lastTargetAppID = nil;
   _lastTargetIndexPath = nil;
@@ -151,7 +159,8 @@
   if (_isCustomService) {
     serviceDefaults =
         (prefs[NSPPreferenceCustomServicesKey] ?: @{})[_service] ?: @{};
-    _customApps = [(prefs[_prefsKey] ?: @{}) mutableCopy];
+    _customApps = [(serviceDefaults[NSPPreferenceServiceCustomAppsKey]
+                        ?: @{}) mutableCopy];
   } else {
     NSDictionary* builtInServices =
         (NSDictionary*)prefs[NSPPreferenceBuiltInServicesKey] ?: @{};

@@ -1,6 +1,8 @@
 #import "NSPServiceListController.h"
 #import "NSPServiceController.h"
 #import "NSPSharedSpecifiers.h"
+#import "NSPusherManager.h"
+#import "../Generated/BuiltinServices.generated.h"
 
 @implementation NSPServiceListController
 
@@ -435,8 +437,10 @@
     [_serviceImages removeObjectForKey:service];
     [self saveCustomServices];
 
-    // Also remove the service's flat pref keys (app list / custom apps) so a
-    // recreated service of the same name doesn't resurrect old data.
+    // Also remove the service's flat legacy pref keys (app list / custom
+    // apps) so a recreated service of the same name doesn't resurrect old
+    // data. New installs store these nested inside the service object, but
+    // pre-migration installs may still have the flat keys around.
     NSString* blPrefix = NSPPreferenceCustomServiceBLPrefix(service);
     NSString* customAppsKey =
         NSPPreferenceCustomServiceCustomAppsKey(service);
@@ -560,6 +564,9 @@
       newPrefs = [NSMutableDictionary new];
     }
 
+    // Legacy-only: flat custom-apps / app-list keys for the old name, kept
+    // for pre-migration installs. Current installs store everything nested
+    // inside CustomServices[service], which is renamed via _customServices.
     NSDictionary* keysToMigrate = @{
       NSPPreferenceCustomServiceCustomAppsKey(currService) :
           NSPPreferenceCustomServiceCustomAppsKey(newServiceName)
