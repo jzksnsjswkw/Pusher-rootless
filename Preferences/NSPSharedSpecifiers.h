@@ -27,4 +27,7 @@
 + (NSArray*)builtInServiceAppListForService:(NSString*)service;
 + (void)setBuiltInServiceAppList:(NSArray*)appList
                       forService:(NSString*)service;
++ (NSArray*)customServiceAppListForService:(NSString*)service;
++ (void)setCustomServiceAppList:(NSArray*)appList
+                     forService:(NSString*)service;
 @end

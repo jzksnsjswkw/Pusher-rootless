@@ -11,7 +11,6 @@
   NSString* _service;
   NSMutableDictionary* _customApps;
   // ALApplicationList *_appList;
-  NSString* _prefsKey;
   NSString* _lastTargetAppID;
   NSIndexPath* _lastTargetIndexPath;
 

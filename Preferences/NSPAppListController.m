@@ -12,6 +12,9 @@
 
   _prefix = [self.specifier propertyForKey:@"ALSettingsKeyPrefix"];
   _service = [self.specifier propertyForKey:@"service"];
+  _isCustomService =
+      [self.specifier propertyForKey:@"isCustomService"] &&
+      ((NSNumber*)[self.specifier propertyForKey:@"isCustomService"]).boolValue;
 }
 
 - (void)loadPreferences {
@@ -34,12 +37,18 @@
   }
   _prefix = [self.specifier propertyForKey:@"ALSettingsKeyPrefix"];
   _service = [self.specifier propertyForKey:@"service"];
-  // Built-in services store their app list as an array inside the service
-  // object (no ALSettingsKeyPrefix). Global and custom services use the flat
-  // prefixed-key scheme.
+  _isCustomService =
+      [self.specifier propertyForKey:@"isCustomService"] &&
+      ((NSNumber*)[self.specifier propertyForKey:@"isCustomService"]).boolValue;
+  // Built-in and custom services store their app list as an array inside the
+  // service object (no ALSettingsKeyPrefix). Only the global app list uses the
+  // flat prefixed-key scheme.
   if (_service && !_prefix) {
-    NSArray* appList =
-        [NSPSharedSpecifiers builtInServiceAppListForService:_service];
+    NSArray* appList = _isCustomService
+                           ? [NSPSharedSpecifiers
+                                 customServiceAppListForService:_service]
+                           : [NSPSharedSpecifiers
+                                 builtInServiceAppListForService:_service];
     [_selectedApplications addObjectsFromArray:appList];
   } else {
     for (id key in prefs.allKeys) {
@@ -64,9 +73,15 @@
   }
 
   if (_service && !_prefix) {
-    [NSPSharedSpecifiers
-        setBuiltInServiceAppList:_selectedApplications.allObjects
-                      forService:_service];
+    if (_isCustomService) {
+      [NSPSharedSpecifiers
+          setCustomServiceAppList:_selectedApplications.allObjects
+                       forService:_service];
+    } else {
+      [NSPSharedSpecifiers
+          setBuiltInServiceAppList:_selectedApplications.allObjects
+                        forService:_service];
+    }
   } else {
     NSString* key = XStr(@"%@%@", _prefix, appID);
     CFPreferencesSetValue((__bridge CFStringRef)key,

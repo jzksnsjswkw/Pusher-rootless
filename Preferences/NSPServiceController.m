@@ -1,10 +1,11 @@
 #import "NSPServiceController.h"
 #import "NSPCustomizeAppsController.h"
 #import "NSPSharedSpecifiers.h"
-
+#import "NSPusherManager.h"
 #import "../global.h"
 #import "../helpers.h"
 #import <notify.h>
+#import <AppSupport/CPDistributedMessagingCenter.h>
 
 @implementation NSPServiceController
 
@@ -79,6 +80,11 @@
     NSMutableArray* allSpecifiers = nil;
     NSArray* sharedSpecifiers = nil;
 
+    // Cells that must not get nested-preference setter/getter forwarding:
+    // groups (headers), buttons (URL actions), links (navigation to detail
+    // controllers that manage their own data).
+    NSArray* specialCells = @[ @(PSGroupCell), @(PSButtonCell), @(PSLinkCell) ];
+
     if (_isCustom) {
       allSpecifiers = [[NSPSharedSpecifiers getCustom:_service
                                                   ref:self] mutableCopy];
@@ -87,6 +93,24 @@
       allSpecifiers = [[self loadSpecifiersFromPlistName:_service
                                                   target:self] mutableCopy];
       sharedSpecifiers = [NSPSharedSpecifiers get:_service];
+
+      // The service plists (Bark/Feishu/... .plist) declare plain cells with
+      // defaults=com.noahsaso.pusher and a flat top-level key. Since commit
+      // 1e90930 the actual storage is nested under
+      // BuiltInServices[service][key], so without forwarding these cells would
+      // read/write keys loadSnapshot no longer reads. Forward them the same
+      // way GlobalAndServices specifiers are forwarded below.
+      for (PSSpecifier* specifier in allSpecifiers) {
+        if ([specialCells containsObject:@(specifier.cellType)]) {
+          continue;
+        }
+        [specifier setProperty:_service forKey:@"service"];
+        [specifier setProperty:@NO forKey:@"isCustomApp"];
+        specifier->setter =
+            @selector(setPreferenceValue:forBuiltInServiceSpecifier:);
+        specifier->getter = @selector(readBuiltInServicePreferenceValue:);
+        specifier.target = NSPSharedSpecifiers.class;
+      }
     }
 
     // Get preferences for counting
@@ -110,10 +134,9 @@
         if (XEq(specifier.name, @"App List")) {
           int count = 0;
           if (_isCustom) {
-            count = [NSPSharedSpecifiers
-                countAppIDsWithPrefix:prefs
-                               prefix:[specifier propertyForKey:
-                                                     @"ALSettingsKeyPrefix"]];
+            count = (int)[NSPSharedSpecifiers
+                        customServiceAppListForService:_service]
+                        .count;
           } else {
             count = (int)[NSPSharedSpecifiers
                         builtInServiceAppListForService:_service]
@@ -130,7 +153,8 @@
           NSDictionary* customApps = nil;
           if (_isCustom) {
             customApps = (NSDictionary*)
-                prefs[NSPPreferenceCustomServiceCustomAppsKey(_service)];
+                ((prefs[NSPPreferenceCustomServicesKey] ?: @{})
+                    [_service][NSPPreferenceServiceCustomAppsKey]);
           } else {
             NSDictionary* builtInServices =
                 (NSDictionary*)prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
@@ -153,8 +177,6 @@
     // but no plist group cell carries that identifier, so the branch was
     // unreachable and the plain append below is the only path that ever ran.
     [allSpecifiers addObjectsFromArray:sharedSpecifiers];
-
-    NSArray* specialCells = @[ @(PSGroupCell), @(PSButtonCell), @(PSLinkCell) ];
 
     NSArray* globalSpecifiers =
         [self loadSpecifiersFromPlistName:@"GlobalAndServices" target:self];

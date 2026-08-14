@@ -1,6 +1,7 @@
 #import "NSPushConfig.h"
 #import "NSPushService.h"
-#import "global.h"
+#import "../Generated/BuiltinServices.generated.h"
+#import "NSPushConstants.h"
 #import "helpers.h"
 #import <notify.h>
 
@@ -391,6 +392,119 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
   return newPrefs;
 }
 
+static NSDictionary* migrateLegacyCustomServices(NSDictionary* prefs) {
+  // Scan the top-level keys for legacy flat custom-service data instead of
+  // iterating CustomServices: the flat keys (CustomService_<name>_CustomApps,
+  // CustomServiceBL_<name>-<appID>=YES) must be cleaned up even when the
+  // service no longer exists or the caller's CustomServices snapshot is
+  // stale (e.g. a cached copy without the service), otherwise the orphan keys
+  // linger forever.
+  NSMutableSet* legacyNames = [NSMutableSet new];
+  NSString* customAppsPrefix = @"CustomService_";
+  NSString* customAppsSuffix = @"_CustomApps";
+  NSString* blKeyPrefix = @"CustomServiceBL_";
+  for (NSString* key in prefs.allKeys) {
+    if (![key isKindOfClass:NSString.class]) {
+      continue;
+    }
+    if ([key hasPrefix:customAppsPrefix] && [key hasSuffix:customAppsSuffix]) {
+      [legacyNames addObject:[key substringWithRange:NSMakeRange(
+          customAppsPrefix.length,
+          key.length - customAppsPrefix.length - customAppsSuffix.length)]];
+    } else if ([key hasPrefix:blKeyPrefix]) {
+      NSString* rest = [key substringFromIndex:blKeyPrefix.length];
+      NSRange dash = [rest rangeOfString:@"-"];
+      if (dash.location != NSNotFound) {
+        [legacyNames addObject:[rest substringToIndex:dash.location]];
+      }
+    }
+  }
+  if (legacyNames.count == 0) {
+    return prefs;
+  }
+
+  BOOL migratedAny = NO;
+  NSMutableDictionary* newCustomServices =
+      [((NSDictionary*)prefs[NSPPreferenceCustomServicesKey] ?: @{}) mutableCopy];
+  NSMutableArray* keysToRemove = [NSMutableArray new];
+
+  for (NSString* service in legacyNames) {
+    // Only fold data into services that still exist; orphan flat keys for
+    // deleted services are removed outright.
+    NSMutableDictionary* serviceObj = nil;
+    if ([newCustomServices[service] isKindOfClass:NSDictionary.class]) {
+      serviceObj = [newCustomServices[service] mutableCopy];
+    }
+
+    // Flat CustomService_<service>_CustomApps -> nested customApps.
+    NSString* customAppsKey = NSPPreferenceCustomServiceCustomAppsKey(service);
+    NSDictionary* flatCustomApps = prefs[customAppsKey];
+    if (serviceObj && [flatCustomApps isKindOfClass:NSDictionary.class] &&
+        flatCustomApps.count > 0) {
+      NSMutableDictionary* nestedCustomApps =
+          [(serviceObj[NSPPreferenceServiceCustomAppsKey] ?: @{}) mutableCopy];
+      [nestedCustomApps addEntriesFromDictionary:flatCustomApps];
+      serviceObj[NSPPreferenceServiceCustomAppsKey] = nestedCustomApps;
+      migratedAny = YES;
+    }
+    [keysToRemove addObject:customAppsKey];
+
+    // Flat CustomServiceBL_<service>-<appID>=YES -> nested appList array.
+    NSString* blPrefix = NSPPreferenceCustomServiceBLPrefix(service);
+    NSArray* flatAppList = getAppIDsWithPrefix(prefs, blPrefix);
+    if (serviceObj && flatAppList.count > 0) {
+      NSMutableArray* nestedAppList = [NSMutableArray
+          arrayWithArray:(serviceObj[NSPPreferenceServiceAppListKey] ?: @[])];
+      for (NSString* appID in flatAppList) {
+        if (![nestedAppList containsObject:appID]) {
+          [nestedAppList addObject:appID];
+        }
+      }
+      serviceObj[NSPPreferenceServiceAppListKey] = nestedAppList;
+      migratedAny = YES;
+    }
+    for (NSString* key in prefs.allKeys) {
+      if ([key isKindOfClass:NSString.class] && [key hasPrefix:blPrefix] &&
+          ![keysToRemove containsObject:key]) {
+        [keysToRemove addObject:key];
+      }
+    }
+
+    if (serviceObj) {
+      newCustomServices[service] = serviceObj;
+    }
+  }
+
+  // Any actual flat keys to remove? (migratedAny only covers data moved into
+  // nested storage; orphan-only cleanups still need to write back.)
+  if (!migratedAny) {
+    for (NSString* key in keysToRemove) {
+      if (prefs[key] != nil) {
+        migratedAny = YES;
+        break;
+      }
+    }
+  }
+  if (!migratedAny) {
+    return prefs;
+  }
+
+  NSMutableDictionary* newPrefs = [prefs mutableCopy];
+  newPrefs[NSPPreferenceCustomServicesKey] = newCustomServices;
+  for (NSString* key in keysToRemove) {
+    [newPrefs removeObjectForKey:key];
+  }
+
+  CFPreferencesSetMultiple((__bridge CFDictionaryRef)newPrefs,
+                           (__bridge CFArrayRef)keysToRemove, PUSHER_APP_ID,
+                           kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+  CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
+                           kCFPreferencesAnyHost);
+  notify_post(PUSHER_PREFS_NOTIFICATION);
+  XLog(@"Migrated legacy custom service prefs");
+  return newPrefs;
+}
+
 @implementation NSPushPrefs
 
 + (NSPushConfigSnapshot*)loadSnapshot {
@@ -410,6 +524,7 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
   }
 
   prefs = migrateLegacyBuiltInServices(prefs);
+  prefs = migrateLegacyCustomServices(prefs);
 
   BOOL enabled = YES;
   NSInteger whenToPush = PUSHER_WHEN_TO_PUSH_EITHER;
@@ -447,7 +562,7 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
     servicePrefs[@"appListIsBlacklist"] =
         servicePrefs[@"appListIsBlacklist"] ?: @YES;
     servicePrefs[@"appList"] =
-        getAppIDsWithPrefix(prefs, NSPPreferenceCustomServiceBLPrefix(service));
+        customService[NSPPreferenceServiceAppListKey] ?: @[];
     servicePrefs[@"whenToPush"] =
         (!servicePrefs[@"whenToPush"] ||
          ((NSNumber*)servicePrefs[@"whenToPush"]).intValue ==
@@ -468,9 +583,8 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
     servicePrefs[@"sns"] = getSNSKeys(customService, NSPPreferenceSNSPrefix,
                                       prefs, NSPPreferenceSNSPrefix);
 
-    NSString* customAppsKey = NSPPreferenceCustomServiceCustomAppsKey(service);
-
-    NSDictionary* prefCustomApps = (NSDictionary*)prefs[customAppsKey] ?: @{};
+    NSDictionary* prefCustomApps =
+        (NSDictionary*)customService[NSPPreferenceServiceCustomAppsKey] ?: @{};
     NSMutableDictionary* customApps = [NSMutableDictionary new];
     for (NSString* customAppID in prefCustomApps.allKeys) {
       NSDictionary* customAppPrefs = prefCustomApps[customAppID];
