@@ -667,6 +667,12 @@ static NSDictionary* migrateLegacyGlobal(NSDictionary* prefs) {
       if (!customAppPrefs) {
         continue;
       }
+      // Skip disabled per-app overrides, mirroring the built-in service loop:
+      // default enabled, so only an explicit NO is skipped.
+      if (customAppPrefs[@"enabled"] &&
+          !((NSNumber*)customAppPrefs[@"enabled"]).boolValue) {
+        continue;
+      }
       customApps[customAppID] = [customAppPrefs copy];
     }
 
