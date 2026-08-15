@@ -53,10 +53,10 @@ static dispatch_once_t gServiceRegistryToken;
 }
 
 + (NSString*)replacedKeyURLStringForConfig:(NSPushServiceConfig*)config {
-  NSString* key = config.rawPrefs[@"key"];
-  NSString* url = config.rawPrefs[@"url"] ?: @"";
+  NSString* key = XStrDefault(config.rawPrefs[@"key"], @"");
+  NSString* url = XStrDefault(config.rawPrefs[@"url"], @"");
   return [url stringByReplacingOccurrencesOfString:@"REPLACE_KEY"
-                                         withString:key ?: @""];
+                                         withString:key];
 }
 
 + (NSString*)urlForEventName:(NSString*)eventName
@@ -120,23 +120,33 @@ static dispatch_once_t gServiceRegistryToken;
         image = [UIImage imageWithData:rawData];
       }
       if (image) {
-        NSNumber* imageShrinkFactor = config.rawPrefs[@"imageShrinkFactor"];
-        if (imageShrinkFactor) {
-          data[@"imageShrinkFactor"] = imageShrinkFactor;
+        id imageShrinkFactorValue = config.rawPrefs[@"imageShrinkFactor"];
+        if (imageShrinkFactorValue) {
+          data[@"imageShrinkFactor"] = imageShrinkFactorValue;
         }
 
-        NSNumber* imageMaxWidth = config.rawPrefs[@"imageMaxWidth"];
-        NSNumber* imageMaxHeight = config.rawPrefs[@"imageMaxHeight"];
+        // Guard the type before floatValue: NSString is also accepted because
+        // Preferences edit cells commonly store text values as NSString.
+        id imageMaxWidthValue = config.rawPrefs[@"imageMaxWidth"];
+        id imageMaxHeightValue = config.rawPrefs[@"imageMaxHeight"];
+        CGFloat imageMaxWidth = 0.0;
+        CGFloat imageMaxHeight = 0.0;
+        if ([imageMaxWidthValue isKindOfClass:NSNumber.class] ||
+            [imageMaxWidthValue isKindOfClass:NSString.class]) {
+          imageMaxWidth = [imageMaxWidthValue floatValue];
+        }
+        if ([imageMaxHeightValue isKindOfClass:NSNumber.class] ||
+            [imageMaxHeightValue isKindOfClass:NSString.class]) {
+          imageMaxHeight = [imageMaxHeightValue floatValue];
+        }
         CGFloat widthShrinkFactor = 0.0;
         CGFloat heightShrinkFactor = 0.0;
 
-        if (imageMaxWidth && imageMaxWidth.floatValue > 0.0 &&
-            image.size.width > imageMaxWidth.floatValue) {
-          widthShrinkFactor = image.size.width / imageMaxWidth.floatValue;
+        if (imageMaxWidth > 0.0 && image.size.width > imageMaxWidth) {
+          widthShrinkFactor = image.size.width / imageMaxWidth;
         }
-        if (imageMaxHeight && imageMaxHeight.floatValue > 0.0 &&
-            image.size.height > imageMaxHeight.floatValue) {
-          heightShrinkFactor = image.size.height / imageMaxHeight.floatValue;
+        if (imageMaxHeight > 0.0 && image.size.height > imageMaxHeight) {
+          heightShrinkFactor = image.size.height / imageMaxHeight;
         }
 
         // if either has a value, shrink with the largest factor

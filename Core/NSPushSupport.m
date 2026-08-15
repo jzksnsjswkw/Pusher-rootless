@@ -42,6 +42,17 @@
 }
 
 + (NSString*)base64IconDataForBundleID:(NSString*)bundleID {
+  // SBIconController / SBIconModel are SpringBoard UI objects that should only
+  // be touched on the main thread. The push pipeline builds payloads on a
+  // background queue, so hop to the main thread when needed.
+  if (![NSThread isMainThread]) {
+    __block NSString* result = nil;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+      result = [NSPushImage base64IconDataForBundleID:bundleID];
+    });
+    return result;
+  }
+
   SBApplicationIcon* icon =
       [((SBIconController*)[NSClassFromString(@"SBIconController")
             sharedInstance]).model expectedIconForDisplayIdentifier:bundleID];

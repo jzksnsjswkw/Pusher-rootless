@@ -1,4 +1,5 @@
 #import "NSPPushbulletService.h"
+#import "../../helpers.h"
 #import "../NSPushConfig.h"
 #import "../NSPushSupport.h"
 
@@ -45,7 +46,7 @@
   }
 
   return [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
-                                     headers:@{@"Access-Token" : config.rawPrefs[@"token"] ?: @""}
+                                     headers:@{@"Access-Token" : XStrDefault(config.rawPrefs[@"token"], @"")}
                                     infoDict:infoDict];
 }
 

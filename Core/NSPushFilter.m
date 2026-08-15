@@ -57,7 +57,9 @@
 + (NSString*)appListReasonIfAnyWithConfig:(NSPushServiceConfig*)config
                                     appID:(NSString*)appID {
   NSPushServiceConfig* serviceConfig = (NSPushServiceConfig*)config;
-  NSArray* serviceAppList = serviceConfig.appList;
+  NSArray* serviceAppList = [serviceConfig.appList isKindOfClass:NSArray.class]
+                                   ? serviceConfig.appList
+                                   : @[];
   BOOL appListContainsApp =
       [serviceAppList containsObject:appID];
   BOOL appListIsBlacklist = serviceConfig.appListIsBlacklist;

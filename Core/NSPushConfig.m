@@ -5,6 +5,69 @@
 #import "helpers.h"
 #import <notify.h>
 
+// Guarded prefs value accessors. Prefs plists can carry values of any class
+// (hand-edited, legacy flat keys, migration leftovers), and messaging
+// .boolValue/.intValue on the wrong class raises "unrecognized selector",
+// crashing SpringBoard on the push hot path. NSNumber and NSString are
+// accepted; anything else falls back to a safe default (NO / NSIntegerMin for
+// invalid values). For integer prefs, NSString must represent a complete
+// integer literal: partial or non-numeric strings ("abc", "12x") are treated
+// as invalid instead of silently parsing to 0.
+static BOOL NSPrefsBool(id value) {
+  if ([value isKindOfClass:NSNumber.class] ||
+      [value isKindOfClass:NSString.class]) {
+    return [value boolValue];
+  }
+  return NO;
+}
+
+static BOOL NSPrefsBoolResolved(id value, BOOL defaultValue) {
+  if ([value isKindOfClass:NSNumber.class] ||
+      [value isKindOfClass:NSString.class]) {
+    return [value boolValue];
+  }
+  return defaultValue;
+}
+
+static NSInteger NSPrefsInt(id value) {
+  if ([value isKindOfClass:NSNumber.class]) {
+    return [value integerValue];
+  }
+  if ([value isKindOfClass:NSString.class]) {
+    NSString* stringValue = [(NSString*)value
+        stringByTrimmingCharactersInSet:[NSCharacterSet
+                                            whitespaceAndNewlineCharacterSet]];
+    if (stringValue.length == 0) {
+      return NSIntegerMin;
+    }
+    NSScanner* scanner = [NSScanner scannerWithString:stringValue];
+    NSInteger result = 0;
+    if ([scanner scanInteger:&result] && [scanner isAtEnd]) {
+      return result;
+    }
+  }
+  return NSIntegerMin;
+}
+
+// Resolves a prefs integer to a real default, treating both invalid values and
+// the "-1 means default" segment-cell sentinel as "use default".
+static NSInteger NSPrefsIntResolved(id value, NSInteger defaultValue) {
+  NSInteger v = NSPrefsInt(value);
+  return (v == NSIntegerMin || v == PUSHER_SEGMENT_CELL_DEFAULT) ? defaultValue : v;
+}
+
+static NSDictionary* NSPrefsDictionary(id value) {
+  return [value isKindOfClass:NSDictionary.class] ? value : nil;
+}
+
+static NSArray* NSPrefsArray(id value) {
+  return [value isKindOfClass:NSArray.class] ? value : nil;
+}
+
+static NSString* NSPrefsString(id value, NSString* defaultValue) {
+  return [value isKindOfClass:NSString.class] ? (NSString*)value : defaultValue;
+}
+
 @interface NSPushServiceConfig ()
 @property(nonatomic, readwrite, copy) NSString* name;
 @property(nonatomic, readwrite) BOOL isCustomService;
@@ -28,7 +91,7 @@
 }
 
 - (BOOL)appListIsBlacklist {
-  return ((NSNumber*)self.rawPrefs[@"appListIsBlacklist"]).boolValue;
+  return NSPrefsBoolResolved(self.rawPrefs[@"appListIsBlacklist"], YES);
 }
 
 - (NSArray*)sns {
@@ -36,19 +99,21 @@
 }
 
 - (BOOL)snsIsAnd {
-  return ((NSNumber*)self.rawPrefs[@"snsIsAnd"]).boolValue;
+  return NSPrefsBoolResolved(self.rawPrefs[@"snsIsAnd"], YES);
 }
 
 - (BOOL)snsRequireANWithOR {
-  return ((NSNumber*)self.rawPrefs[@"snsRequireANWithOR"]).boolValue;
+  return NSPrefsBoolResolved(self.rawPrefs[@"snsRequireANWithOR"], YES);
 }
 
 - (NSInteger)whenToPush {
-  return ((NSNumber*)self.rawPrefs[@"whenToPush"]).intValue;
+  return NSPrefsIntResolved(self.rawPrefs[@"whenToPush"],
+                            PUSHER_WHEN_TO_PUSH_EITHER);
 }
 
 - (NSInteger)whatNetwork {
-  return ((NSNumber*)self.rawPrefs[@"whatNetwork"]).intValue;
+  return NSPrefsIntResolved(self.rawPrefs[@"whatNetwork"],
+                            PUSHER_WHAT_NETWORK_ANY);
 }
 
 - (NSDictionary*)customApps {
@@ -56,10 +121,12 @@
 }
 
 - (NSPushServiceConfig*)effectiveConfigForAppID:(NSString*)appID {
-  // appList matching is done against lowercased app IDs (see
-  // NSPushFilter.appListReasonIfAnyWithConfig:), so look up the per-app
-  // override case-insensitively too; otherwise a custom app entered with a
-  // different case silently never applies.
+  // The service app-list filter in NSPushFilter compares case-sensitively
+  // against the current appID, matching the exact-case bundle IDs stored by
+  // the UI. Per-app override lookup is kept case-insensitive as a separate
+  // tolerance layer: customApps may have been entered with a different case
+  // (or migrated from older lowercased storage), so we still apply the
+  // override when only the case differs.
   NSDictionary* customApp = nil;
   NSString* lookupAppID = appID.lowercaseString;
   if (self.customApps[lookupAppID]) {
@@ -131,7 +198,7 @@ static NSArray* getAppIDsWithPrefix(NSDictionary* prefs, NSString* prefix) {
     if (![key isKindOfClass:NSString.class]) {
       continue;
     }
-    if ([key hasPrefix:prefix] && ((NSNumber*)prefs[key]).boolValue) {
+    if ([key hasPrefix:prefix] && NSPrefsBool(prefs[key])) {
       NSString* subKey = [key substringFromIndex:prefix.length];
       // Keep the original case: app IDs are stored (GlobalBL-<appID> flat
       // keys, AltList applicationIdentifier) in their exact bundle-ID case,
@@ -151,21 +218,21 @@ static NSArray* getSNSKeys(NSDictionary* prefs, NSString* prefix,
     NSString* key = XStr(@"%@%@", prefix, snsKey);
     id val = prefs[key];
     if (val) {
-      if (((NSNumber*)val).boolValue) {
+      if (NSPrefsBool(val)) {
         [keys addObject:snsKey];
       }
       continue;
     } else if (!val && backupPrefs) {
       NSString* backupKey = XStr(@"%@%@", backupPrefix, snsKey);
       if (backupPrefs[backupKey]) {
-        if (((NSNumber*)backupPrefs[backupKey]).boolValue) {
+        if (NSPrefsBool(backupPrefs[backupKey])) {
           [keys addObject:snsKey];
         }
         continue;
       }
     }
     if (!val && pusherDefaultSNSKeys[snsKey] &&
-        ((NSNumber*)pusherDefaultSNSKeys[snsKey]).boolValue) {
+        NSPrefsBool(pusherDefaultSNSKeys[snsKey])) {
       [keys addObject:snsKey];
     }
   }
@@ -257,7 +324,7 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
     // appListIsBlacklist defaults to YES; only a non-default NO is migrated,
     // a YES value is dropped with the flat keys.
     v = prefs[XStr(@"%@AppListIsBlacklist", service)];
-    if (v && !((NSNumber*)v).boolValue) {
+    if (v && !NSPrefsBoolResolved(v, YES)) {
       serviceObj[NSPPreferenceServiceAppListIsBlacklistKey] = v;
     }
     MIGRATE_FIELD(NSPPreferenceServiceIncludeIconKey,
@@ -428,8 +495,9 @@ static NSDictionary* migrateLegacyCustomServices(NSDictionary* prefs) {
   }
 
   BOOL migratedAny = NO;
-  NSMutableDictionary* newCustomServices =
-      [((NSDictionary*)prefs[NSPPreferenceCustomServicesKey] ?: @{}) mutableCopy];
+  NSDictionary* rawCustomServices =
+      NSPrefsDictionary(prefs[NSPPreferenceCustomServicesKey]);
+  NSMutableDictionary* newCustomServices = [rawCustomServices ?: @{} mutableCopy];
   NSMutableArray* keysToRemove = [NSMutableArray new];
 
   for (NSString* service in legacyNames) {
@@ -445,8 +513,10 @@ static NSDictionary* migrateLegacyCustomServices(NSDictionary* prefs) {
     NSDictionary* flatCustomApps = prefs[customAppsKey];
     if (serviceObj && [flatCustomApps isKindOfClass:NSDictionary.class] &&
         flatCustomApps.count > 0) {
+      NSDictionary* existingCustomApps =
+          NSPrefsDictionary(serviceObj[NSPPreferenceServiceCustomAppsKey]);
       NSMutableDictionary* nestedCustomApps =
-          [(serviceObj[NSPPreferenceServiceCustomAppsKey] ?: @{}) mutableCopy];
+          [existingCustomApps ?: @{} mutableCopy];
       [nestedCustomApps addEntriesFromDictionary:flatCustomApps];
       serviceObj[NSPPreferenceServiceCustomAppsKey] = nestedCustomApps;
       migratedAny = YES;
@@ -457,8 +527,10 @@ static NSDictionary* migrateLegacyCustomServices(NSDictionary* prefs) {
     NSString* blPrefix = NSPPreferenceCustomServiceBLPrefix(service);
     NSArray* flatAppList = getAppIDsWithPrefix(prefs, blPrefix);
     if (serviceObj && flatAppList.count > 0) {
-      NSMutableArray* nestedAppList = [NSMutableArray
-          arrayWithArray:(serviceObj[NSPPreferenceServiceAppListKey] ?: @[])];
+      NSArray* existingAppList =
+          NSPrefsArray(serviceObj[NSPPreferenceServiceAppListKey]);
+      NSMutableArray* nestedAppList =
+          [NSMutableArray arrayWithArray:existingAppList ?: @[]];
       for (NSString* appID in flatAppList) {
         if (![nestedAppList containsObject:appID]) {
           [nestedAppList addObject:appID];
@@ -526,7 +598,7 @@ static NSDictionary* migrateLegacyGlobal(NSDictionary* prefs) {
       continue;
     }
     if ([key hasPrefix:NSPPreferenceGlobalBLPrefix]) {
-      if (((NSNumber*)prefs[key]).boolValue) {
+      if (NSPrefsBool(prefs[key])) {
         [flatAppIDs addObject:[key substringFromIndex:NSPPreferenceGlobalBLPrefix.length]];
       }
       [keysToRemove addObject:key];
@@ -542,8 +614,10 @@ static NSDictionary* migrateLegacyGlobal(NSDictionary* prefs) {
   NSMutableDictionary* global = [([prefs[NSPPreferenceGlobalKey] isKindOfClass:NSDictionary.class]
                                       ? prefs[NSPPreferenceGlobalKey]
                                       : @{}) mutableCopy];
-  NSMutableArray* appList = [NSMutableArray
-      arrayWithArray:(global[NSPPreferenceServiceAppListKey] ?: @[])];
+  NSArray* existingAppList =
+      NSPrefsArray(global[NSPPreferenceServiceAppListKey]);
+  NSMutableArray* appList =
+      [NSMutableArray arrayWithArray:existingAppList ?: @[]];
   for (NSString* appID in flatAppIDs) {
     if (![appList containsObject:appID]) {
       [appList addObject:appID];
@@ -552,7 +626,7 @@ static NSDictionary* migrateLegacyGlobal(NSDictionary* prefs) {
   if (appList.count > 0) {
     global[NSPPreferenceServiceAppListKey] = appList;
   }
-  if (isBlacklist && !((NSNumber*)isBlacklist).boolValue) {
+  if (isBlacklist && !NSPrefsBoolResolved(isBlacklist, YES)) {
     global[NSPPreferenceServiceAppListIsBlacklistKey] = isBlacklist;
   } else if (isBlacklist) {
     [global removeObjectForKey:NSPPreferenceServiceAppListIsBlacklistKey];
@@ -604,76 +678,104 @@ static NSDictionary* migrateLegacyGlobal(NSDictionary* prefs) {
   BOOL snsRequireANWithOR = YES;
 
   id val = prefs[@"Enabled"];
-  enabled = val ? ((NSNumber*)val).boolValue : YES;
+  enabled = NSPrefsBoolResolved(val, YES);
   val = prefs[@"WhenToPush"];
-  whenToPush = val ? ((NSNumber*)val).intValue : PUSHER_WHEN_TO_PUSH_EITHER;
+  whenToPush = NSPrefsIntResolved(val, PUSHER_WHEN_TO_PUSH_EITHER);
   val = prefs[@"WhatNetwork"];
-  whatNetwork = val ? ((NSNumber*)val).intValue : PUSHER_WHAT_NETWORK_ANY;
+  whatNetwork = NSPrefsIntResolved(val, PUSHER_WHAT_NETWORK_ANY);
   NSDictionary* global = prefs[NSPPreferenceGlobalKey];
   NSArray* globalAppList = @[];
   if ([global isKindOfClass:NSDictionary.class]) {
     val = global[NSPPreferenceServiceAppListIsBlacklistKey];
-    globalAppListIsBlacklist = val ? ((NSNumber*)val).boolValue : YES;
+    globalAppListIsBlacklist = NSPrefsBoolResolved(val, YES);
     NSArray* nestedAppList = global[NSPPreferenceServiceAppListKey];
     if ([nestedAppList isKindOfClass:NSArray.class]) {
       globalAppList = nestedAppList;
     }
   }
   val = prefs[@"SufficientNotificationSettingsIsAnd"];
-  snsIsAnd = val ? ((NSNumber*)val).boolValue : YES;
+  snsIsAnd = NSPrefsBoolResolved(val, YES);
   val = prefs[@"SNSORRequireAllowNotifications"];
-  snsRequireANWithOR = val ? ((NSNumber*)val).boolValue : YES;
+  snsRequireANWithOR = NSPrefsBoolResolved(val, YES);
 
   NSMutableDictionary* serviceConfigs = [NSMutableDictionary new];
   NSMutableArray* enabledServiceNames = [NSMutableArray new];
 
-  NSDictionary* customServices = prefs[NSPPreferenceCustomServicesKey];
-  NSDictionary* builtInServices = prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
+  NSDictionary* customServices = NSPrefsDictionary(prefs[NSPPreferenceCustomServicesKey]);
+  NSDictionary* builtInServices =
+      NSPrefsDictionary(prefs[NSPPreferenceBuiltInServicesKey]) ?: @{};
   for (NSString* service in [[customServices allKeys]
            sortedArrayUsingSelector:@selector(compare:)]) {
-    NSDictionary* customService = customServices[service];
+    NSDictionary* customService = NSPrefsDictionary(customServices[service]);
+    if (!customService) {
+      continue;
+    }
     NSMutableDictionary* servicePrefs = [customService mutableCopy];
 
     servicePrefs[@"isCustomService"] = @YES;
+    servicePrefs[@"url"] = NSPrefsString(servicePrefs[@"url"], @"");
+    servicePrefs[@"key"] = NSPrefsString(servicePrefs[@"key"], @"");
+    servicePrefs[@"paramName"] =
+        NSPrefsString(servicePrefs[@"paramName"], @"");
     servicePrefs[@"appListIsBlacklist"] =
-        servicePrefs[@"appListIsBlacklist"] ?: @YES;
+        @(NSPrefsBoolResolved(servicePrefs[@"appListIsBlacklist"], YES));
     servicePrefs[@"appList"] =
-        customService[NSPPreferenceServiceAppListKey] ?: @[];
-    servicePrefs[@"whenToPush"] =
-        (!servicePrefs[@"whenToPush"] ||
-         ((NSNumber*)servicePrefs[@"whenToPush"]).intValue ==
-             PUSHER_SEGMENT_CELL_DEFAULT)
-            ? @(whenToPush)
-            : servicePrefs[@"whenToPush"];
-    servicePrefs[@"whatNetwork"] =
-        (!servicePrefs[@"whatNetwork"] ||
-         ((NSNumber*)servicePrefs[@"whatNetwork"]).intValue ==
-             PUSHER_SEGMENT_CELL_DEFAULT)
-            ? @(whatNetwork)
-            : servicePrefs[@"whatNetwork"];
-    servicePrefs[@"snsIsAnd"] =
-        servicePrefs[@"SufficientNotificationSettingsIsAnd"] ?: @(snsIsAnd);
-    servicePrefs[@"snsRequireANWithOR"] =
-        servicePrefs[@"SNSORRequireAllowNotifications"]
-            ?: @(snsRequireANWithOR);
+        NSPrefsArray(customService[NSPPreferenceServiceAppListKey]) ?: @[];
+    servicePrefs[@"whenToPush"] = @(NSPrefsIntResolved(
+        servicePrefs[@"whenToPush"], whenToPush));
+    servicePrefs[@"whatNetwork"] = @(NSPrefsIntResolved(
+        servicePrefs[@"whatNetwork"], whatNetwork));
+    servicePrefs[@"snsIsAnd"] = @(NSPrefsBoolResolved(
+        servicePrefs[@"SufficientNotificationSettingsIsAnd"], snsIsAnd));
+    servicePrefs[@"snsRequireANWithOR"] = @(NSPrefsBoolResolved(
+        servicePrefs[@"SNSORRequireAllowNotifications"], snsRequireANWithOR));
     servicePrefs[@"sns"] = getSNSKeys(customService, NSPPreferenceSNSPrefix,
                                       prefs, NSPPreferenceSNSPrefix);
 
     NSDictionary* prefCustomApps =
-        (NSDictionary*)customService[NSPPreferenceServiceCustomAppsKey] ?: @{};
+        NSPrefsDictionary(customService[NSPPreferenceServiceCustomAppsKey]);
     NSMutableDictionary* customApps = [NSMutableDictionary new];
     for (NSString* customAppID in prefCustomApps.allKeys) {
-      NSDictionary* customAppPrefs = prefCustomApps[customAppID];
+      NSDictionary* customAppPrefs = NSPrefsDictionary(prefCustomApps[customAppID]);
       if (!customAppPrefs) {
         continue;
       }
       // Skip disabled per-app overrides, mirroring the built-in service loop:
       // default enabled, so only an explicit NO is skipped.
       if (customAppPrefs[@"enabled"] &&
-          !((NSNumber*)customAppPrefs[@"enabled"]).boolValue) {
+          !NSPrefsBoolResolved(customAppPrefs[@"enabled"], YES)) {
         continue;
       }
-      customApps[customAppID] = [customAppPrefs copy];
+
+      NSMutableDictionary* customAppIDPref = [customAppPrefs mutableCopy];
+      if (customAppPrefs[@"devices"] != nil) {
+        NSArray* customAppDevices = NSPrefsArray(customAppPrefs[@"devices"]);
+        NSMutableArray* customAppEnabledDevices = [NSMutableArray new];
+        for (NSDictionary* customAppDevice in customAppDevices ?: @[]) {
+          if (![customAppDevice isKindOfClass:NSDictionary.class]) {
+            continue;
+          }
+          if (NSPrefsBool(customAppDevice[@"enabled"])) {
+            [customAppEnabledDevices addObject:customAppDevice];
+          }
+        }
+        customAppIDPref[@"devices"] = customAppEnabledDevices;
+      }
+      if (customAppPrefs[@"sounds"] != nil) {
+        NSArray* customAppSounds = NSPrefsArray(customAppPrefs[@"sounds"]);
+        NSMutableArray* customAppEnabledSounds = [NSMutableArray new];
+        for (NSDictionary* customAppSound in customAppSounds ?: @[]) {
+          if (![customAppSound isKindOfClass:NSDictionary.class] ||
+              !customAppSound[@"id"]) {
+            continue;
+          }
+          if (NSPrefsBool(customAppSound[@"enabled"])) {
+            [customAppEnabledSounds addObject:customAppSound[@"id"]];
+          }
+        }
+        customAppIDPref[@"sounds"] = customAppEnabledSounds;
+      }
+      customApps[customAppID] = [customAppIDPref copy];
     }
 
     servicePrefs[@"customApps"] = [customApps copy];
@@ -684,51 +786,47 @@ static NSDictionary* migrateLegacyGlobal(NSDictionary* prefs) {
                             isCustomService:YES];
     serviceConfigs[service] = config;
 
-    if (customService[@"Enabled"] == nil ||
-        !((NSNumber*)customService[@"Enabled"]).boolValue) {
+    if (customService[@"Enabled"] == nil || !NSPrefsBool(customService[@"Enabled"])) {
     } else {
       [enabledServiceNames addObject:service];
     }
   }
 
   for (NSString* service in BUILTIN_PUSHER_SERVICES) {
-    NSDictionary* serviceObj = builtInServices[service] ?: @{};
+    NSDictionary* serviceObj = NSPrefsDictionary(builtInServices[service]) ?: @{};
     NSMutableDictionary* servicePrefs = [NSMutableDictionary new];
 
-    servicePrefs[@"appList"] = serviceObj[@"appList"] ?: @[];
+    servicePrefs[@"appList"] = NSPrefsArray(serviceObj[@"appList"]) ?: @[];
     servicePrefs[@"appListIsBlacklist"] =
-        serviceObj[@"appListIsBlacklist"] ?: @YES;
-    servicePrefs[@"token"] = serviceObj[@"token"] ?: @"";
-    servicePrefs[@"user"] = serviceObj[@"user"] ?: @"";
-    servicePrefs[@"key"] = serviceObj[@"key"] ?: @"";
-    NSString* eventName = serviceObj[@"eventName"] ?: @"";
-    NSString* dbName = [[(serviceObj[@"dbName"] ?: @"")
+        @(NSPrefsBoolResolved(serviceObj[@"appListIsBlacklist"], YES));
+    servicePrefs[@"token"] = NSPrefsString(serviceObj[@"token"], @"");
+    servicePrefs[@"user"] = NSPrefsString(serviceObj[@"user"], @"");
+    servicePrefs[@"key"] = NSPrefsString(serviceObj[@"key"], @"");
+    NSString* eventName = NSPrefsString(serviceObj[@"eventName"], @"");
+    NSString* dbName = [[NSPrefsString(serviceObj[@"dbName"], @"")
         stringByTrimmingCharactersInSet:[NSCharacterSet
                                             whitespaceAndNewlineCharacterSet]]
         copy];
-    servicePrefs[@"dateFormat"] = serviceObj[@"dateFormat"] ?: @"";
-    NSString* serverURL = serviceObj[@"serverURL"] ?: @"";
+    servicePrefs[@"dateFormat"] =
+        NSPrefsString(serviceObj[@"dateFormat"], @"");
+    NSString* serverURL = NSPrefsString(serviceObj[@"serverURL"], @"");
     servicePrefs[@"url"] =
         [(Class<NSPPushService>)[NSPushServiceManager serviceClassForName:service]
             urlForEventName:eventName
                       dbName:dbName
                    serverURL:serverURL];
-    servicePrefs[@"whenToPush"] =
-        [(((NSNumber*)serviceObj[@"whenToPush"]).intValue ==
-                  PUSHER_SEGMENT_CELL_DEFAULT
-              ? @(whenToPush)
-              : (serviceObj[@"whenToPush"] ?: @(whenToPush))) copy];
-    servicePrefs[@"whatNetwork"] =
-        [(((NSNumber*)serviceObj[@"whatNetwork"]).intValue ==
-                  PUSHER_SEGMENT_CELL_DEFAULT
-              ? @(whatNetwork)
-              : (serviceObj[@"whatNetwork"] ?: @(whatNetwork))) copy];
-    servicePrefs[@"snsIsAnd"] =
-        (serviceObj[@"SufficientNotificationSettingsIsAnd"]
-             ?: (serviceObj[@"snsIsAnd"] ?: @(snsIsAnd)));
-    servicePrefs[@"snsRequireANWithOR"] =
-        (serviceObj[@"SNSORRequireAllowNotifications"]
-             ?: (serviceObj[@"snsRequireANWithOR"] ?: @(snsRequireANWithOR)));
+    servicePrefs[@"whenToPush"] = @(NSPrefsIntResolved(
+        serviceObj[@"whenToPush"], whenToPush));
+    servicePrefs[@"whatNetwork"] = @(NSPrefsIntResolved(
+        serviceObj[@"whatNetwork"], whatNetwork));
+    servicePrefs[@"snsIsAnd"] = @(NSPrefsBoolResolved(
+        serviceObj[@"SufficientNotificationSettingsIsAnd"]
+            ?: serviceObj[@"snsIsAnd"],
+        snsIsAnd));
+    servicePrefs[@"snsRequireANWithOR"] = @(NSPrefsBoolResolved(
+        serviceObj[@"SNSORRequireAllowNotifications"]
+            ?: serviceObj[@"snsRequireANWithOR"],
+        snsRequireANWithOR));
     servicePrefs[@"sns"] = getSNSKeys(serviceObj, NSPPreferenceSNSPrefix, prefs,
                                       NSPPreferenceSNSPrefix);
 
@@ -737,7 +835,7 @@ static NSDictionary* migrateLegacyGlobal(NSDictionary* prefs) {
                                                extraPrefsForName:service
                                                     servicePrefs:serviceObj]];
 
-    NSArray* devices = serviceObj[@"devices"] ?: @[];
+    NSArray* devices = NSPrefsArray(serviceObj[@"devices"]) ?: @[];
     NSMutableArray* enabledDevices = [NSMutableArray new];
     for (NSDictionary* device in devices) {
       // Guard against malformed entries so SpringBoard can't crash on a
@@ -745,59 +843,64 @@ static NSDictionary* migrateLegacyGlobal(NSDictionary* prefs) {
       if (![device isKindOfClass:NSDictionary.class]) {
         continue;
       }
-      if (((NSNumber*)device[@"enabled"]).boolValue) {
+      if (NSPrefsBool(device[@"enabled"])) {
         [enabledDevices addObject:device];
       }
     }
     servicePrefs[@"devices"] = enabledDevices;
 
-    NSArray* sounds = serviceObj[@"sounds"] ?: @[];
+    NSArray* sounds = NSPrefsArray(serviceObj[@"sounds"]) ?: @[];
     NSMutableArray* enabledSounds = [NSMutableArray new];
     for (NSDictionary* sound in sounds) {
       if (![sound isKindOfClass:NSDictionary.class] || !sound[@"id"]) {
         continue;
       }
-      if (((NSNumber*)sound[@"enabled"]).boolValue) {
+      if (NSPrefsBool(sound[@"enabled"])) {
         [enabledSounds addObject:sound[@"id"]];
       }
     }
     servicePrefs[@"sounds"] = enabledSounds;
 
     NSDictionary* prefCustomApps =
-        (NSDictionary*)serviceObj[@"customApps"] ?: @{};
+        NSPrefsDictionary(serviceObj[@"customApps"]);
     NSMutableDictionary* customApps = [NSMutableDictionary new];
     for (NSString* customAppID in prefCustomApps.allKeys) {
-      NSDictionary* customAppPrefs = prefCustomApps[customAppID];
+      NSDictionary* customAppPrefs = NSPrefsDictionary(prefCustomApps[customAppID]);
+      if (!customAppPrefs) {
+        continue;
+      }
       if (customAppPrefs[@"enabled"] &&
-          !((NSNumber*)customAppPrefs[@"enabled"]).boolValue) {
+          !NSPrefsBoolResolved(customAppPrefs[@"enabled"], YES)) {
         continue;
       }
 
-      NSArray* customAppDevices = customAppPrefs[@"devices"] ?: @[];
+      NSArray* customAppDevices = NSPrefsArray(customAppPrefs[@"devices"]) ?: @[];
       NSMutableArray* customAppEnabledDevices = [NSMutableArray new];
       for (NSDictionary* customAppDevice in customAppDevices) {
         if (![customAppDevice isKindOfClass:NSDictionary.class]) {
           continue;
         }
-        if (((NSNumber*)customAppDevice[@"enabled"]).boolValue) {
+        if (NSPrefsBool(customAppDevice[@"enabled"])) {
           [customAppEnabledDevices addObject:customAppDevice];
         }
       }
 
-      NSArray* customAppSounds = customAppPrefs[@"sounds"] ?: @[];
+      NSArray* customAppSounds = NSPrefsArray(customAppPrefs[@"sounds"]) ?: @[];
       NSMutableArray* customAppEnabledSounds = [NSMutableArray new];
       for (NSDictionary* customAppSound in customAppSounds) {
         if (![customAppSound isKindOfClass:NSDictionary.class] ||
             !customAppSound[@"id"]) {
           continue;
         }
-        if (((NSNumber*)customAppSound[@"enabled"]).boolValue) {
+        if (NSPrefsBool(customAppSound[@"enabled"])) {
           [customAppEnabledSounds addObject:customAppSound[@"id"]];
         }
       }
 
-      NSString* customAppEventName = customAppPrefs[@"eventName"] ?: eventName;
-      NSString* customServerURL = customAppPrefs[@"serverURL"] ?: serverURL;
+      NSString* customAppEventName =
+          NSPrefsString(customAppPrefs[@"eventName"], eventName);
+      NSString* customServerURL =
+          NSPrefsString(customAppPrefs[@"serverURL"], serverURL);
       NSString* customAppUrl =
           [(Class<NSPPushService>)[NSPushServiceManager serviceClassForName:service]
               urlForEventName:customAppEventName
@@ -828,8 +931,7 @@ static NSDictionary* migrateLegacyGlobal(NSDictionary* prefs) {
                             isCustomService:NO];
     serviceConfigs[service] = config;
 
-    if (serviceObj[@"enabled"] == nil ||
-        !((NSNumber*)serviceObj[@"enabled"]).boolValue) {
+    if (serviceObj[@"enabled"] == nil || !NSPrefsBool(serviceObj[@"enabled"])) {
     } else {
       [enabledServiceNames addObject:service];
     }

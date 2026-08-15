@@ -91,7 +91,13 @@
   if (!XIsEmpty(service)) {
     id val = CFBridgingRelease(CFPreferencesCopyAppValue(
         (__bridge CFStringRef)XStr(@"%@LogEnabled", service), PUSHER_APP_ID));
-    BOOL logEnabled = val ? ((NSNumber*)val).boolValue : YES;
+    // Guard the type: prefs can hold a non-NSNumber value, and messaging
+    // boolValue on it would crash. NSString also implements boolValue.
+    BOOL logEnabled = YES;
+    if ([val isKindOfClass:NSNumber.class] ||
+        [val isKindOfClass:NSString.class]) {
+      logEnabled = [val boolValue];
+    }
     if (!logEnabled) {
       XLog(@"[S:%@] Log Disabled", service);
       return;
@@ -114,21 +120,37 @@
   }
 
   NSString* logKey = XStr(@"%@Log", service);
-  NSMutableArray* logSections = [(prefs[logKey] ?: @[]) mutableCopy];
+  // Guard against malformed log prefs: the value must be an array before we
+  // treat it as a list of log sections.
+  id rawLogSections = prefs[logKey];
+  NSMutableArray* logSections =
+      [rawLogSections isKindOfClass:NSArray.class]
+          ? [(NSArray*)rawLogSections mutableCopy]
+          : [NSMutableArray new];
 
   NSString* currBulletinID = bulletin.bulletinID ?: @"empty_bulletin_id";
   NSString* currSectionID = bulletin.sectionID ?: @"empty_app_id";
   NSMutableDictionary* existingLogSection = nil;
   int replaceIdx = -1;
   for (int i = 0; i < logSections.count; i++) {
-    NSDictionary* logSection = logSections[i];
-    NSString* existingSectionID =
-        (NSString*)logSection[@"appID"] ?: @"empty_app_id";
-    NSDate* existingTimestamp = (NSDate*)logSection[@"timestamp"];
-    NSString* existingBulletinID =
-        (NSString*)logSection[@"bulletinID"] ?: @"empty_bulletin_id";
-    if (existingTimestamp && [existingTimestamp isKindOfClass:NSDate.class] &&
-        [existingTimestamp respondsToSelector:@selector(isEqualToDate:)] &&
+    id rawLogSection = logSections[i];
+    if (![rawLogSection isKindOfClass:NSDictionary.class]) {
+      continue;
+    }
+    NSDictionary* logSection = (NSDictionary*)rawLogSection;
+    NSString* existingSectionID = @"empty_app_id";
+    if ([logSection[@"appID"] isKindOfClass:NSString.class]) {
+      existingSectionID = (NSString*)logSection[@"appID"];
+    }
+    NSDate* existingTimestamp = nil;
+    if ([logSection[@"timestamp"] isKindOfClass:NSDate.class]) {
+      existingTimestamp = (NSDate*)logSection[@"timestamp"];
+    }
+    NSString* existingBulletinID = @"empty_bulletin_id";
+    if ([logSection[@"bulletinID"] isKindOfClass:NSString.class]) {
+      existingBulletinID = (NSString*)logSection[@"bulletinID"];
+    }
+    if (existingTimestamp &&
         [existingTimestamp isEqualToDate:bulletin.date] &&
         XEq(existingBulletinID, currBulletinID) &&
         XEq(existingSectionID, currSectionID)) {
@@ -147,7 +169,11 @@
     [logSections addObject:existingLogSection];
   }
 
-  NSMutableArray* logs = [(existingLogSection[@"logs"] ?: @[]) mutableCopy];
+  id rawLogs = existingLogSection[@"logs"];
+  NSMutableArray* logs =
+      [rawLogs isKindOfClass:NSArray.class]
+          ? [(NSArray*)rawLogs mutableCopy]
+          : [NSMutableArray new];
   existingLogSection[@"logs"] = logs;
 
   if (logs.count == 0) {

@@ -3,6 +3,16 @@
 #import "../NSPushConfig.h"
 #import "../NSPushSupport.h"
 
+// Guarded prefs bool accessor: prefs can be hand-edited to non-NSNumber
+// values; only NSNumber/NSString implement boolValue safely.
+static BOOL NSPIFTTTBool(id value) {
+  if ([value isKindOfClass:NSNumber.class] ||
+      [value isKindOfClass:NSString.class]) {
+    return [value boolValue];
+  }
+  return NO;
+}
+
 @implementation NSPIFTTTService
 
 + (void)load {
@@ -18,7 +28,7 @@
                    serverURL:(NSString*)serverURL {
   return [PUSHER_SERVICE_IFTTT_URL
       stringByReplacingOccurrencesOfString:@"REPLACE_EVENT_NAME"
-                                withString:eventName ?: @""];
+                                withString:XStrDefault(eventName, @"")];
 }
 
 + (NSDictionary*)extraPrefsForName:(NSString*)name
@@ -38,8 +48,7 @@
 }
 
 + (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config {
-  NSNumber* includeIcon = config.rawPrefs[@"includeIcon"];
-  return includeIcon && includeIcon.boolValue;
+  return NSPIFTTTBool(config.rawPrefs[@"includeIcon"]);
 }
 
 + (NSPushRequest*)requestForBulletinContext:(NSPBulletinContext*)context
@@ -47,11 +56,10 @@
   NSDictionary* data = [self baseInfoDictForBulletinContext:context
                                                       config:config];
 
-  NSNumber* curateData = config.rawPrefs[@"curateData"];
   // curateData = curated single-field webhook format (value1-3, icon or date
   // as value3); otherwise the whole info dict is JSON-serialized into value1.
   NSDictionary* infoDict;
-  if (curateData && curateData.boolValue) {
+  if (NSPIFTTTBool(config.rawPrefs[@"curateData"])) {
     NSString* dateStr = [self dateStringForDate:context.bulletin.date
                                          config:config];
     infoDict = @{
