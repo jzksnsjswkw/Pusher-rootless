@@ -3,6 +3,19 @@
 #import "../NSPushConfig.h"
 #import "../NSPushSupport.h"
 
+// Guarded prefs integer accessor: prefs can hold non-NSNumber values, and
+// agentID is sent as an NSNumber to the WeChat API. NSNumber and NSString are
+// accepted; anything else (including NSNull) falls back to 0.
+static NSInteger NSPWechatInteger(id value) {
+  if ([value isKindOfClass:NSNumber.class]) {
+    return [value integerValue];
+  }
+  if ([value isKindOfClass:NSString.class]) {
+    return [(NSString*)value integerValue];
+  }
+  return 0;
+}
+
 @implementation NSPWechatService
 
 + (void)load {
@@ -22,33 +35,29 @@
 + (NSDictionary*)extraPrefsForName:(NSString*)name
                       servicePrefs:(NSDictionary*)servicePrefs {
   return @{
-    @"corpid" : servicePrefs[NSPPreferenceServiceCorpidKey] ?: @"",
-    @"corpsecret" : servicePrefs[NSPPreferenceServiceCorpsecretKey] ?: @"",
-    @"agentID" : servicePrefs[NSPPreferenceServiceAgentIDKey] ?: @"",
-    @"touser" : servicePrefs[NSPPreferenceServiceTouserKey] ?: @""
+    @"corpid" : XStrDefault(servicePrefs[NSPPreferenceServiceCorpidKey], @""),
+    @"corpsecret" :
+        XStrDefault(servicePrefs[NSPPreferenceServiceCorpsecretKey], @""),
+    @"agentID" : @(NSPWechatInteger(
+        servicePrefs[NSPPreferenceServiceAgentIDKey])),
+    @"touser" : XStrDefault(servicePrefs[NSPPreferenceServiceTouserKey], @"")
   };
 }
 
 + (NSDictionary*)extraCustomAppPrefsForName:(NSString*)name
                                    appPrefs:(NSDictionary*)appPrefs {
-  return @{@"touser" : appPrefs[@"touser"] ?: @""};
+  return @{@"touser" : XStrDefault(appPrefs[@"touser"], @"")};
 }
 
 + (void)requestForBulletinContext:(NSPBulletinContext*)context
                            config:(NSPushServiceConfig*)config
                        completion:(void (^)(NSPushRequest* request))completion {
-  NSString* touser = config.rawPrefs[@"touser"];
-  // agentid and safe must be integers for the WeChat Work message/send API;
-  // strings are rejected with an invalid-parameter error.
-  NSNumber* agentid = config.rawPrefs[@"agentID"];
-  NSInteger agentIDValue = 0;
-  if (agentid) {
-    agentIDValue = agentid.integerValue;
-  } else if ([config.rawPrefs[@"agentID"] isKindOfClass:NSString.class]) {
-    agentIDValue = ((NSString*)config.rawPrefs[@"agentID"]).integerValue;
-  }
+  NSString* touser = XStrDefault(config.rawPrefs[@"touser"], @"");
+  // agentid and safe must be integers for the WeChat Work message/send API.
+  // Use the guarded accessor so malformed prefs can't crash the send path.
+  NSInteger agentIDValue = NSPWechatInteger(config.rawPrefs[@"agentID"]);
   NSDictionary* infoDict = @{
-    @"touser" : (touser && [touser length] != 0) ? touser : @"@all",
+    @"touser" : (touser.length != 0) ? touser : @"@all",
     @"msgtype" : @"text",
     @"agentid" : @(agentIDValue),
     @"text" : @{
@@ -57,8 +66,8 @@
     @"safe" : @0
   };
 
-  NSString* corpid = config.rawPrefs[@"corpid"];
-  NSString* corpsecret = config.rawPrefs[@"corpsecret"];
+  NSString* corpid = XStrDefault(config.rawPrefs[@"corpid"], @"");
+  NSString* corpsecret = XStrDefault(config.rawPrefs[@"corpsecret"], @"");
   if (!corpid || !corpsecret) {
     if (completion) {
       // Missing credentials: abort rather than sending a request with an
@@ -108,12 +117,16 @@
                             NSError* error) {
           NSString* token = @"";
           if (!error) {
-            NSDictionary* jsonResponse =
+            id jsonResponse =
                 [NSJSONSerialization JSONObjectWithData:data
                                                 options:0
                                                   error:nil];
-            if ([jsonResponse[@"errcode"] isEqual:@(0)]) {
-              token = jsonResponse[@"access_token"];
+            if ([jsonResponse isKindOfClass:NSDictionary.class] &&
+                [jsonResponse[@"errcode"] isEqual:@(0)]) {
+              id accessToken = jsonResponse[@"access_token"];
+              if ([accessToken isKindOfClass:NSString.class]) {
+                token = (NSString*)accessToken;
+              }
             }
           }
           if (token && token.length > 0) {

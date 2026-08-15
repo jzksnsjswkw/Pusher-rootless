@@ -1,6 +1,23 @@
 #import "NSPCustomService.h"
+#import "../../helpers.h"
 #import "../NSPushConfig.h"
 #import "../NSPushSupport.h"
+
+static BOOL NSPCustomPrefsBool(id value) {
+  if ([value isKindOfClass:NSNumber.class] ||
+      [value isKindOfClass:NSString.class]) {
+    return [value boolValue];
+  }
+  return NO;
+}
+
+static NSInteger NSPCustomPrefsInt(id value) {
+  if ([value isKindOfClass:NSNumber.class] ||
+      [value isKindOfClass:NSString.class]) {
+    return [value integerValue];
+  }
+  return 0;
+}
 
 @implementation NSPCustomService
 
@@ -14,24 +31,24 @@
   NSMutableDictionary* infoDict =
       [[self baseInfoDictForBulletinContext:context config:config] mutableCopy];
 
-  NSNumber* authMethod = config.rawPrefs[@"authenticationMethod"];
+  NSInteger authMethod = NSPCustomPrefsInt(config.rawPrefs[@"authenticationMethod"]);
   // authMethod 2 = body auth: embed key inside the JSON payload instead.
-  if (authMethod && authMethod.intValue == 2) {
-    NSString* paramName = config.rawPrefs[@"paramName"];
-    if (paramName && paramName.length > 0) {
-      infoDict[paramName] = config.rawPrefs[@"key"] ?: @"";
+  if (authMethod == 2) {
+    NSString* paramName = XStrDefault(config.rawPrefs[@"paramName"], @"");
+    if (paramName.length > 0) {
+      infoDict[paramName] = XStrDefault(config.rawPrefs[@"key"], @"");
     } else {
-      infoDict[@"key"] = config.rawPrefs[@"key"] ?: @"";
+      infoDict[@"key"] = XStrDefault(config.rawPrefs[@"key"], @"");
     }
   }
 
   NSDictionary* headers = @{};
   // authMethod 1 = header auth: send key as a custom HTTP header.
-  if (authMethod && authMethod.intValue == 1) {
-    NSString* paramName = config.rawPrefs[@"paramName"];
+  if (authMethod == 1) {
+    NSString* paramName = XStrDefault(config.rawPrefs[@"paramName"], @"");
     headers = @{
-      (paramName && paramName.length > 0) ? paramName : @"Access-Token"
-          : config.rawPrefs[@"key"] ?: @""
+      (paramName.length > 0) ? paramName : @"Access-Token"
+          : XStrDefault(config.rawPrefs[@"key"], @"")
     };
   }
 
@@ -41,13 +58,11 @@
 }
 
 + (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config {
-  NSNumber* includeIcon = config.rawPrefs[@"includeIcon"];
-  return includeIcon && includeIcon.boolValue;
+  return NSPCustomPrefsBool(config.rawPrefs[@"includeIcon"]);
 }
 
 + (BOOL)shouldIncludeImageForConfig:(NSPushServiceConfig*)config {
-  NSNumber* includeImage = config.rawPrefs[@"includeImage"];
-  return includeImage && includeImage.boolValue;
+  return NSPCustomPrefsBool(config.rawPrefs[@"includeImage"]);
 }
 
 @end

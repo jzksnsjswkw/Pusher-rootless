@@ -3,6 +3,16 @@
 #import "../NSPushConfig.h"
 #import "../NSPushSupport.h"
 
+// Guarded prefs bool accessor: prefs can be hand-edited to non-NSNumber
+// values; only NSNumber/NSString implement boolValue safely.
+static BOOL NSPReceiverBool(id value) {
+  if ([value isKindOfClass:NSNumber.class] ||
+      [value isKindOfClass:NSString.class]) {
+    return [value boolValue];
+  }
+  return NO;
+}
+
 @implementation NSPPusherReceiverService
 
 + (void)load {
@@ -17,7 +27,7 @@
                                      config:(NSPushServiceConfig*)config {
   return [NSPushRequest
       requestWithURLString:[self replacedKeyURLStringForConfig:config]
-                   headers:@{@"x-apikey" : config.rawPrefs[@"key"] ?: @""}
+                   headers:@{@"x-apikey" : XStrDefault(config.rawPrefs[@"key"], @"")}
                   infoDict:[self baseInfoDictForBulletinContext:context
                                                          config:config]];
 }
@@ -27,7 +37,7 @@
                    serverURL:(NSString*)serverURL {
   return [PUSHER_SERVICE_PUSHER_RECEIVER_URL
       stringByReplacingOccurrencesOfString:@"REPLACE_DB_NAME"
-                                withString:dbName ?: @""];
+                                withString:XStrDefault(dbName, @"")];
 }
 
 + (NSDictionary*)extraPrefsForName:(NSString*)name
@@ -60,13 +70,11 @@
 }
 
 + (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config {
-  NSNumber* includeIcon = config.rawPrefs[@"includeIcon"];
-  return includeIcon && includeIcon.boolValue;
+  return NSPReceiverBool(config.rawPrefs[@"includeIcon"]);
 }
 
 + (BOOL)shouldIncludeImageForConfig:(NSPushServiceConfig*)config {
-  NSNumber* includeImage = config.rawPrefs[@"includeImage"];
-  return includeImage && includeImage.boolValue;
+  return NSPReceiverBool(config.rawPrefs[@"includeImage"]);
 }
 
 @end

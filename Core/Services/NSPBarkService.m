@@ -42,8 +42,8 @@
 + (NSDictionary*)extraPrefsForName:(NSString*)name
                       servicePrefs:(NSDictionary*)servicePrefs {
   return @{
-    @"serverURL" : servicePrefs[NSPPreferenceServiceServerURLKey]
-        ?: @"https://api.day.app"
+    @"serverURL" : XStrDefault(servicePrefs[NSPPreferenceServiceServerURLKey],
+                               @"https://api.day.app")
   };
 }
 

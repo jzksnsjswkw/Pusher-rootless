@@ -9,7 +9,14 @@
 #import "UIImage+ReplaceColor.h"
 #import "Preferences/NSPusherManager.h"
 
-static void pusherPrefsChanged() { [[NSPusher sharedInstance] reloadConfig]; }
+// Darwin notifications can arrive on any thread; reloading the config there
+// would race with handleBulletin: reading self.config on the main thread
+// (non-atomic ivar), so hop to the main queue first.
+static void pusherPrefsChanged() {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [[NSPusher sharedInstance] reloadConfig];
+  });
+}
 
 %group SB
 %hook BBServer

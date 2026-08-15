@@ -1,4 +1,5 @@
 #import "NSPPushoverService.h"
+#import "../../helpers.h"
 #import "../NSPushConfig.h"
 #import "../NSPushSupport.h"
 
@@ -34,8 +35,8 @@
   }
 
   NSMutableDictionary* infoDict = [@{
-    @"token" : config.rawPrefs[@"token"] ?: @"",
-    @"user" : config.rawPrefs[@"user"] ?: @"",
+    @"token" : XStrDefault(config.rawPrefs[@"token"], @""),
+    @"user" : XStrDefault(config.rawPrefs[@"user"], @""),
     @"title" : context.title ?: @"",
     @"message" : context.message ?: @"",
     @"device" : [deviceIDs componentsJoinedByString:@","]
