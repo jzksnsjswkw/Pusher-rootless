@@ -55,7 +55,7 @@
 #define PUSHER_SUFFICIENT_NOTIFICATION_CENTER_KEY @"NotificationCenter"
 #define PUSHER_SUFFICIENT_BANNERS_KEY @"Banners"
 #define PUSHER_SUFFICIENT_BADGES_KEY @"Badges"
-// #define PUSHER_SUFFICIENT_SOUNDS_KEY @"Sounds"
+#define PUSHER_SUFFICIENT_SOUNDS_KEY @"Sounds"
 #define PUSHER_SUFFICIENT_SHOWS_PREVIEWS_KEY @"ShowsPreviews"
 
 #define PUSHER_SNS_KEYS                                                        \
@@ -65,6 +65,7 @@
     PUSHER_SUFFICIENT_NOTIFICATION_CENTER_KEY : @NO,                           \
     PUSHER_SUFFICIENT_BANNERS_KEY : @NO,                                       \
     PUSHER_SUFFICIENT_BADGES_KEY : @NO,                                        \
+    PUSHER_SUFFICIENT_SOUNDS_KEY : @NO,                                        \
     PUSHER_SUFFICIENT_SHOWS_PREVIEWS_KEY : @NO                                 \
   }
 

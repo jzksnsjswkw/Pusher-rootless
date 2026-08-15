@@ -104,49 +104,33 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
   }
 
   if ([pushRequest.method caseInsensitiveCompare:@"GET"] == NSOrderedSame) {
-    // Only unreserved RFC 3986 characters are left unescaped so that
-    // '&', '=', '+', '#', '?', '/' etc. in keys/values can't corrupt the
-    // query string.
-    static NSCharacterSet* queryAllowedCharacterSet;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-      queryAllowedCharacterSet = [NSCharacterSet
-          characterSetWithCharactersInString:@"abcdefghijklmnopqrstuvwxyz"
-                                             @"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                                             @"0123456789"
-                                             @"-._~"];
-    });
-    NSString* parameterString = @"";
-    for (NSString* key in infoDictForRequest.allKeys) {
-      // GET URLs can't carry non-string values (NSNumber, the image marker
-      // @YES, etc.) as-is; stringify them so they survive in the query.
-      id rawValue = infoDictForRequest[key];
-      NSString* value;
-      if ([rawValue isKindOfClass:NSString.class]) {
-        value = (NSString*)rawValue;
-      } else if ([rawValue respondsToSelector:@selector(stringValue)]) {
-        value = [rawValue stringValue];
-      } else if (rawValue) {
-        value = [rawValue description];
-      } else {
-        value = @"";
+    // Use NSURLComponents + NSURLQueryItem instead of manual string
+    // concatenation: it percent-encodes both names and values, preserves any
+    // existing query string, and correctly handles '?', '&', and '#'.
+    NSURLComponents* components =
+        [NSURLComponents componentsWithString:newUrlString];
+    if (components) {
+      NSMutableArray* queryItems =
+          [NSMutableArray arrayWithArray:components.queryItems ?: @[]];
+      for (NSString* key in infoDictForRequest.allKeys) {
+        // GET URLs can't carry non-string values (NSNumber, the image marker
+        // @YES, etc.) as-is; stringify them so they survive in the query.
+        id rawValue = infoDictForRequest[key];
+        NSString* value;
+        if ([rawValue isKindOfClass:NSString.class]) {
+          value = (NSString*)rawValue;
+        } else if ([rawValue respondsToSelector:@selector(stringValue)]) {
+          value = [rawValue stringValue];
+        } else if (rawValue) {
+          value = [rawValue description];
+        } else {
+          value = @"";
+        }
+        [queryItems addObject:[NSURLQueryItem queryItemWithName:key
+                                                          value:value]];
       }
-      NSString* escapedKey =
-          [key stringByAddingPercentEncodingWithAllowedCharacters:
-                   queryAllowedCharacterSet];
-      NSString* escapedValue =
-          [value stringByAddingPercentEncodingWithAllowedCharacters:
-                     queryAllowedCharacterSet];
-      parameterString = XStr(@"%@%@%@=%@", parameterString,
-                             (parameterString.length < 1 ? @"" : @"&"),
-                             escapedKey, escapedValue);
-    }
-    // Don't add a duplicate '?' if the URL template already contains one
-    // (custom services can provide full URLs with a query string).
-    if (parameterString.length > 0) {
-      newUrlString =
-          XStr(@"%@%@%@", newUrlString,
-               [newUrlString containsString:@"?"] ? @"&" : @"?", parameterString);
+      components.queryItems = queryItems;
+      newUrlString = components.string;
     }
     XLog(@"URL String: %@", newUrlString);
   }

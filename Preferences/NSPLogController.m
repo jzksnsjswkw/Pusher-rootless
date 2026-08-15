@@ -52,7 +52,12 @@ static NSDictionary* getLogPreferences() {
   CFNotificationCenterRemoveObserver(CFNotificationCenterGetDarwinNotifyCenter(),
                                      NULL, CFSTR(PUSHER_LOG_PREFS_NOTIFICATION),
                                      NULL);
-  logControllerSharedInstance = nil;
+  // Only clear the shared instance if this controller is still the current
+  // one; an older instance being torn down after a newer one was created must
+  // not disable live log updates for the newer controller.
+  if (logControllerSharedInstance == self) {
+    logControllerSharedInstance = nil;
+  }
 }
 
 - (void)showAppFilterTutorial {

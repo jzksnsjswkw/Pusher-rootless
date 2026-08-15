@@ -100,6 +100,9 @@
     } else if (XEq(key, PUSHER_SUFFICIENT_BADGES_KEY)) {
       sufficient = (sectionInfo.pushSettings &
                     BBActualSectionInfoPushSettingsBadges) != 0;
+    } else if (XEq(key, PUSHER_SUFFICIENT_SOUNDS_KEY)) {
+      sufficient = (sectionInfo.pushSettings &
+                    BBActualSectionInfoPushSettingsSounds) != 0;
     } else if (XEq(key, PUSHER_SUFFICIENT_SHOWS_PREVIEWS_KEY)) {
       sufficient = sectionInfo.showsMessagePreview;
     } else {
