@@ -6,6 +6,10 @@
 #import "NSPSharedSpecifiers.h"
 #import <notify.h>
 
+static NSDictionary* NSPJSONDictionary(id object) {
+  return [object isKindOfClass:NSDictionary.class] ? (NSDictionary*)object : @{};
+}
+
 @implementation NSPDeviceSoundListController
 
 - (void)viewDidLoad {
@@ -23,9 +27,9 @@
 
   _prefsKey = [self.specifier propertyForKey:@"prefsKey"];
   _service = [self.specifier propertyForKey:@"service"];
-  _isSound = ((NSNumber*)[self.specifier propertyForKey:@"isSound"]).boolValue;
-  _isCustomApp =
-      ((NSNumber*)[self.specifier propertyForKey:@"isCustomApp"]).boolValue;
+  _isSound = NSPushBoolResolved([self.specifier propertyForKey:@"isSound"], NO);
+  _isCustomApp = NSPushBoolResolved(
+      [self.specifier propertyForKey:@"isCustomApp"], NO);
   if (_isCustomApp) {
     _customAppIDKey = [self.specifier propertyForKey:@"customAppIDKey"];
   }
@@ -64,26 +68,34 @@
   }
 
   NSDictionary* builtInServices =
-      (NSDictionary*)_prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
-  NSDictionary* serviceObj = builtInServices[_service] ?: @{};
+      NSPushDictionaryValue(_prefs[NSPPreferenceBuiltInServicesKey]) ?: @{};
+  NSDictionary* serviceObj =
+      NSPushDictionaryValue(builtInServices[_service]) ?: @{};
   NSString* subkey = _isSound ? @"sounds" : @"devices";
   NSArray* val = nil;
   if (_isCustomApp) {
     NSDictionary* customApps =
-        serviceObj[NSPPreferenceServiceCustomAppsKey] ?: @{};
-    NSDictionary* customApp = customApps[_customAppIDKey] ?: @{};
-    val = customApp[subkey] ?: @[];
+        NSPushDictionaryValue(serviceObj[NSPPreferenceServiceCustomAppsKey])
+        ?: @{};
+    NSDictionary* customApp =
+        NSPushDictionaryValue(customApps[_customAppIDKey]) ?: @{};
+    val = NSPushArrayValue(customApp[subkey]) ?: @[];
   } else {
-    val = serviceObj[subkey] ?: @[];
+    val = NSPushArrayValue(serviceObj[subkey]) ?: @[];
   }
-  _serviceItems = [val mutableCopy];
-  NSMutableDictionary* indexesToReplace = [NSMutableDictionary new];
-  for (int i = 0; i < _serviceItems.count; i++) {
-    indexesToReplace[@(i)] = [_serviceItems[i] mutableCopy];
-  }
-  for (NSNumber* index in indexesToReplace.allKeys) {
-    [_serviceItems replaceObjectAtIndex:index.intValue
-                             withObject:indexesToReplace[index]];
+  _serviceItems = [NSMutableArray new];
+  for (id rawItem in val) {
+    if (![rawItem isKindOfClass:NSDictionary.class]) {
+      continue;
+    }
+    NSDictionary* item = (NSDictionary*)rawItem;
+    // Reject malformed entries up front so later code can safely treat every
+    // service item as a mutable dictionary with string name/id values.
+    if (![item[@"name"] isKindOfClass:NSString.class] ||
+        ![item[@"id"] isKindOfClass:NSString.class]) {
+      continue;
+    }
+    [_serviceItems addObject:[item mutableCopy]];
   }
 
   [self reloadSpecifiers];
@@ -106,17 +118,16 @@
 
 - (void)saveServiceItems {
   NSMutableDictionary* builtInServices =
-      [([NSPSharedSpecifiers
-            getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey]
-            ?: @{}) mutableCopy];
+      [(NSPushDictionaryValue([NSPSharedSpecifiers
+            getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey]) ?: @{}) mutableCopy];
   NSMutableDictionary* serviceObj =
-      [(builtInServices[_service] ?: @{}) mutableCopy];
+      [(NSPushDictionaryValue(builtInServices[_service]) ?: @{}) mutableCopy];
   NSString* subkey = _isSound ? @"sounds" : @"devices";
   if (_isCustomApp) {
     NSMutableDictionary* customApps =
-        [(serviceObj[NSPPreferenceServiceCustomAppsKey] ?: @{}) mutableCopy];
+        [(NSPushDictionaryValue(serviceObj[NSPPreferenceServiceCustomAppsKey]) ?: @{}) mutableCopy];
     NSMutableDictionary* customApp =
-        [(customApps[_customAppIDKey] ?: @{}) mutableCopy];
+        [(NSPushDictionaryValue(customApps[_customAppIDKey]) ?: @{}) mutableCopy];
     customApp[subkey] = _serviceItems;
     customApps[_customAppIDKey] = customApp;
     serviceObj[NSPPreferenceServiceCustomAppsKey] = customApps;
@@ -171,6 +182,11 @@
     }
 
     for (NSDictionary* item in [self sortedItemList:_serviceItems]) {
+      if (![item isKindOfClass:NSDictionary.class] ||
+          ![item[@"name"] isKindOfClass:NSString.class] ||
+          ![item[@"id"] isKindOfClass:NSString.class]) {
+        continue;
+      }
       PSSpecifier* switchSpecifier = [PSSpecifier
           preferenceSpecifierNamed:item[@"name"]
                             target:self
@@ -196,15 +212,32 @@
 }
 
 - (NSArray*)sortedItemList:(NSArray*)items {
-  return [items sortedArrayUsingComparator:^NSComparisonResult(
-                    NSDictionary* item1, NSDictionary* item2) {
-    return [item1[@"name"] localizedCaseInsensitiveCompare:item2[@"name"]];
+  return [items sortedArrayUsingComparator:^NSComparisonResult(id obj1, id obj2) {
+    if (![obj1 isKindOfClass:NSDictionary.class] ||
+        ![obj2 isKindOfClass:NSDictionary.class]) {
+      return NSOrderedSame;
+    }
+    NSDictionary* item1 = (NSDictionary*)obj1;
+    NSDictionary* item2 = (NSDictionary*)obj2;
+    NSString* name1 = [item1[@"name"] isKindOfClass:NSString.class]
+                          ? (NSString*)item1[@"name"]
+                          : @"";
+    NSString* name2 = [item2[@"name"] isKindOfClass:NSString.class]
+                          ? (NSString*)item2[@"name"]
+                          : @"";
+    return [name1 localizedCaseInsensitiveCompare:name2];
   }];
 }
 
 - (void)setPreferenceValue:(id)value forItemSpecifier:(PSSpecifier*)specifier {
-  for (NSMutableDictionary* item in _serviceItems) {
-    if (XEq(item[@"id"], specifier.identifier)) {
+  for (id rawItem in _serviceItems) {
+    if (![rawItem isKindOfClass:NSMutableDictionary.class]) {
+      continue;
+    }
+    NSMutableDictionary* item = (NSMutableDictionary*)rawItem;
+    id itemID = item[@"id"];
+    if ([itemID isKindOfClass:NSString.class] &&
+        XEq(itemID, specifier.identifier)) {
       item[@"enabled"] = value;
     } else if (_onlyAllowOne) {
       // all others must be off
@@ -219,8 +252,14 @@
 }
 
 - (id)readItemPreferenceValue:(PSSpecifier*)specifier {
-  for (NSDictionary* item in _serviceItems) {
-    if (XEq(item[@"id"], specifier.identifier)) {
+  for (id rawItem in _serviceItems) {
+    if (![rawItem isKindOfClass:NSDictionary.class]) {
+      continue;
+    }
+    NSDictionary* item = (NSDictionary*)rawItem;
+    id itemID = item[@"id"];
+    if ([itemID isKindOfClass:NSString.class] &&
+        XEq(itemID, specifier.identifier)) {
       return item[@"enabled"];
     }
   }
@@ -229,10 +268,13 @@
 
 - (void)updatePushoverDevices {
   NSDictionary* builtInServices =
-      (NSDictionary*)_prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
-  NSDictionary* serviceObj = builtInServices[_service] ?: @{};
-  NSString* pushoverToken = serviceObj[NSPPreferenceServiceTokenKey] ?: @"";
-  NSString* pushoverUser = serviceObj[NSPPreferenceServiceUserKey] ?: @"";
+      NSPushDictionaryValue(_prefs[NSPPreferenceBuiltInServicesKey]) ?: @{};
+  NSDictionary* serviceObj =
+      NSPushDictionaryValue(builtInServices[_service]) ?: @{};
+  NSString* pushoverToken =
+      XStrDefault(serviceObj[NSPPreferenceServiceTokenKey], @"");
+  NSString* pushoverUser =
+      XStrDefault(serviceObj[NSPPreferenceServiceUserKey], @"");
   NSDictionary* userDictionary =
       @{@"token" : pushoverToken, @"user" : pushoverUser};
   NSData* jsonData =
@@ -264,18 +306,21 @@
           if (data.length && error == nil) {
             XLog(@"Success");
             NSError* jsonError = nil;
-            NSDictionary* json =
+            NSDictionary* json = NSPJSONDictionary(
                 [NSJSONSerialization JSONObjectWithData:data
-                                                options:kNilOptions
-                                                  error:&jsonError];
+                                               options:kNilOptions
+                                                 error:&jsonError]);
             if (jsonError) {
               XLog(@"JSON Error: %@", jsonError);
             }
             // 0 error, 1 success
-            int status = ((NSNumber*)json[@"status"]).intValue;
+            int status = (int)NSPushIntegerValue(json[@"status"], 0);
             if (status == 0) {
               XLog(@"Something went wrong");
-              NSArray* errors = (NSArray*)json[@"errors"];
+              NSArray* errors =
+                  [json[@"errors"] isKindOfClass:NSArray.class]
+                      ? (NSArray*)json[@"errors"]
+                      : nil;
               NSString* title;
               NSString* msg = @"";
               if (errors == nil || errors.count == 0) {
@@ -297,8 +342,11 @@
               return;
             }
 
+            id rawDevices = json[@"devices"];
             NSMutableArray* serviceDevices =
-                [(NSArray*)json[@"devices"] mutableCopy];
+                [rawDevices isKindOfClass:NSArray.class]
+                    ? [(NSArray*)rawDevices mutableCopy]
+                    : [NSMutableArray new];
             NSMutableArray* serviceDevicesToRemove = [NSMutableArray new];
             for (NSDictionary* device in _serviceItems) {
               if (![serviceDevices containsObject:device[@"id"]]) {
@@ -307,7 +355,12 @@
                 [serviceDevices removeObject:device[@"id"]];
               }
             }
-            for (NSString* device in serviceDevices) {
+            for (id rawDevice in serviceDevices) {
+              if (![rawDevice isKindOfClass:NSString.class] ||
+                  [(NSString*)rawDevice length] == 0) {
+                continue;
+              }
+              NSString* device = (NSString*)rawDevice;
               [_serviceItems addObject:[@{
                                @"name" : device,
                                @"id" : device,
@@ -354,9 +407,11 @@
 
 - (void)updatePushoverSounds {
   NSDictionary* builtInServices =
-      (NSDictionary*)_prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
-  NSDictionary* serviceObj = builtInServices[_service] ?: @{};
-  NSString* pushoverToken = serviceObj[NSPPreferenceServiceTokenKey] ?: @"";
+      NSPushDictionaryValue(_prefs[NSPPreferenceBuiltInServicesKey]) ?: @{};
+  NSDictionary* serviceObj =
+      NSPushDictionaryValue(builtInServices[_service]) ?: @{};
+  NSString* pushoverToken =
+      XStrDefault(serviceObj[NSPPreferenceServiceTokenKey], @"");
   NSMutableURLRequest* request = [NSMutableURLRequest
        requestWithURL:[NSURL URLWithString:XStr(@"https://api.pushover.net/1/"
                                                 @"sounds.json?token=%@",
@@ -378,18 +433,21 @@
           if (data.length && error == nil) {
             XLog(@"Success");
             NSError* jsonError = nil;
-            NSDictionary* json =
+            NSDictionary* json = NSPJSONDictionary(
                 [NSJSONSerialization JSONObjectWithData:data
-                                                options:kNilOptions
-                                                  error:&jsonError];
+                                               options:kNilOptions
+                                                 error:&jsonError]);
             if (jsonError) {
               XLog(@"JSON Error: %@", jsonError);
             }
             // 0 error, 1 success
-            int status = ((NSNumber*)json[@"status"]).intValue;
+            int status = (int)NSPushIntegerValue(json[@"status"], 0);
             if (status == 0) {
               XLog(@"Something went wrong");
-              NSArray* errors = (NSArray*)json[@"errors"];
+              NSArray* errors =
+                  [json[@"errors"] isKindOfClass:NSArray.class]
+                      ? (NSArray*)json[@"errors"]
+                      : nil;
               NSString* title;
               NSString* msg = @"";
               if (errors == nil || errors.count == 0) {
@@ -411,8 +469,11 @@
               return;
             }
 
+            id rawSounds = json[@"sounds"];
             NSMutableDictionary* serviceSounds =
-                [(NSDictionary*)json[@"sounds"] mutableCopy];
+                [rawSounds isKindOfClass:NSDictionary.class]
+                    ? [(NSDictionary*)rawSounds mutableCopy]
+                    : [NSMutableDictionary new];
 
             NSMutableArray* serviceSoundsToRemove = [NSMutableArray new];
             for (NSDictionary* sound in _serviceItems) {
@@ -423,8 +484,12 @@
               }
             }
             for (NSString* soundID in serviceSounds.allKeys) {
+              id rawName = serviceSounds[soundID];
+              NSString* name = [rawName isKindOfClass:NSString.class]
+                                   ? (NSString*)rawName
+                                   : soundID;
               [_serviceItems addObject:[@{
-                               @"name" : serviceSounds[soundID],
+                               @"name" : name,
                                @"id" : soundID,
                                @"enabled" : @NO
                              } mutableCopy]];
@@ -469,9 +534,11 @@
 
 - (void)updatePushbulletDevices {
   NSDictionary* builtInServices =
-      (NSDictionary*)_prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
-  NSDictionary* serviceObj = builtInServices[_service] ?: @{};
-  NSString* pushbulletToken = serviceObj[NSPPreferenceServiceTokenKey] ?: @"";
+      NSPushDictionaryValue(_prefs[NSPPreferenceBuiltInServicesKey]) ?: @{};
+  NSDictionary* serviceObj =
+      NSPushDictionaryValue(builtInServices[_service]) ?: @{};
+  NSString* pushbulletToken =
+      XStrDefault(serviceObj[NSPPreferenceServiceTokenKey], @"");
   NSMutableURLRequest* request = [NSMutableURLRequest
        requestWithURL:
            [NSURL URLWithString:@"https://api.pushbullet.com/v2/devices"]
@@ -493,15 +560,18 @@
           if (data.length && error == nil) {
             XLog(@"Success");
             NSError* jsonError = nil;
-            NSDictionary* json =
+            NSDictionary* json = NSPJSONDictionary(
                 [NSJSONSerialization JSONObjectWithData:data
-                                                options:kNilOptions
-                                                  error:&jsonError];
+                                               options:kNilOptions
+                                                 error:&jsonError]);
             if (jsonError) {
               XLog(@"JSON Error: %@", jsonError);
             }
 
-            NSDictionary* error = (NSDictionary*)json[@"error"];
+            NSDictionary* error =
+                [json[@"error"] isKindOfClass:NSDictionary.class]
+                    ? (NSDictionary*)json[@"error"]
+                    : nil;
             if (error) {
               XLog(@"Something went wrong");
               NSString* title = @"Server Error";
@@ -518,13 +588,20 @@
               return;
             }
 
+            id rawDevices = json[@"devices"];
             NSMutableArray* serviceDevices =
-                [(NSArray*)json[@"devices"] mutableCopy];
+                [rawDevices isKindOfClass:NSArray.class]
+                    ? [(NSArray*)rawDevices mutableCopy]
+                    : [NSMutableArray new];
 
             NSMutableArray* serviceDevicesToRemove = [NSMutableArray new];
             for (NSDictionary* savedDevice in _serviceItems) {
               NSDictionary* foundNewDevice = nil;
-              for (NSDictionary* newDevice in serviceDevices) {
+              for (id rawNewDevice in serviceDevices) {
+                if (![rawNewDevice isKindOfClass:NSDictionary.class]) {
+                  continue;
+                }
+                NSDictionary* newDevice = (NSDictionary*)rawNewDevice;
                 if (XEq(savedDevice[@"id"], newDevice[@"iden"])) {
                   foundNewDevice = newDevice;
                   break;
@@ -538,16 +615,30 @@
               }
             }
 
-            for (NSDictionary* newDevice in serviceDevices) {
-              // pushable deprecated
-              if ((newDevice[@"active"] &&
-                   !((NSNumber*)newDevice[@"active"]).boolValue)) {
+            for (id rawDevice in serviceDevices) {
+              if (![rawDevice isKindOfClass:NSDictionary.class]) {
                 continue;
               }
-              NSString* name = newDevice[@"nickname"] ?: newDevice[@"model"];
+              NSDictionary* newDevice = (NSDictionary*)rawDevice;
+              // pushable deprecated
+              if (!NSPushBoolResolved(newDevice[@"active"], YES)) {
+                continue;
+              }
+              id deviceID = newDevice[@"iden"];
+              if (![deviceID isKindOfClass:NSString.class] ||
+                  [(NSString*)deviceID length] == 0) {
+                continue;
+              }
+              id rawName = newDevice[@"nickname"];
+              if (![rawName isKindOfClass:NSString.class]) {
+                rawName = newDevice[@"model"];
+              }
+              NSString* name = [rawName isKindOfClass:NSString.class]
+                                   ? (NSString*)rawName
+                                   : @"";
               [_serviceItems addObject:[@{
                                @"name" : name,
-                               @"id" : newDevice[@"iden"],
+                               @"id" : deviceID,
                                @"enabled" : @NO
                              } mutableCopy]];
             }
@@ -591,9 +682,11 @@
 
 - (void)updatePushbulletSounds {
   NSDictionary* builtInServices =
-      (NSDictionary*)_prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
-  NSDictionary* serviceObj = builtInServices[_service] ?: @{};
-  NSString* pushbulletToken = serviceObj[NSPPreferenceServiceTokenKey] ?: @"";
+      NSPushDictionaryValue(_prefs[NSPPreferenceBuiltInServicesKey]) ?: @{};
+  NSDictionary* serviceObj =
+      NSPushDictionaryValue(builtInServices[_service]) ?: @{};
+  NSString* pushbulletToken =
+      XStrDefault(serviceObj[NSPPreferenceServiceTokenKey], @"");
   NSMutableURLRequest* request = [NSMutableURLRequest
        requestWithURL:[NSURL
                           URLWithString:@"https://api.pushbullet.com/v2/sounds"]
@@ -615,15 +708,18 @@
           if (data.length && error == nil) {
             XLog(@"Success");
             NSError* jsonError = nil;
-            NSDictionary* json =
+            NSDictionary* json = NSPJSONDictionary(
                 [NSJSONSerialization JSONObjectWithData:data
-                                                options:kNilOptions
-                                                  error:&jsonError];
+                                               options:kNilOptions
+                                                 error:&jsonError]);
             if (jsonError) {
               XLog(@"JSON Error: %@", jsonError);
             }
 
-            NSDictionary* error = (NSDictionary*)json[@"error"];
+            NSDictionary* error =
+                [json[@"error"] isKindOfClass:NSDictionary.class]
+                    ? (NSDictionary*)json[@"error"]
+                    : nil;
             if (error) {
               XLog(@"Something went wrong");
               NSString* title = @"Server Error";
@@ -640,13 +736,20 @@
               return;
             }
 
+            id rawSounds = json[@"sounds"];
             NSMutableArray* serviceSounds =
-                [(NSArray*)json[@"sounds"] mutableCopy];
+                [rawSounds isKindOfClass:NSArray.class]
+                    ? [(NSArray*)rawSounds mutableCopy]
+                    : [NSMutableArray new];
 
             NSMutableArray* serviceSoundsToRemove = [NSMutableArray new];
             for (NSDictionary* savedSound in _serviceItems) {
               NSDictionary* foundNewSound = nil;
-              for (NSDictionary* newSound in serviceSounds) {
+              for (id rawNewSound in serviceSounds) {
+                if (![rawNewSound isKindOfClass:NSDictionary.class]) {
+                  continue;
+                }
+                NSDictionary* newSound = (NSDictionary*)rawNewSound;
                 if (XEq(savedSound[@"id"], newSound[@"iden"])) {
                   foundNewSound = newSound;
                   break;
@@ -660,16 +763,30 @@
               }
             }
 
-            for (NSDictionary* newSound in serviceSounds) {
-              // pushable deprecated
-              if ((newSound[@"active"] &&
-                   !((NSNumber*)newSound[@"active"]).boolValue)) {
+            for (id rawSound in serviceSounds) {
+              if (![rawSound isKindOfClass:NSDictionary.class]) {
                 continue;
               }
-              NSString* name = newSound[@"nickname"] ?: newSound[@"model"];
+              NSDictionary* newSound = (NSDictionary*)rawSound;
+              // pushable deprecated
+              if (!NSPushBoolResolved(newSound[@"active"], YES)) {
+                continue;
+              }
+              id soundID = newSound[@"iden"];
+              if (![soundID isKindOfClass:NSString.class] ||
+                  [(NSString*)soundID length] == 0) {
+                continue;
+              }
+              id rawName = newSound[@"nickname"];
+              if (![rawName isKindOfClass:NSString.class]) {
+                rawName = newSound[@"model"];
+              }
+              NSString* name = [rawName isKindOfClass:NSString.class]
+                                   ? (NSString*)rawName
+                                   : @"";
               [_serviceItems addObject:[@{
                                @"name" : name,
-                               @"id" : newSound[@"iden"],
+                               @"id" : soundID,
                                @"enabled" : @NO
                              } mutableCopy]];
             }
