@@ -16,12 +16,13 @@ TMP_FILE="$OUT_FILE.tmp"
 
 mkdir -p "$(dirname "$OUT_FILE")"
 
-# Name macros: `#define PUSHER_SERVICE_X @"..."` where X is not a _URL or
-# _APP_ID variant (those carry the same `@"...` shape on one line).
+# Name macro: the first `#define PUSHER_SERVICE_X @"..."` in each header is
+# that service's name; _URL/_APP_ID and any other variants follow it and are
+# intentionally ignored.
 name_awk='
   /^[[:space:]]*#define[[:space:]]+PUSHER_SERVICE_[A-Z0-9_]+[[:space:]]+@"/ {
-    name = $2
-    if (name !~ /_URL$/ && name !~ /_APP_ID$/) print name
+    print $2
+    exit
   }
 '
 
