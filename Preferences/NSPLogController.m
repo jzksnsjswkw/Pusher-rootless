@@ -10,7 +10,7 @@
 
 #define EXPANDED_TEXT_VIEW_TAG 674
 
-static NSPLogController* logControllerSharedInstance = nil;
+static __weak NSPLogController* logControllerSharedInstance = nil;
 static void logsUpdated() {
   // Darwin notification callbacks run on a background thread; UITableView must
   // only be touched on the main thread. Keep the guards: the static does not
@@ -190,7 +190,7 @@ static NSDictionary* getLogPreferences() {
       (__bridge CFStringRef)_logEnabledKey, PUSHER_APP_ID,
       kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
   _logEnabled =
-      logEnabledRef ? ((__bridge NSNumber*)logEnabledRef).boolValue : YES;
+      NSPushBoolResolved((__bridge id)logEnabledRef, YES);
   if (logEnabledRef) {
     CFRelease(logEnabledRef);
   }
@@ -267,12 +267,16 @@ static NSDictionary* getLogPreferences() {
       // should be all but just in case change implementation later
       if ([key hasSuffix:@"Log"]) {
         NSString* service = [key substringToIndex:((NSString*)key).length - 3];
-        NSArray* serviceLogs = (NSArray*)prefs[key];
-        if (!serviceLogs) {
+        id rawServiceLogs = prefs[key];
+        if (![rawServiceLogs isKindOfClass:NSArray.class]) {
           continue;
         }
-        for (NSDictionary* logSection in serviceLogs) {
-          NSMutableDictionary* newLogSection = [logSection mutableCopy];
+        for (id rawLogSection in (NSArray*)rawServiceLogs) {
+          if (![rawLogSection isKindOfClass:NSDictionary.class]) {
+            continue;
+          }
+          NSMutableDictionary* newLogSection =
+              [(NSDictionary*)rawLogSection mutableCopy];
           newLogSection[@"service"] = service;
           [allLogs addObject:newLogSection];
         }
@@ -282,7 +286,8 @@ static NSDictionary* getLogPreferences() {
   } else {
     // handles _filteredGlobalOnly because _logKey set to @"Log" which is just
     // global
-    prefsLog = prefs[_logKey] ?: @[];
+    id rawPrefsLog = prefs[_logKey];
+    prefsLog = [rawPrefsLog isKindOfClass:NSArray.class] ? rawPrefsLog : @[];
   }
 
   // sort prefs log by timestamp
@@ -290,8 +295,15 @@ static NSDictionary* getLogPreferences() {
       [[NSSortDescriptor alloc] initWithKey:@"timestamp" ascending:NO];
   prefsLog = [prefsLog sortedArrayUsingDescriptors:@[ timestampDescriptor ]];
 
-  for (NSDictionary* logSection in prefsLog) {
-    NSString* logSectionAppID = logSection[@"appID"];
+  for (id rawLogSection in prefsLog) {
+    if (![rawLogSection isKindOfClass:NSDictionary.class]) {
+      continue;
+    }
+    NSDictionary* logSection = (NSDictionary*)rawLogSection;
+    NSString* logSectionAppID = nil;
+    if ([logSection[@"appID"] isKindOfClass:NSString.class]) {
+      logSectionAppID = (NSString*)logSection[@"appID"];
+    }
     // if app filter is on, skip if not same app
     if (_filteredAppID) {
       if (!logSectionAppID || !XEq(logSectionAppID, _filteredAppID)) {
@@ -299,7 +311,10 @@ static NSDictionary* getLogPreferences() {
       }
     }
 
-    NSString* sectionName = logSection[@"name"];
+    NSString* sectionName = nil;
+    if ([logSection[@"name"] isKindOfClass:NSString.class]) {
+      sectionName = (NSString*)logSection[@"name"];
+    }
     if (!sectionName) {
       NSString* appName = @"Unknown App";
       if (logSectionAppID) {
@@ -309,19 +324,25 @@ static NSDictionary* getLogPreferences() {
         // appName = _appList.applications[logSectionAppID];
       }
 
-      NSDate* timestamp = logSection[@"timestamp"];
-      if (timestamp && [timestamp isKindOfClass:NSDate.class]) {
+      NSDate* timestamp = nil;
+      if ([logSection[@"timestamp"] isKindOfClass:NSDate.class]) {
+        timestamp = (NSDate*)logSection[@"timestamp"];
+      }
+      if (timestamp) {
         NSDateFormatter* dateFormatter = [NSDateFormatter new];
         dateFormatter.dateStyle = NSDateFormatterMediumStyle;
         dateFormatter.timeStyle = NSDateFormatterMediumStyle;
         NSString* dateString = [dateFormatter stringFromDate:timestamp];
         sectionName = XStr(@"%@: %@", appName, dateString);
       } else {
-        sectionName = XStr(@"%@: %@", appName, timestamp);
+        sectionName = XStr(@"%@: %@", appName, logSection[@"timestamp"]);
       }
     }
     // added only if global
-    NSString* logSectionService = logSection[@"service"];
+    NSString* logSectionService = nil;
+    if ([logSection[@"service"] isKindOfClass:NSString.class]) {
+      logSectionService = (NSString*)logSection[@"service"];
+    }
     if (logSectionService) {
       if (XIsEmpty(logSectionService)) {
         sectionName = XStr(@"{GLOBAL} %@", sectionName);
@@ -329,7 +350,16 @@ static NSDictionary* getLogPreferences() {
         sectionName = XStr(@"[%@] %@", logSectionService, sectionName);
       }
     }
-    NSArray* logs = logSection[@"logs"] ?: @[];
+    id rawLogs = logSection[@"logs"];
+    NSArray* sourceLogs = [rawLogs isKindOfClass:NSArray.class] ? rawLogs : @[];
+    NSMutableArray* logs = [NSMutableArray new];
+    for (id log in sourceLogs) {
+      if ([log isKindOfClass:NSString.class]) {
+        [logs addObject:log];
+      } else if (log) {
+        [logs addObject:[log description]];
+      }
+    }
 
     if (_filteredNetworkResponse) {
       BOOL networkResponseFilterPasses = NO;
@@ -429,8 +459,7 @@ static NSDictionary* getLogPreferences() {
           kCFPreferencesAnyHost);
       CFRelease(tutorialKeyRef);
       BOOL tutorialShown =
-          tutorialShownRef ? ((__bridge NSNumber*)tutorialShownRef).boolValue
-                           : NO;
+          NSPushBoolResolved((__bridge id)tutorialShownRef, NO);
       if (tutorialShownRef) {
         CFRelease(tutorialShownRef);
       }

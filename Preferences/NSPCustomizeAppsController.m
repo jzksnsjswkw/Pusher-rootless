@@ -15,9 +15,9 @@
 @implementation NSPCustomizeAppsController
 
 - (void)setAppDefaults:(NSString*)appID {
-  if ([_customApps.allKeys containsObject:appID]) {
-    NSMutableDictionary* appDict =
-        [(NSDictionary*)_customApps[appID] mutableCopy];
+  id existing = _customApps[appID];
+  if ([existing isKindOfClass:NSDictionary.class]) {
+    NSMutableDictionary* appDict = [(NSDictionary*)existing mutableCopy];
     appDict[@"enabled"] = @YES;
     _customApps[appID] = appDict;
   } else {
@@ -61,12 +61,11 @@
   }
   [self updateTitle];
   if (_isCustomService) {
-    NSMutableDictionary* customServices = [(
-        [NSPSharedSpecifiers
-            getPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey]
-            ?: @{}) mutableCopy];
+    NSMutableDictionary* customServices =
+        [(NSPushDictionaryValue([NSPSharedSpecifiers
+            getPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey]) ?: @{}) mutableCopy];
     NSMutableDictionary* serviceObj =
-        [(customServices[_service] ?: @{}) mutableCopy];
+        [(NSPushDictionaryValue(customServices[_service]) ?: @{}) mutableCopy];
     serviceObj[NSPPreferenceServiceCustomAppsKey] = _customApps;
     customServices[_service] = serviceObj;
     [NSPSharedSpecifiers
@@ -74,12 +73,11 @@
                 value:(__bridge CFPropertyListRef)customServices
          shouldNotify:YES];
   } else {
-    NSMutableDictionary* builtInServices = [(
-        [NSPSharedSpecifiers
-            getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey]
-            ?: @{}) mutableCopy];
+    NSMutableDictionary* builtInServices =
+        [(NSPushDictionaryValue([NSPSharedSpecifiers
+            getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey]) ?: @{}) mutableCopy];
     NSMutableDictionary* serviceObj =
-        [(builtInServices[_service] ?: @{}) mutableCopy];
+        [(NSPushDictionaryValue(builtInServices[_service]) ?: @{}) mutableCopy];
     serviceObj[NSPPreferenceServiceCustomAppsKey] = _customApps;
     builtInServices[_service] = serviceObj;
     [NSPSharedSpecifiers
@@ -95,9 +93,8 @@
   // _appList = [ALApplicationList sharedApplicationList];
 
   _service = [self.specifier propertyForKey:@"service"];
-  _isCustomService =
-      [self.specifier propertyForKey:@"isCustomService"] &&
-      ((NSNumber*)[self.specifier propertyForKey:@"isCustomService"]).boolValue;
+  _isCustomService = NSPushBoolResolved(
+      [self.specifier propertyForKey:@"isCustomService"], NO);
 
   _lastTargetAppID = nil;
   _lastTargetIndexPath = nil;
@@ -157,15 +154,19 @@
 
   NSDictionary* serviceDefaults = nil;
   if (_isCustomService) {
-    serviceDefaults =
-        (prefs[NSPPreferenceCustomServicesKey] ?: @{})[_service] ?: @{};
-    _customApps = [(serviceDefaults[NSPPreferenceServiceCustomAppsKey]
+    serviceDefaults = NSPushDictionaryValue(
+        NSPushDictionaryValue(
+            prefs[NSPPreferenceCustomServicesKey])[_service]) ?: @{};
+    _customApps = [(NSPushDictionaryValue(
+                        serviceDefaults[NSPPreferenceServiceCustomAppsKey])
                         ?: @{}) mutableCopy];
   } else {
     NSDictionary* builtInServices =
-        (NSDictionary*)prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
-    serviceDefaults = builtInServices[_service] ?: @{};
-    _customApps = [(serviceDefaults[NSPPreferenceServiceCustomAppsKey]
+        NSPushDictionaryValue(prefs[NSPPreferenceBuiltInServicesKey]) ?: @{};
+    serviceDefaults =
+        NSPushDictionaryValue(builtInServices[_service]) ?: @{};
+    _customApps = [(NSPushDictionaryValue(
+                        serviceDefaults[NSPPreferenceServiceCustomAppsKey])
                         ?: @{}) mutableCopy];
   }
 
@@ -175,12 +176,16 @@
   if (XEq(_service, PUSHER_SERVICE_PUSHOVER) ||
       XEq(_service, PUSHER_SERVICE_PUSHBULLET)) {
     _defaultDevices =
-        [(serviceDefaults[[self.specifier propertyForKey:@"defaultDevicesKey"]]
+        [(NSPushArrayValue(
+              serviceDefaults[[self.specifier
+                  propertyForKey:@"defaultDevicesKey"]])
               ?: @[]) copy];
   }
   if (XEq(_service, PUSHER_SERVICE_PUSHOVER)) {
     _defaultSounds =
-        [(serviceDefaults[[self.specifier propertyForKey:@"defaultSoundsKey"]]
+        [(NSPushArrayValue(
+              serviceDefaults[[self.specifier
+                  propertyForKey:@"defaultSoundsKey"]])
               ?: @[]) copy];
   }
   if (XEq(_service, PUSHER_SERVICE_IFTTT)) {

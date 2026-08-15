@@ -152,14 +152,21 @@
         } else if (XEq(specifier.name, @"App Customization")) {
           NSDictionary* customApps = nil;
           if (_isCustom) {
-            customApps = (NSDictionary*)
-                ((prefs[NSPPreferenceCustomServicesKey] ?: @{})
-                    [_service][NSPPreferenceServiceCustomAppsKey]);
+            NSDictionary* customServices =
+                NSPushDictionaryValue(
+                    prefs[NSPPreferenceCustomServicesKey]);
+            NSDictionary* serviceObj =
+                NSPushDictionaryValue(customServices[_service]);
+            customApps = NSPushDictionaryValue(
+                serviceObj[NSPPreferenceServiceCustomAppsKey]);
           } else {
             NSDictionary* builtInServices =
-                (NSDictionary*)prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
-            customApps =
-                builtInServices[_service][NSPPreferenceServiceCustomAppsKey];
+                NSPushDictionaryValue(
+                    prefs[NSPPreferenceBuiltInServicesKey]);
+            NSDictionary* serviceObj =
+                NSPushDictionaryValue(builtInServices[_service]);
+            customApps = NSPushDictionaryValue(
+                serviceObj[NSPPreferenceServiceCustomAppsKey]);
           }
           specifier.name = XStr(@"%@ (%d total)", specifier.name,
                                 customApps ? (int)customApps.count : 0);
@@ -263,7 +270,7 @@
     XLog(@"Test push exception: %@", exception);
   }
 
-  if (reply[@"success"] && ((NSNumber*)reply[@"success"]).boolValue) {
+  if (NSPushBoolValue(reply[@"success"])) {
     [self displayNotification:XStr(@"%@Sent", PUSHER_TEST_PUSH_RESULT_PREFIX)];
   } else {
     [self displayNotification:XStr(@"%@Failed to Send",

@@ -4,6 +4,14 @@
 #import "NSPusherManager.h"
 #import "../Generated/BuiltinServices.generated.h"
 
+static BOOL NSPListPrefsBool(id value) {
+  if ([value isKindOfClass:NSNumber.class] ||
+      [value isKindOfClass:NSString.class]) {
+    return [value boolValue];
+  }
+  return NO;
+}
+
 @implementation NSPServiceListController
 
 - (void)viewDidLoad {
@@ -67,19 +75,27 @@
       [@{@"Enabled" : [NSMutableArray new], @"Disabled" : [NSMutableArray new]}
           mutableCopy];
   _services = BUILTIN_PUSHER_SERVICES;
-  _customServices = [(NSDictionary*)(_prefs[NSPPreferenceCustomServicesKey]
-                                         ?: @{}) mutableCopy];
+  id rawCustomServices = _prefs[NSPPreferenceCustomServicesKey];
+  NSDictionary* customServicesPref =
+      [rawCustomServices isKindOfClass:NSDictionary.class]
+          ? (NSDictionary*)rawCustomServices
+          : @{};
+  _customServices = [customServicesPref mutableCopy];
 
   _defaultImage = DEFAULT_IMAGE;
   _serviceImages = [NSMutableDictionary new];
 
-  NSDictionary* builtInServices =
-      (NSDictionary*)_prefs[NSPPreferenceBuiltInServicesKey] ?: @{};
+  NSDictionary* builtInServices = @{};
+  id rawBuiltInServices = _prefs[NSPPreferenceBuiltInServicesKey];
+  if ([rawBuiltInServices isKindOfClass:NSDictionary.class]) {
+    builtInServices = (NSDictionary*)rawBuiltInServices;
+  }
 
   for (NSString* service in _services) {
-    NSDictionary* serviceObj = builtInServices[service] ?: @{};
+    NSDictionary* serviceObj =
+        NSPushDictionaryValue(builtInServices[service]) ?: @{};
     if (serviceObj[NSPPreferenceServiceEnabledKey] &&
-        ((NSNumber*)serviceObj[NSPPreferenceServiceEnabledKey]).boolValue) {
+        NSPListPrefsBool(serviceObj[NSPPreferenceServiceEnabledKey])) {
       [_data[@"Enabled"] addObject:service];
     } else {
       [_data[@"Disabled"] addObject:service];
@@ -92,11 +108,14 @@
 
   // make deep mutable and preload service images
   for (NSString* customService in _customServices.allKeys) {
-    _customServices[customService] =
-        [(_customServices[customService] ?: @{}) mutableCopy];
-    if (_customServices[customService] &&
-        _customServices[customService][@"Enabled"] &&
-        ((NSNumber*)_customServices[customService][@"Enabled"]).boolValue) {
+    id rawCustomService = _customServices[customService];
+    NSMutableDictionary* customServicePrefs =
+        [rawCustomService isKindOfClass:NSDictionary.class]
+            ? [(NSDictionary*)rawCustomService mutableCopy]
+            : [NSMutableDictionary new];
+    _customServices[customService] = customServicePrefs;
+    if (customServicePrefs[@"Enabled"] &&
+        NSPListPrefsBool(customServicePrefs[@"Enabled"])) {
       [_data[@"Enabled"] addObject:customService];
     } else {
       [_data[@"Disabled"] addObject:customService];
@@ -118,7 +137,7 @@
 - (void)viewDidAppear:(BOOL)animated {
   [super viewDidAppear:animated];
   if (!_prefs[@"ServiceListTutorialShown"] ||
-      !((NSNumber*)_prefs[@"ServiceListTutorialShown"]).boolValue) {
+      !NSPListPrefsBool(_prefs[@"ServiceListTutorialShown"])) {
     [self showTutorial];
   }
 }
@@ -232,13 +251,12 @@
       [_table isEditing] ? _addNewServiceBarButtonItem : nil;
   if (![_table isEditing]) {
     // Save
-    NSMutableDictionary* builtInServices = [(
-        [NSPSharedSpecifiers
-            getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey]
-            ?: @{}) mutableCopy];
+    NSMutableDictionary* builtInServices =
+        [(NSPushDictionaryValue([NSPSharedSpecifiers
+            getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey]) ?: @{}) mutableCopy];
     for (NSString* service in _services) {
       NSMutableDictionary* serviceObj =
-          [(builtInServices[service] ?: @{}) mutableCopy];
+          [(NSPushDictionaryValue(builtInServices[service]) ?: @{}) mutableCopy];
       serviceObj[NSPPreferenceServiceEnabledKey] =
           @([_data[@"Enabled"] containsObject:service]);
       builtInServices[service] = serviceObj;
@@ -263,9 +281,9 @@
 }
 
 - (void)addNewService {
-  __unsafe_unretained NSPServiceListController* weakSelf = self;
+  __weak NSPServiceListController* weakSelf = self;
   UIAlertController* alert = XAlertTitle(@"Add Custom Service", nil);
-  __unsafe_unretained UIAlertController* weakAlert = alert;
+  __weak UIAlertController* weakAlert = alert;
   [alert addTextFieldWithConfigurationHandler:^(UITextField* textField) {
     textField.placeholder = @"Service Name";
   }];
@@ -273,17 +291,22 @@
                                             style:UIAlertActionStyleCancel
                                           handler:nil]];
   id handler = ^(UIAlertAction* action) {
-    if (!weakAlert || !weakAlert.textFields ||
-        ![weakAlert.textFields isKindOfClass:NSArray.class]) {
-      XLog(@"alert or alert.textFields nil: %@ %@", weakAlert,
-           weakAlert ? weakAlert.textFields : nil);
+    // Promote the weak refs to strong locals first: ARC forbids dereferencing
+    // a __weak pointer directly, and this also guards against the alert /
+    // controller being gone by the time the handler runs.
+    NSPServiceListController* strongSelf = weakSelf;
+    UIAlertController* strongAlert = weakAlert;
+    if (!strongSelf || !strongAlert || !strongAlert.textFields ||
+        ![strongAlert.textFields isKindOfClass:NSArray.class]) {
+      XLog(@"alert or alert.textFields nil: %@ %@", strongAlert,
+           strongAlert ? strongAlert.textFields : nil);
       return;
     }
-    if (weakAlert.textFields.count == 0) {
+    if (strongAlert.textFields.count == 0) {
       XLog(@"No text fields found");
       return;
     }
-    UITextField* textField = weakAlert.textFields[0];
+    UITextField* textField = strongAlert.textFields[0];
     if (!textField || !textField.text ||
         ![textField.text isKindOfClass:NSString.class]) {
       XLog(@"textField or textField.text nil: %@ %@", textField,
@@ -297,36 +320,38 @@
       XLog(@"newServiceName empty");
       return;
     }
-    if ([weakSelf->_customServices.allKeys containsObject:newServiceName] ||
-        [weakSelf->_services containsObject:newServiceName]) {
-      // Nested block: also uses weakSelf, not self.
+    if ([strongSelf->_customServices.allKeys containsObject:newServiceName] ||
+        [strongSelf->_services containsObject:newServiceName]) {
+      // Nested block: capture weakSelf and re-promote inside to avoid
+      // retaining the controller for the lifetime of the alert.
       id existsHandler = ^(UIAlertAction* existsAction) {
-        [weakSelf addNewService];
+        NSPServiceListController* handlerSelf = weakSelf;
+        [handlerSelf addNewService];
       };
       UIAlertController* existsAlert =
           XAlertTitle(@"Error", @"A service with that name already exists.");
       [existsAlert addAction:XAlertBtnHandler(@"Ok", existsHandler)];
-      [weakSelf presentViewController:existsAlert animated:YES
-                           completion:nil];
+      [strongSelf presentViewController:existsAlert animated:YES
+                             completion:nil];
       XLog(@"newServiceName already exists");
       return;
     }
-    weakSelf->_customServices[newServiceName] = [@{@"Enabled" : @NO} mutableCopy];
-    [weakSelf->_data[@"Disabled"] addObject:newServiceName];
-    [weakSelf->_data[@"Disabled"]
+    strongSelf->_customServices[newServiceName] = [@{@"Enabled" : @NO} mutableCopy];
+    [strongSelf->_data[@"Disabled"] addObject:newServiceName];
+    [strongSelf->_data[@"Disabled"]
         sortUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
 
-    UIImage* defaultImage = weakSelf->_defaultImage;
+    UIImage* defaultImage = strongSelf->_defaultImage;
     if (!defaultImage || ![defaultImage isKindOfClass:UIImage.class]) {
       defaultImage = DEFAULT_IMAGE;
     }
 
     NSString* imageName = XStr(@"CustomService_%@", newServiceName);
-    weakSelf->_serviceImages[newServiceName] =
+    strongSelf->_serviceImages[newServiceName] =
         [UIImage imageNamed:imageName inBundle:PUSHER_BUNDLE] ?: defaultImage;
-    [weakSelf->_table reloadSections:[NSIndexSet indexSetWithIndex:1]
+    [strongSelf->_table reloadSections:[NSIndexSet indexSetWithIndex:1]
                     withRowAnimation:UITableViewRowAnimationAutomatic];
-    [weakSelf saveCustomServices];
+    [strongSelf saveCustomServices];
   };
   [alert addAction:XAlertBtnHandler(@"Add", handler)];
   [self presentViewController:alert animated:YES completion:nil];
@@ -498,9 +523,9 @@
 
 - (void)renameService:(NSString*)currService {
 
-  __unsafe_unretained NSPServiceListController* weakSelf = self;
+  __weak NSPServiceListController* weakSelf = self;
   UIAlertController* alert = XAlertTitle(XStr(@"Rename %@", currService), nil);
-  __unsafe_unretained UIAlertController* weakAlert = alert;
+  __weak UIAlertController* weakAlert = alert;
   [alert addTextFieldWithConfigurationHandler:^(UITextField* textField) {
     textField.placeholder = @"Service Name";
     textField.text = currService;
@@ -509,7 +534,15 @@
                                             style:UIAlertActionStyleCancel
                                           handler:nil]];
   id handler = ^(UIAlertAction* action) {
-    UITextField* textField = weakAlert.textFields[0];
+    // Promote weak refs to strong locals first: ARC forbids dereferencing a
+    // __weak pointer directly (and this guards against the alert being gone).
+    NSPServiceListController* strongSelf = weakSelf;
+    UIAlertController* strongAlert = weakAlert;
+    if (!strongSelf || !strongAlert || !strongAlert.textFields ||
+        strongAlert.textFields.count == 0) {
+      return;
+    }
+    UITextField* textField = strongAlert.textFields[0];
     if (!textField || !textField.text) {
       return;
     }
@@ -519,32 +552,39 @@
     if (newServiceName.length < 1 || XEq(newServiceName, currService)) {
       return;
     }
-    if ([weakSelf->_customServices.allKeys containsObject:newServiceName] ||
-        [weakSelf->_services containsObject:newServiceName]) {
-      // Nested block: uses weakSelf, not self.
+    if ([strongSelf->_customServices.allKeys containsObject:newServiceName] ||
+        [strongSelf->_services containsObject:newServiceName]) {
+      // Nested block: capture weakSelf and re-promote inside to avoid
+      // retaining the controller for the lifetime of the alert.
       id existsHandler = ^(UIAlertAction* existsAction) {
-        [weakSelf renameService:currService];
+        NSPServiceListController* handlerSelf = weakSelf;
+        [handlerSelf renameService:currService];
       };
       UIAlertController* existsAlert =
           XAlertTitle(XStr(@"Rename %@", currService),
                       @"A service with that name already exists.");
       [existsAlert addAction:XAlertBtnHandler(@"Ok", existsHandler)];
-      [weakSelf presentViewController:existsAlert animated:YES completion:nil];
+      [strongSelf presentViewController:existsAlert animated:YES
+                             completion:nil];
       return;
     }
 
-    weakSelf->_serviceImages[newServiceName] =
-        weakSelf->_serviceImages[currService];
-    [weakSelf->_serviceImages removeObjectForKey:currService];
+    strongSelf->_serviceImages[newServiceName] =
+        strongSelf->_serviceImages[currService];
+    [strongSelf->_serviceImages removeObjectForKey:currService];
 
-    weakSelf->_customServices[newServiceName] =
-        [weakSelf->_customServices[currService] mutableCopy];
-    [weakSelf->_customServices removeObjectForKey:currService];
-    [weakSelf saveCustomServices];
+    id rawCustomService = strongSelf->_customServices[currService];
+    if (![rawCustomService isKindOfClass:NSDictionary.class]) {
+      return;
+    }
+    strongSelf->_customServices[newServiceName] =
+        [rawCustomService mutableCopy];
+    [strongSelf->_customServices removeObjectForKey:currService];
+    [strongSelf saveCustomServices];
 
     // Drop any cached service controller for the old name so the renamed
     // service reloads with fresh data instead of reusing the stale instance.
-    [weakSelf->_loadedServiceControllers removeObjectForKey:currService];
+    [strongSelf->_loadedServiceControllers removeObjectForKey:currService];
 
     // Get preferences
     CFArrayRef keyList = CFPreferencesCopyKeyList(
@@ -610,19 +650,21 @@
     CFPreferencesSetMultiple((__bridge CFDictionaryRef)newPrefs,
                              (__bridge CFArrayRef)keysToRemove, PUSHER_APP_ID,
                              kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
+                             kCFPreferencesAnyHost);
+    strongSelf->_prefs = [newPrefs copy];
     notify_post(PUSHER_PREFS_NOTIFICATION);
 
     NSString* currSection =
-        ((NSNumber*)weakSelf->_customServices[newServiceName][@"Enabled"])
-            .boolValue
+        NSPListPrefsBool(strongSelf->_customServices[newServiceName][@"Enabled"])
             ? @"Enabled"
             : @"Disabled";
-    [weakSelf->_data[currSection] removeObject:currService];
-    [weakSelf->_data[currSection] addObject:newServiceName];
-    [weakSelf->_data[currSection]
+    [strongSelf->_data[currSection] removeObject:currService];
+    [strongSelf->_data[currSection] addObject:newServiceName];
+    [strongSelf->_data[currSection]
         sortUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
 
-    [weakSelf->_table reloadSections:
+    [strongSelf->_table reloadSections:
                           [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0, 2)]
                     withRowAnimation:UITableViewRowAnimationFade];
   };

@@ -18,10 +18,8 @@
   _isService = (BOOL)[self.specifier propertyForKey:@"service"];
   if (_isService) {
     _service = [self.specifier propertyForKey:@"service"];
-    _isCustomService =
-        [self.specifier propertyForKey:@"isCustomService"] &&
-        ((NSNumber*)[self.specifier propertyForKey:@"isCustomService"])
-            .boolValue;
+    _isCustomService = NSPushBoolResolved(
+        [self.specifier propertyForKey:@"isCustomService"], NO);
 
     // synchronized if all values are nil
     BOOL synchronizedWithGlobal = YES;
@@ -34,22 +32,24 @@
         BOOL foundTruthy = NO;
         if (_isCustomService) {
           NSDictionary* customServices =
-              [NSPSharedSpecifiers
+              NSPushDictionaryValue([NSPSharedSpecifiers
                   getPreference:(__bridge CFStringRef)
-                                    NSPPreferenceCustomServicesKey]
-                  ?: @{};
-          if (customServices[_service]) {
+                                    NSPPreferenceCustomServicesKey])
+              ?: @{};
+          NSDictionary* customServiceObj =
+              NSPushDictionaryValue(customServices[_service]);
+          if (customServiceObj) {
             foundTruthy =
-                customServices[_service][[specifier propertyForKey:@"key"]] !=
-                nil;
+                customServiceObj[[specifier propertyForKey:@"key"]] != nil;
           }
         } else {
           NSDictionary* builtInServices =
-              [NSPSharedSpecifiers
+              NSPushDictionaryValue([NSPSharedSpecifiers
                   getPreference:(__bridge CFStringRef)
-                                    NSPPreferenceBuiltInServicesKey]
-                  ?: @{};
-          NSDictionary* serviceObj = builtInServices[_service] ?: @{};
+                                    NSPPreferenceBuiltInServicesKey])
+              ?: @{};
+          NSDictionary* serviceObj =
+              NSPushDictionaryValue(builtInServices[_service]) ?: @{};
           foundTruthy = serviceObj[[specifier propertyForKey:@"key"]] != nil;
         }
         synchronizedWithGlobal = !foundTruthy;
@@ -109,7 +109,7 @@
       [allowNotificationsSpecifier performSetterWithValue:value];
       [self reloadSpecifier:allowNotificationsSpecifier animated:YES];
     }
-    if (!((NSNumber*)value).boolValue) {
+    if (!NSPushBoolValue(value)) {
       PSSpecifier* requireANWithORSpecifier =
           [self specifierForID:@"Require Allow Notifications with OR"];
       if (requireANWithORSpecifier) {
