@@ -127,25 +127,35 @@ static NSString* NSPrefsString(id value, NSString* defaultValue) {
   // tolerance layer: customApps may have been entered with a different case
   // (or migrated from older lowercased storage), so we still apply the
   // override when only the case differs.
+  NSDictionary* customApps =
+      [self.customApps isKindOfClass:NSDictionary.class]
+          ? (NSDictionary*)self.customApps
+          : nil;
   NSDictionary* customApp = nil;
-  NSString* lookupAppID = appID.lowercaseString;
-  if (self.customApps[lookupAppID]) {
-    customApp = self.customApps[lookupAppID];
+  NSString* lookupAppID = [appID isKindOfClass:NSString.class]
+                              ? appID.lowercaseString
+                              : @"";
+  if (customApps[lookupAppID]) {
+    customApp = customApps[lookupAppID];
   } else {
     // Also tolerate custom apps stored with the original (possibly mixed) case.
-    for (NSString* storedAppID in self.customApps) {
-      if ([storedAppID.lowercaseString isEqualToString:lookupAppID]) {
-        customApp = self.customApps[storedAppID];
+    for (id storedAppID in customApps) {
+      if ([storedAppID isKindOfClass:NSString.class] &&
+          [((NSString*)storedAppID).lowercaseString
+              isEqualToString:lookupAppID]) {
+        customApp = customApps[storedAppID];
         break;
       }
     }
   }
-  if (!customApp) {
+  if (![customApp isKindOfClass:NSDictionary.class]) {
     return self;
   }
   NSMutableDictionary* merged = [self.rawPrefs mutableCopy];
-  for (NSString* key in customApp) {
-    merged[key] = customApp[key];
+  for (id key in customApp) {
+    if ([key isKindOfClass:NSString.class]) {
+      merged[key] = customApp[key];
+    }
   }
   return [NSPushServiceConfig configWithName:self.name
                                     rawPrefs:merged
@@ -241,17 +251,23 @@ static NSArray* getSNSKeys(NSDictionary* prefs, NSString* prefix,
 
 // Migrate the legacy flat-per-service key scheme (e.g. `PushoverToken`,
 // `BarkServerURL`, `PushoverBL-<appid>`=YES) into the new one-service-one-
-// object layout stored under NSPPreferenceBuiltInServicesKey. Runs once:
-// if the new key already exists the migration is a no-op. Returns a (copy of
-// the) prefs dict with BuiltInServices filled and the migrated flat keys
-// removed. Global (non-service) keys and custom services are left untouched.
+// object layout stored under NSPPreferenceBuiltInServicesKey. Always scans for
+// flat keys even when BuiltInServices already exists, so an empty/stale
+// BuiltInServices object cannot strand old flat data. Returns a (copy of the)
+// prefs dict with BuiltInServices filled and the migrated flat keys removed.
+// Global (non-service) keys and custom services are left untouched.
 static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
-  if (prefs[NSPPreferenceBuiltInServicesKey] != nil) {
-    return prefs; // already migrated
+  // Always scan for legacy flat keys, even when a (possibly empty or stale)
+  // BuiltInServices object already exists, so old flat data is still folded
+  // in and removed instead of being stranded forever.
+  NSMutableDictionary* builtInServices = [NSMutableDictionary new];
+  id existingBuiltIn = prefs[NSPPreferenceBuiltInServicesKey];
+  if ([existingBuiltIn isKindOfClass:NSDictionary.class]) {
+    [builtInServices addEntriesFromDictionary:(NSDictionary*)existingBuiltIn];
   }
 
   BOOL migratedAny = NO;
-  NSMutableDictionary* builtInServices = [NSMutableDictionary new];
+  NSMutableArray* allKeysToRemove = [NSMutableArray new];
 
   for (NSString* service in BUILTIN_PUSHER_SERVICES) {
     // Legacy key basenames (flat `<service><Field>` keys).
@@ -301,14 +317,26 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
     }
 
     migratedAny = YES;
-    NSMutableDictionary* serviceObj = [NSMutableDictionary new];
 
-    serviceObj[NSPPreferenceServiceEnabledKey] =
-        prefs[XStr(@"%@Enabled", service)] ?: @NO;
+    // Start from the existing nested object (if any) and only fill missing
+    // values from flat legacy keys, so an existing newer config is preserved.
+    NSMutableDictionary* serviceObj = [NSMutableDictionary new];
+    id existingServiceObj = builtInServices[service];
+    if ([existingServiceObj isKindOfClass:NSDictionary.class]) {
+      [serviceObj addEntriesFromDictionary:(NSDictionary*)existingServiceObj];
+    }
+
+    id flatEnabled = prefs[XStr(@"%@Enabled", service)];
+    if (flatEnabled && !serviceObj[NSPPreferenceServiceEnabledKey]) {
+      serviceObj[NSPPreferenceServiceEnabledKey] = flatEnabled;
+    } else if (!serviceObj[NSPPreferenceServiceEnabledKey]) {
+      serviceObj[NSPPreferenceServiceEnabledKey] = @NO;
+    }
+
     id v;
 #define MIGRATE_FIELD(field, legacy)                                           \
   v = prefs[(legacy)];                                                         \
-  if (v)                                                                       \
+  if (v && !serviceObj[(field)])                                               \
   serviceObj[(field)] = v
 
     MIGRATE_FIELD(NSPPreferenceServiceTokenKey, XStr(@"%@Token", service));
@@ -321,12 +349,6 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
     MIGRATE_FIELD(NSPPreferenceServiceServerURLKey,
                   XStr(@"%@ServerURL", service));
     MIGRATE_FIELD(NSPPreferenceServiceDBNameKey, XStr(@"%@DBName", service));
-    // appListIsBlacklist defaults to YES; only a non-default NO is migrated,
-    // a YES value is dropped with the flat keys.
-    v = prefs[XStr(@"%@AppListIsBlacklist", service)];
-    if (v && !NSPrefsBoolResolved(v, YES)) {
-      serviceObj[NSPPreferenceServiceAppListIsBlacklistKey] = v;
-    }
     MIGRATE_FIELD(NSPPreferenceServiceIncludeIconKey,
                   XStr(@"%@IncludeIcon", service));
     MIGRATE_FIELD(NSPPreferenceServiceCurateDataKey,
@@ -350,119 +372,93 @@ static NSDictionary* migrateLegacyBuiltInServices(NSDictionary* prefs) {
                   XStr(@"%@CustomApps", service));
 #undef MIGRATE_FIELD
 
+    // appListIsBlacklist defaults to YES; only a non-default NO is migrated.
+    v = prefs[XStr(@"%@AppListIsBlacklist", service)];
+    if (v && !serviceObj[NSPPreferenceServiceAppListIsBlacklistKey] &&
+        !NSPrefsBoolResolved(v, YES)) {
+      serviceObj[NSPPreferenceServiceAppListIsBlacklistKey] = v;
+    }
+
     // whenToPush / whatNetwork / snsIsAnd / snsRequireANWithOR
     v = prefs[XStr(@"%@WhenToPush", service)];
-    if (v)
+    if (v && !serviceObj[NSPPreferenceServiceWhenToPushKey])
       serviceObj[NSPPreferenceServiceWhenToPushKey] = v;
     v = prefs[XStr(@"%@WhatNetwork", service)];
-    if (v)
+    if (v && !serviceObj[NSPPreferenceServiceWhatNetworkKey])
       serviceObj[NSPPreferenceServiceWhatNetworkKey] = v;
     v = prefs[XStr(@"%@SufficientNotificationSettingsIsAnd", service)];
-    if (v)
+    if (v && !serviceObj[@"SufficientNotificationSettingsIsAnd"])
       serviceObj[@"SufficientNotificationSettingsIsAnd"] = v;
     v = prefs[XStr(@"%@SNSORRequireAllowNotifications", service)];
-    if (v)
+    if (v && !serviceObj[@"SNSORRequireAllowNotifications"])
       serviceObj[@"SNSORRequireAllowNotifications"] = v;
 
     // SNS toggles
     NSDictionary* snsDefaults = PUSHER_SNS_KEYS;
     for (NSString* snsKey in snsDefaults.allKeys) {
+      NSString* snsField = XStr(@"SNS-%@", snsKey);
       v = prefs[XStr(@"%@SNS-%@", service, snsKey)];
-      if (v) {
-        serviceObj[XStr(@"SNS-%@", snsKey)] = v;
+      if (v && !serviceObj[snsField]) {
+        serviceObj[snsField] = v;
       }
     }
 
-    // app list: flat `<service>BL-<appid>`=YES -> array
-    NSArray* appList = getAppIDsWithPrefix(prefs, XStr(@"%@BL-", service));
-    serviceObj[NSPPreferenceServiceAppListKey] = appList;
+    // app list: merge flat `<service>BL-<appid>`=YES into any existing array.
+    NSArray* flatAppList = getAppIDsWithPrefix(prefs, XStr(@"%@BL-", service));
+    if (flatAppList.count > 0) {
+      id existingAppListValue = serviceObj[NSPPreferenceServiceAppListKey];
+      NSMutableArray* mergedAppList = [NSMutableArray arrayWithArray:
+          [existingAppListValue isKindOfClass:NSArray.class]
+              ? (NSArray*)existingAppListValue
+              : @[]];
+      for (NSString* appID in flatAppList) {
+        if (![mergedAppList containsObject:appID]) {
+          [mergedAppList addObject:appID];
+        }
+      }
+      serviceObj[NSPPreferenceServiceAppListKey] = mergedAppList;
+    }
 
     builtInServices[service] = serviceObj;
+
+    // Collect the flat legacy keys for this service so they can be removed.
+    for (NSString* p in legacyKeys) {
+      if (prefs[p] != nil && ![allKeysToRemove containsObject:p]) {
+        [allKeysToRemove addObject:p];
+      }
+    }
+    for (NSString* key in prefs.allKeys) {
+      if (![key isKindOfClass:NSString.class]) {
+        continue;
+      }
+      if (([key hasPrefix:XStr(@"%@BL-", service)] ||
+           [key hasPrefix:XStr(@"%@SNS-", service)]) &&
+          ![allKeysToRemove containsObject:key]) {
+        [allKeysToRemove addObject:key];
+      }
+    }
   }
 
-  if (!migratedAny) {
+  if (!migratedAny || allKeysToRemove.count == 0) {
     return prefs;
   }
 
   NSMutableDictionary* newPrefs = [prefs mutableCopy];
   newPrefs[NSPPreferenceBuiltInServicesKey] = builtInServices;
-
-  // Remove the migrated flat per-service keys.
-  NSMutableArray* keysToRemove = [NSMutableArray new];
-  for (NSString* service in BUILTIN_PUSHER_SERVICES) {
-    NSArray* prefixes = @[
-      XStr(@"%@Enabled", service),
-      XStr(@"%@Token", service),
-      XStr(@"%@User", service),
-      XStr(@"%@Key", service),
-      XStr(@"%@EventName", service),
-      XStr(@"%@DateFormat", service),
-      XStr(@"%@ServerURL", service),
-      XStr(@"%@DBName", service),
-      XStr(@"%@AppListIsBlacklist", service),
-      XStr(@"%@WhenToPush", service),
-      XStr(@"%@WhatNetwork", service),
-      XStr(@"%@SufficientNotificationSettingsIsAnd", service),
-      XStr(@"%@SNSORRequireAllowNotifications", service),
-      XStr(@"%@Devices", service),
-      XStr(@"%@Sounds", service),
-      XStr(@"%@CustomApps", service),
-      XStr(@"%@IncludeIcon", service),
-      XStr(@"%@CurateData", service),
-      XStr(@"%@IncludeImage", service),
-      XStr(@"%@ImageMaxWidth", service),
-      XStr(@"%@ImageMaxHeight", service),
-      XStr(@"%@ImageShrinkFactor", service),
-      XStr(@"%@Corpid", service),
-      XStr(@"%@Corpsecret", service),
-      XStr(@"%@AgentID", service),
-      XStr(@"%@Touser", service)
-    ];
-    for (NSString* p in prefixes) {
-      if (newPrefs[p] != nil) {
-        [newPrefs removeObjectForKey:p];
-        [keysToRemove addObject:p];
-      }
-    }
-    // remove flat `<service>BL-<appid>` keys
-    for (NSString* key in prefs.allKeys) {
-      if ([key hasPrefix:XStr(@"%@BL-", service)] &&
-          ![keysToRemove containsObject:key]) {
-        [keysToRemove addObject:key];
-      }
-    }
-    // remove flat `<service>SNS-<key>` keys
-    for (NSString* key in prefs.allKeys) {
-      if ([key hasPrefix:XStr(@"%@SNS-", service)] &&
-          ![keysToRemove containsObject:key]) {
-        [keysToRemove addObject:key];
-      }
-    }
+  for (NSString* key in allKeysToRemove) {
+    [newPrefs removeObjectForKey:key];
   }
 
-  if (keysToRemove.count) {
-    for (NSString* key in keysToRemove) {
-      [newPrefs removeObjectForKey:key];
-    }
-    CFPreferencesSetMultiple((__bridge CFDictionaryRef)newPrefs,
-                             (__bridge CFArrayRef)keysToRemove, PUSHER_APP_ID,
-                             kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-    CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                             kCFPreferencesAnyHost);
-  } else {
-    CFPreferencesSetValue((__bridge CFStringRef)NSPPreferenceBuiltInServicesKey,
-                          (__bridge CFPropertyListRef)builtInServices,
-                          PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                          kCFPreferencesAnyHost);
-    CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                             kCFPreferencesAnyHost);
-  }
+  CFPreferencesSetMultiple((__bridge CFDictionaryRef)newPrefs,
+                           (__bridge CFArrayRef)allKeysToRemove, PUSHER_APP_ID,
+                           kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+  CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
+                           kCFPreferencesAnyHost);
 
   notify_post(PUSHER_PREFS_NOTIFICATION);
   XLog(@"Migrated legacy built-in service prefs");
   return newPrefs;
 }
-
 static NSDictionary* migrateLegacyCustomServices(NSDictionary* prefs) {
   // Scan the top-level keys for legacy flat custom-service data instead of
   // iterating CustomServices: the flat keys (CustomService_<name>_CustomApps,
@@ -736,6 +732,9 @@ static NSDictionary* migrateLegacyGlobal(NSDictionary* prefs) {
         NSPrefsDictionary(customService[NSPPreferenceServiceCustomAppsKey]);
     NSMutableDictionary* customApps = [NSMutableDictionary new];
     for (NSString* customAppID in prefCustomApps.allKeys) {
+      if (![customAppID isKindOfClass:NSString.class]) {
+        continue;
+      }
       NSDictionary* customAppPrefs = NSPrefsDictionary(prefCustomApps[customAppID]);
       if (!customAppPrefs) {
         continue;
@@ -865,6 +864,9 @@ static NSDictionary* migrateLegacyGlobal(NSDictionary* prefs) {
         NSPrefsDictionary(serviceObj[@"customApps"]);
     NSMutableDictionary* customApps = [NSMutableDictionary new];
     for (NSString* customAppID in prefCustomApps.allKeys) {
+      if (![customAppID isKindOfClass:NSString.class]) {
+        continue;
+      }
       NSDictionary* customAppPrefs = NSPrefsDictionary(prefCustomApps[customAppID]);
       if (!customAppPrefs) {
         continue;

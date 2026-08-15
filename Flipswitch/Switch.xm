@@ -2,6 +2,7 @@
 #import "FSSwitchPanel.h"
 
 #import "../global.h"
+#import "../helpers.h"
 
 @interface NSUserDefaults (Tweak_Category)
 - (id)objectForKey:(NSString*)key inDomain:(NSString*)domain;
@@ -18,10 +19,12 @@
 }
 
 - (FSSwitchState)stateForSwitchIdentifier:(NSString*)switchIdentifier {
-  NSNumber* n = (NSNumber*)[[NSUserDefaults standardUserDefaults]
+  id n = [[NSUserDefaults standardUserDefaults]
       objectForKey:@"Enabled"
           inDomain:(__bridge NSString*)PUSHER_APP_ID];
-  BOOL enabled = n ? n.boolValue : YES;
+  // Guard against hand-edited/malformed prefs: only NSNumber/NSString have a
+  // safe boolValue, anything else falls back to the default enabled state.
+  BOOL enabled = NSPushBoolResolved(n, YES);
   return enabled ? FSSwitchStateOn : FSSwitchStateOff;
 }
 

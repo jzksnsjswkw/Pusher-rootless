@@ -68,7 +68,7 @@ static NSInteger NSPWechatInteger(id value) {
 
   NSString* corpid = XStrDefault(config.rawPrefs[@"corpid"], @"");
   NSString* corpsecret = XStrDefault(config.rawPrefs[@"corpsecret"], @"");
-  if (!corpid || !corpsecret) {
+  if (corpid.length == 0 || corpsecret.length == 0) {
     if (completion) {
       // Missing credentials: abort rather than sending a request with an
       // empty URL. Callers treat nil as "failed to build request" and skip
