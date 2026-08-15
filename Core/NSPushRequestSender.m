@@ -14,6 +14,7 @@
                       bulletin:(BBBulletin*)bulletin;
 - (NSNumber*)retriesLeftForRetryKey:(NSString*)retryKey;
 - (void)setRetriesLeft:(NSNumber*)count forRetryKey:(NSString*)retryKey;
+- (NSInteger)decrementRetriesLeftForRetryKey:(NSString*)retryKey;
 @end
 
 static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
@@ -56,6 +57,20 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
     } else {
       [self.retriesLeft removeObjectForKey:retryKey];
     }
+  }
+}
+
+// Atomically claims one retry. Returns the remaining retry count, or -1 when
+// there are no retries left to claim.
+- (NSInteger)decrementRetriesLeftForRetryKey:(NSString*)retryKey {
+  @synchronized(self) {
+    NSNumber* current = self.retriesLeft[retryKey];
+    if (current && current.integerValue > 0) {
+      NSInteger remaining = current.integerValue - 1;
+      self.retriesLeft[retryKey] = @(remaining);
+      return remaining;
+    }
+    return -1;
   }
 }
 
@@ -166,15 +181,17 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                                   object:pushRequest.method];
   [request setHTTPMethod:pushRequest.method];
   for (NSString* headerName in pushRequest.headers) {
-    [request setValue:pushRequest.headers[headerName] forHTTPHeaderField:headerName];
+    NSString* headerValue =
+        XStrDefault(pushRequest.headers[headerName], @"");
+    [request setValue:headerValue forHTTPHeaderField:headerName];
     [NSPushLog addToLogIfEnabledForService:service
                                   bulletin:bulletin
                                      label:@"Header"
                                     object:XStr(@"%@: %@", headerName,
-                                                pushRequest.headers[headerName])];
+                                                headerValue)];
   }
 
-  if (XEq(pushRequest.method, @"POST")) {
+  if ([pushRequest.method caseInsensitiveCompare:@"POST"] == NSOrderedSame) {
     // replace image strings with shorter string
     NSMutableDictionary* infoDictForLog = [infoDictForRequest mutableCopy];
     for (NSString* prop in PUSHER_LOG_IMAGE_DATA_PROPERTIES) {
@@ -219,7 +236,6 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
           XLog(@"%@ Got response back", logString);
 
           NSString* retryKey = retryKeyForBulletinAndService(bulletin, service);
-          NSNumber* retriesLeft = [self retriesLeftForRetryKey:retryKey];
 
           if (error == nil) {
             // A body-less success (e.g. 204 or an empty 200) is still a
@@ -233,77 +249,94 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
             if (image &&
                 [dataStr.lowercaseString
                     containsString:@"request entity too large"] &&
-                retriesLeft && retriesLeft.intValue > 0 &&
                 [image isKindOfClass:UIImage.class]) {
-              [self setRetriesLeft:@(retriesLeft.intValue - 1)
-                       forRetryKey:retryKey];
-              NSMutableDictionary* retryInfoDict = [pushRequest.infoDict mutableCopy];
+              NSInteger retriesLeft =
+                  [self decrementRetriesLeftForRetryKey:retryKey];
+              if (retriesLeft >= 0) {
+                NSMutableDictionary* retryInfoDict = [pushRequest.infoDict mutableCopy];
 
-              CGFloat imageShrinkFactor =
-                  ((NSNumber*)pushRequest.infoDict[@"imageShrinkFactor"]
-                       ?: @(PUSHER_DEFAULT_SHRINK_FACTOR))
-                      .floatValue;
-              NSString* status =
-                  @"unchanged (your shrink factor may be less than 1.0)";
-              // if last retry and has image, set image property to true
-              // instead of image base64
-              if ([self retriesLeftForRetryKey:retryKey].intValue == 0 ||
-                  imageShrinkFactor <= 1.0) {
-                // A shrink factor that can't shrink is as good as no shrink;
-                // drop the image so we don't re-send the same oversized
-                // payload until retries run out.
-                status = @"removed";
-                retryInfoDict[@"image"] = @YES;
-              } else if (imageShrinkFactor > 1.0) {
-                status = @"shrunk";
-                UIImage* smallerImage =
-                    [NSPushImage shrinkImage:image byFactor:imageShrinkFactor];
-                retryInfoDict[@"image"] = smallerImage;
+                // Guard the type and numeric content: imageShrinkFactor comes
+                // from user prefs, so a non-number or non-numeric string should
+                // fall back to the default rather than parsing as 0.
+                id shrinkFactorValue = pushRequest.infoDict[@"imageShrinkFactor"];
+                CGFloat imageShrinkFactor = PUSHER_DEFAULT_SHRINK_FACTOR;
+                if ([shrinkFactorValue isKindOfClass:NSNumber.class]) {
+                  imageShrinkFactor = [shrinkFactorValue floatValue];
+                } else if ([shrinkFactorValue isKindOfClass:NSString.class]) {
+                  NSString* stringValue = [(NSString*)shrinkFactorValue
+                      stringByTrimmingCharactersInSet:
+                          [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                  if (stringValue.length > 0) {
+                    NSScanner* scanner = [NSScanner scannerWithString:stringValue];
+                    double scanned = 0.0;
+                    if ([scanner scanDouble:&scanned] && [scanner isAtEnd]) {
+                      imageShrinkFactor = (CGFloat)scanned;
+                    }
+                  }
+                }
+                NSString* status =
+                    @"unchanged (your shrink factor may be less than 1.0)";
+                // if last retry and has image, set image property to true
+                // instead of image base64
+                if (retriesLeft == 0 || imageShrinkFactor <= 1.0) {
+                  // A shrink factor that can't shrink is as good as no shrink;
+                  // drop the image so we don't re-send the same oversized
+                  // payload until retries run out.
+                  status = @"removed";
+                  retryInfoDict[@"image"] = @YES;
+                } else if (imageShrinkFactor > 1.0) {
+                  status = @"shrunk";
+                  UIImage* smallerImage =
+                      [NSPushImage shrinkImage:image byFactor:imageShrinkFactor];
+                  retryInfoDict[@"image"] = smallerImage;
+                }
+
+                NSString* sizeString = @"";
+                if ([retryInfoDict[@"image"] isKindOfClass:UIImage.class]) {
+                  sizeString =
+                      XStr(@" (size: %@)",
+                           NSStringFromCGSize(
+                               ((UIImage*)retryInfoDict[@"image"]).size));
+                }
+
+                NSInteger tryNumber = PUSHER_TRIES - retriesLeft;
+                XLog(@"%@ Retrying. Try %d of %d with image %@%@. Success but "
+                     @"response was %@.",
+                     logString, (int)tryNumber, PUSHER_TRIES, status, sizeString,
+                     dataStr);
+                [NSPushLog
+                    addToLogIfEnabledForService:service
+                                       bulletin:bulletin
+                                          label:
+                                              XStr(
+                                                  @"----- Retrying. Try %d of %d "
+                                                  @"with image %@%@. Network "
+                                                  @"Response: Success, but "
+                                                  @"response was %@. -----",
+                                                  (int)tryNumber, PUSHER_TRIES,
+                                                  status, sizeString, dataStr)
+                                         object:nil];
+
+                // give delay so server doesn't get mad at us
+                dispatch_time_t delayTime = dispatch_time(
+                    DISPATCH_TIME_NOW,
+                    (int64_t)(PUSHER_DELAY_BETWEEN_RETRIES * NSEC_PER_SEC));
+                dispatch_after(delayTime,
+                               dispatch_get_global_queue(
+                                   QOS_CLASS_USER_INITIATED, 0),
+                               ^(void) {
+                  [self sendAttemptWithRequest:
+                            [NSPushRequest
+                                requestWithURLString:pushRequest.urlString
+                                             headers:pushRequest.headers
+                                            infoDict:retryInfoDict
+                                              method:pushRequest.method]
+                                      logString:logString
+                                        service:service
+                                       bulletin:bulletin];
+                });
+                return;
               }
-
-              NSString* sizeString = @"";
-              if ([retryInfoDict[@"image"] isKindOfClass:UIImage.class]) {
-                sizeString =
-                    XStr(@" (size: %@)",
-                         NSStringFromCGSize(
-                             ((UIImage*)retryInfoDict[@"image"]).size));
-              }
-
-              XLog(@"%@ Retrying. Try %d of %d with image %@%@. Success but "
-                   @"response was %@.",
-                   logString, PUSHER_TRIES - (retriesLeft.intValue - 1),
-                   PUSHER_TRIES, status, sizeString, dataStr);
-              [NSPushLog
-                  addToLogIfEnabledForService:service
-                                     bulletin:bulletin
-                                        label:
-                                            XStr(
-                                                @"----- Retrying. Try %d of %d "
-                                                @"with image %@%@. Network "
-                                                @"Response: Success, but "
-                                                @"response was %@. -----",
-                                                PUSHER_TRIES -
-                                                    (retriesLeft.intValue - 1),
-                                                PUSHER_TRIES, status,
-                                                sizeString, dataStr)
-                                       object:nil];
-
-              // give delay so server doesn't get mad at us
-              dispatch_time_t delayTime = dispatch_time(
-                  DISPATCH_TIME_NOW,
-                  (int64_t)(PUSHER_DELAY_BETWEEN_RETRIES * NSEC_PER_SEC));
-              dispatch_after(delayTime, dispatch_get_main_queue(), ^(void) {
-                [self sendAttemptWithRequest:
-                          [NSPushRequest
-                              requestWithURLString:pushRequest.urlString
-                                           headers:pushRequest.headers
-                                          infoDict:retryInfoDict
-                                            method:pushRequest.method]
-                                    logString:logString
-                                      service:service
-                                     bulletin:bulletin];
-              });
-              return;
             }
             if (image && [dataStr.lowercaseString
                              containsString:@"request entity too large"]) {
@@ -343,34 +376,34 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                                        object:nil];
               XLog(@"%@ No data", logString);
             }
-            if (retriesLeft) {
-              if (retriesLeft.intValue > 0) {
-                [self setRetriesLeft:@(retriesLeft.intValue - 1)
-                         forRetryKey:retryKey];
-
+            if ([self retriesLeftForRetryKey:retryKey]) {
+              NSInteger retriesLeft =
+                  [self decrementRetriesLeftForRetryKey:retryKey];
+              if (retriesLeft >= 0) {
                 NSMutableDictionary* retryInfoDict = [pushRequest.infoDict mutableCopy];
                 // NOTE: unlike the "request entity too large" path below, a
                 // transport-level error says nothing about the payload size,
                 // so retry with the image intact rather than dropping it.
 
+                NSInteger tryNumber = PUSHER_TRIES - retriesLeft;
                 XLog(@"%@ ----- Retrying. Try %d of %d -----", logString,
-                     PUSHER_TRIES - (retriesLeft.intValue - 1), PUSHER_TRIES);
+                     (int)tryNumber, PUSHER_TRIES);
                 [NSPushLog
                     addToLogIfEnabledForService:service
                                        bulletin:bulletin
                                           label:
                                               XStr(@"----- Retrying. Try %d of "
                                                    @"%d -----",
-                                                   PUSHER_TRIES -
-                                                       (retriesLeft.intValue -
-                                                        1),
-                                                   PUSHER_TRIES)
+                                                   (int)tryNumber, PUSHER_TRIES)
                                          object:nil];
 
                 // give delay so server doesn't get mad at us
                 dispatch_time_t delayTime = dispatch_time(
                     DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC));
-                dispatch_after(delayTime, dispatch_get_main_queue(), ^(void) {
+                dispatch_after(delayTime,
+                               dispatch_get_global_queue(
+                                   QOS_CLASS_USER_INITIATED, 0),
+                               ^(void) {
                   [self sendAttemptWithRequest:
                             [NSPushRequest
                                 requestWithURLString:pushRequest.urlString

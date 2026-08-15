@@ -7,10 +7,15 @@
                             infoDict:(NSDictionary*)infoDict
                               method:(NSString*)method {
   NSPushRequest* request = [self new];
-  request.urlString = urlString ?: @"";
-  request.headers = headers ?: @{};
-  request.infoDict = infoDict ?: @{};
-  request.method = method ?: @"POST";
+  request.urlString = [urlString isKindOfClass:NSString.class]
+                          ? (NSString*)urlString
+                          : @"";
+  request.headers = [headers isKindOfClass:NSDictionary.class] ? headers : @{};
+  request.infoDict = [infoDict isKindOfClass:NSDictionary.class] ? infoDict : @{};
+  request.method = ([method isKindOfClass:NSString.class] &&
+                          ((NSString*)method).length > 0)
+                         ? (NSString*)method
+                         : @"POST";
   return request;
 }
 
