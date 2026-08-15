@@ -9,17 +9,15 @@
   [super viewDidLoad];
 
   _service = [self.specifier propertyForKey:@"service"];
-  _isCustomService =
-      [self.specifier propertyForKey:@"isCustomService"] &&
-      ((NSNumber*)[self.specifier propertyForKey:@"isCustomService"]).boolValue;
+  _isCustomService = NSPushBoolResolved(
+      [self.specifier propertyForKey:@"isCustomService"], NO);
 }
 
 - (void)loadPreferences {
   // Get preferences
   _service = [self.specifier propertyForKey:@"service"];
-  _isCustomService =
-      [self.specifier propertyForKey:@"isCustomService"] &&
-      ((NSNumber*)[self.specifier propertyForKey:@"isCustomService"]).boolValue;
+  _isCustomService = NSPushBoolResolved(
+      [self.specifier propertyForKey:@"isCustomService"], NO);
   _selectedApplications = [NSMutableSet new];
   if (_service) {
     NSArray* appList = _isCustomService
