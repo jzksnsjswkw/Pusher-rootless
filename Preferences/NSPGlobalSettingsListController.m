@@ -1,4 +1,5 @@
 #import "NSPGlobalSettingsListController.h"
+#import "NSPLocalization.h"
 #import "NSPSharedSpecifiers.h"
 
 #import "../helpers.h"
@@ -35,9 +36,10 @@
 
     for (PSSpecifier* specifier in _specifiers) {
       if (specifier.cellType == PSLinkCell &&
-          XEq(specifier.name, @"Global App List")) {
+          (XEq(specifier.name, @"Global App List") ||
+           XEq(specifier.name, NSPLocalizedString(@"Global App List", nil)))) {
         specifier.name = XStr(
-            @"%@ (%d total)", specifier.name,
+            NSPLocalizedString(@"%@ (%d total)", nil), specifier.name,
             (int)[NSPSharedSpecifiers globalAppList].count);
         // Non-retaining NSValue to avoid controller -> specifier -> controller
         // retain cycle.

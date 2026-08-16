@@ -1,6 +1,8 @@
 #import "NSPServiceController.h"
+#import "NSPLocalization.h"
 #import "NSPCustomizeAppsController.h"
 #import "NSPSharedSpecifiers.h"
+#import "NSPSharedSpecifiers+ServiceBuilders.h"
 #import "NSPusherManager.h"
 #import "../global.h"
 #import "../helpers.h"
@@ -30,7 +32,7 @@
   // [self setTitle:_service];
   if (!_imageTitleView) {
     UILabel* label = [UILabel new];
-    label.text = _service;
+    label.text = NSPushServiceDisplayName(_service);
     label.font = [UIFont boldSystemFontOfSize:17];
 
     UIImageView* imageView = [[UIImageView alloc] initWithImage:_image];
@@ -131,7 +133,8 @@
 
     for (PSSpecifier* specifier in allSpecifiers) {
       if (specifier.cellType == PSLinkCell) {
-        if (XEq(specifier.name, @"App List")) {
+        if (XEq(specifier.name, @"App List") ||
+        XEq(specifier.name, NSPLocalizedString(@"App List", nil))) {
           int count = 0;
           if (_isCustom) {
             count = (int)[NSPSharedSpecifiers
@@ -142,14 +145,15 @@
                         builtInServiceAppListForService:_service]
                         .count;
           }
-          specifier.name = XStr(@"%@ (%d total)", specifier.name, count);
+          specifier.name = XStr(NSPLocalizedString(@"%@ (%d total)", nil), specifier.name, count);
           // Store as a non-retaining NSValue: keeping a raw self here creates
           // controller -> specifiers -> psListRef -> controller cycle and the
           // controller is never deallocated.
           [specifier
               setProperty:[NSValue valueWithNonretainedObject:self]
                    forKey:@"psListRef"];
-        } else if (XEq(specifier.name, @"App Customization")) {
+        } else if (XEq(specifier.name, @"App Customization") ||
+                 XEq(specifier.name, NSPLocalizedString(@"App Customization", nil))) {
           NSDictionary* customApps = nil;
           if (_isCustom) {
             NSDictionary* customServices =
@@ -168,7 +172,8 @@
             customApps = NSPushDictionaryValue(
                 serviceObj[NSPPreferenceServiceCustomAppsKey]);
           }
-          specifier.name = XStr(@"%@ (%d total)", specifier.name,
+          specifier.name = XStr(NSPLocalizedString(@"%@ (%d total)", nil),
+                                specifier.name,
                                 customApps ? (int)customApps.count : 0);
           // Non-retaining NSValue, see comment above.
           [specifier
@@ -191,7 +196,7 @@
       [specifier setProperty:_service forKey:@"service"];
       if (specifier.cellType == PSSegmentCell) {
         NSMutableArray* values = [specifier.values mutableCopy];
-        NSMutableArray* titles = [NSMutableArray arrayWithObject:@"Default"];
+        NSMutableArray* titles = [NSMutableArray arrayWithObject:NSPLocalizedString(@"Default", nil)];
         for (id v in values) {
           [titles addObject:specifier.titleDictionary[v]];
         }
@@ -230,7 +235,7 @@
 
     PSSpecifier* sendTestNotificationGroup = [PSSpecifier emptyGroupSpecifier];
     PSSpecifier* sendTestNotification =
-        [PSSpecifier preferenceSpecifierNamed:@"Send Test Notification"
+        [PSSpecifier preferenceSpecifierNamed:NSPLocalizedString(@"Send Test Notification", nil)
                                        target:self
                                           set:nil
                                           get:nil
@@ -271,9 +276,9 @@
   }
 
   if (NSPushBoolValue(reply[@"success"])) {
-    [self displayNotification:XStr(@"%@Sent", PUSHER_TEST_PUSH_RESULT_PREFIX)];
+    [self displayNotification:XStr(NSPLocalizedString(@"%@Sent", nil), PUSHER_TEST_PUSH_RESULT_PREFIX)];
   } else {
-    [self displayNotification:XStr(@"%@Failed to Send",
+    [self displayNotification:XStr(NSPLocalizedString(@"%@Failed to Send", nil),
                                    PUSHER_TEST_PUSH_RESULT_PREFIX)];
   }
 }
@@ -297,7 +302,7 @@
            // hop to the main thread before touching UIKit.
            dispatch_async(dispatch_get_main_queue(), ^{
              UIAlertController* alert = XAlert(message);
-             [alert addAction:XAlertBtn(@"Ok")];
+             [alert addAction:XAlertBtn(NSPLocalizedString(@"Ok", nil))];
              [self presentViewController:alert animated:YES completion:nil];
            });
          }

@@ -1,13 +1,15 @@
 #import "NSPLogController.h"
+#import "NSPLocalization.h"
 #import "NSPAppSelectionController.h"
+#import "NSPLogFormatter.h"
 #import "UIImageIcon.h"
 #import "NSPusherManager.h"
+#import "../Shared/NSPushLogStore.h"
+#import "../Shared/NSPushPrefsStore.h"
 #import <MobileCoreServices/LSApplicationProxy.h>
 
 #define SEGMENTED_CONTROL_TAG 673
 #define NETWORK_RESPONSE_ITEMS @[ @"Any", @"Success", @"No Data", @"Error" ]
-#define END_RESULT_ITEMS @[ @"Any", @"Blocked", @"Pushed" ]
-
 #define EXPANDED_TEXT_VIEW_TAG 674
 
 static __weak NSPLogController* logControllerSharedInstance = nil;
@@ -24,24 +26,6 @@ static void logsUpdated() {
       [logControllerSharedInstance updateLogAndReload];
     }
   });
-}
-
-static NSDictionary* getLogPreferences() {
-  CFPreferencesSynchronize(PUSHER_LOG_ID, kCFPreferencesCurrentUser,
-                           kCFPreferencesAnyHost);
-  CFArrayRef keyList = CFPreferencesCopyKeyList(
-      PUSHER_LOG_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-  NSDictionary* prefs = @{};
-  if (keyList) {
-    prefs = (__bridge_transfer NSDictionary*)CFPreferencesCopyMultiple(
-        keyList, PUSHER_LOG_ID, kCFPreferencesCurrentUser,
-        kCFPreferencesAnyHost);
-    if (!prefs) {
-      prefs = @{};
-    }
-    CFRelease(keyList);
-  }
-  return prefs;
 }
 
 @implementation NSPLogController
@@ -87,10 +71,10 @@ static NSDictionary* getLogPreferences() {
   label.font = [UIFont fontWithName:@"HelveticaNeue-Thin"
                                size:UIFont.systemFontSize * 1.5f];
   label.textColor = UIColor.whiteColor;
-  label.text = @"After using the app filter, you can swipe to delete to unset "
-               @"it and show all apps again.\n\nTap on any truncated log to "
-               @"expand it.\n\n Tap and hold on a log to copy it to the "
-               @"clipboard.\n\nTap anywhere to continue.";
+  label.text = NSPLocalizedString(@"After using the app filter, you can swipe to delete to unset "
+                                          @"it and show all apps again.\n\nTap on any truncated log to "
+                                          @"expand it.\n\n Tap and hold on a log to copy it to the "
+                                          @"clipboard.\n\nTap anywhere to continue.", nil);
   label.lineBreakMode = NSLineBreakByWordWrapping;
   label.numberOfLines = 0;
   label.translatesAutoresizingMaskIntoConstraints = NO;
@@ -135,13 +119,9 @@ static NSDictionary* getLogPreferences() {
                    [tutorialView addGestureRecognizer:tapGestureRecognizer];
                  });
 
-  CFStringRef tutorialKeyRef = CFSTR("LogAppFilterTutorialShown");
-  CFPreferencesSetValue(tutorialKeyRef, (__bridge CFNumberRef) @YES,
-                        PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                        kCFPreferencesAnyHost);
-  CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                           kCFPreferencesAnyHost);
-  CFRelease(tutorialKeyRef);
+  [NSPushPrefsStore setPreferenceValue:@YES
+                                forKey:@"LogAppFilterTutorialShown"
+                          shouldNotify:NO];
 }
 
 - (void)dismissTutorial:(UITapGestureRecognizer*)tapGestureRecognizer {
@@ -189,28 +169,19 @@ static NSDictionary* getLogPreferences() {
   _filteredGlobalOnly = NO;
 
   self.navigationItem.title =
-      [self.specifier propertyForKey:@"label"] ?: @"Log";
+      [self.specifier propertyForKey:@"label"] ?: NSPLocalizedString(@"Log", nil);
 
-  CFPropertyListRef logEnabledRef = CFPreferencesCopyValue(
-      (__bridge CFStringRef)_logEnabledKey, PUSHER_APP_ID,
-      kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-  _logEnabled =
-      NSPushBoolResolved((__bridge id)logEnabledRef, YES);
-  if (logEnabledRef) {
-    CFRelease(logEnabledRef);
-  }
+  _logEnabled = NSPushBoolResolved(
+      [NSPushPrefsStore preferenceValueForKey:_logEnabledKey], YES);
 
   [self updateLogAndReload];
 }
 
 - (void)updateLogEnabled:(UISwitch*)logEnabledSwitch {
   _logEnabled = logEnabledSwitch.isOn;
-  CFPreferencesSetValue((__bridge CFStringRef)_logEnabledKey,
-                        (__bridge CFNumberRef) @(_logEnabled), PUSHER_APP_ID,
-                        kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-  CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                           kCFPreferencesAnyHost);
-  notify_post(PUSHER_PREFS_NOTIFICATION);
+  [NSPushPrefsStore setPreferenceValue:@(_logEnabled)
+                                forKey:_logEnabledKey
+                          shouldNotify:YES];
 }
 
 - (void)updateGlobalOnly:(UISwitch*)globalOnlySwitch {
@@ -224,7 +195,7 @@ static NSDictionary* getLogPreferences() {
 }
 
 - (void)updateLog {
-  NSDictionary* prefs = getLogPreferences();
+  NSDictionary* prefs = [NSPushLogStore snapshot];
 
   _truncatedIndexPaths = [NSMutableArray new];
 
@@ -316,45 +287,7 @@ static NSDictionary* getLogPreferences() {
       }
     }
 
-    NSString* sectionName = nil;
-    if ([logSection[@"name"] isKindOfClass:NSString.class]) {
-      sectionName = (NSString*)logSection[@"name"];
-    }
-    if (!sectionName) {
-      NSString* appName = @"Unknown App";
-      if (logSectionAppID) {
-        LSApplicationProxy* appProxy =
-            [LSApplicationProxy applicationProxyForIdentifier:logSectionAppID];
-        appName = [appProxy localizedName];
-        // appName = _appList.applications[logSectionAppID];
-      }
-
-      NSDate* timestamp = nil;
-      if ([logSection[@"timestamp"] isKindOfClass:NSDate.class]) {
-        timestamp = (NSDate*)logSection[@"timestamp"];
-      }
-      if (timestamp) {
-        NSDateFormatter* dateFormatter = [NSDateFormatter new];
-        dateFormatter.dateStyle = NSDateFormatterMediumStyle;
-        dateFormatter.timeStyle = NSDateFormatterMediumStyle;
-        NSString* dateString = [dateFormatter stringFromDate:timestamp];
-        sectionName = XStr(@"%@: %@", appName, dateString);
-      } else {
-        sectionName = XStr(@"%@: %@", appName, logSection[@"timestamp"]);
-      }
-    }
-    // added only if global
-    NSString* logSectionService = nil;
-    if ([logSection[@"service"] isKindOfClass:NSString.class]) {
-      logSectionService = (NSString*)logSection[@"service"];
-    }
-    if (logSectionService) {
-      if (XIsEmpty(logSectionService)) {
-        sectionName = XStr(@"{GLOBAL} %@", sectionName);
-      } else {
-        sectionName = XStr(@"[%@] %@", logSectionService, sectionName);
-      }
-    }
+    NSString* sectionName = [NSPLogFormatter sectionTitleForLogSection:logSection];
     id rawLogs = logSection[@"logs"];
     NSArray* sourceLogs = [rawLogs isKindOfClass:NSArray.class] ? rawLogs : @[];
     NSMutableArray* logs = [NSMutableArray new];
@@ -366,28 +299,12 @@ static NSDictionary* getLogPreferences() {
       }
     }
 
-    if (_filteredNetworkResponse) {
-      BOOL networkResponseFilterPasses = NO;
-      NSString* filterLogString =
-          XStr(@"Network Response: %@", _filteredNetworkResponse);
-      for (NSString* log in logs) {
-        if ([log containsString:filterLogString]) {
-          networkResponseFilterPasses = YES;
-          break;
-        }
-      }
-      if (!networkResponseFilterPasses) {
-        continue;
-      }
+    if (![NSPLogFormatter
+            shouldIncludeLogs:logs
+             networkResponse:_filteredNetworkResponse
+                   endResult:_filteredEndResult]) {
+      continue;
     }
-    if (_filteredEndResult) {
-      BOOL shouldContainPushed = XEq(_filteredEndResult, END_RESULT_ITEMS[2]);
-      BOOL containsPushed = [logs containsObject:END_RESULT_ITEMS[2]];
-      if (shouldContainPushed != containsPushed) {
-        continue;
-      }
-    }
-
     [_sections addObject:sectionName];
     _data[sectionName] = logs;
   }
@@ -423,25 +340,9 @@ static NSDictionary* getLogPreferences() {
   // Clear log button
   if (indexPath.section == 0 && indexPath.row == _clearLogRow) {
     if (_global) {
-      NSDictionary* prefs = getLogPreferences();
-      for (id key in prefs.allKeys) {
-        if (![key isKindOfClass:NSString.class]) {
-          continue;
-        }
-        // should be all but just in case change implementation later
-        if ([key hasSuffix:@"Log"]) {
-          CFPreferencesSetValue((__bridge CFStringRef)key, NULL, PUSHER_LOG_ID,
-                                kCFPreferencesCurrentUser,
-                                kCFPreferencesAnyHost);
-        }
-      }
-      CFPreferencesSynchronize(PUSHER_LOG_ID, kCFPreferencesCurrentUser,
-                               kCFPreferencesAnyHost);
+      [NSPushLogStore removeAllLogs];
     } else {
-      CFPreferencesSetValue((__bridge CFStringRef)_logKey, NULL, PUSHER_LOG_ID,
-                            kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-      CFPreferencesSynchronize(PUSHER_LOG_ID, kCFPreferencesCurrentUser,
-                               kCFPreferencesAnyHost);
+      [NSPushLogStore removeLogsForService:_service];
     }
 
     // Logs are cleared above; simply rebuild the sections and reload. The old
@@ -458,16 +359,9 @@ static NSDictionary* getLogPreferences() {
     [appSelectionController setCallback:^(id appID) {
       _filteredAppID = [appID copy];
       [self updateLogAndReload];
-      CFStringRef tutorialKeyRef = CFSTR("LogAppFilterTutorialShown");
-      CFPropertyListRef tutorialShownRef = CFPreferencesCopyValue(
-          tutorialKeyRef, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-          kCFPreferencesAnyHost);
-      CFRelease(tutorialKeyRef);
-      BOOL tutorialShown =
-          NSPushBoolResolved((__bridge id)tutorialShownRef, NO);
-      if (tutorialShownRef) {
-        CFRelease(tutorialShownRef);
-      }
+      BOOL tutorialShown = NSPushBoolResolved(
+          [NSPushPrefsStore preferenceValueForKey:@"LogAppFilterTutorialShown"],
+          NO);
       if (!tutorialShown) {
         [self showAppFilterTutorial];
       }
@@ -512,7 +406,11 @@ static NSDictionary* getLogPreferences() {
 
 - (NSString*)tableView:(UITableView*)tableView
     titleForHeaderInSection:(NSInteger)section {
-  return _sections[section];
+  NSString* title = _sections[section];
+  if (section < _firstLogSection) {
+    return NSPLocalizedString(title, nil);
+  }
+  return title;
 }
 
 - (NSInteger)tableView:(UITableView*)tableView
@@ -554,7 +452,11 @@ static NSDictionary* getLogPreferences() {
   if (indexPath.section != _filterSection ||
       (indexPath.row != _networkResponseRow &&
        indexPath.row != _endResultFilterRow)) {
-    cell.textLabel.text = _data[_sections[indexPath.section]][indexPath.row];
+    NSString* rowTitle = _data[_sections[indexPath.section]][indexPath.row];
+    if (indexPath.section < _firstLogSection) {
+      rowTitle = NSPLocalizedString(rowTitle, nil);
+    }
+    cell.textLabel.text = rowTitle;
   }
 
   if (indexPath.section == _filterSection) {
@@ -563,8 +465,12 @@ static NSDictionary* getLogPreferences() {
       BOOL isNetworkResponse = indexPath.row == _networkResponseRow;
       UISegmentedControl* segmentedControl = nil;
       if (isNetworkResponse) {
+        NSArray* localizedNetworkItems = @[
+          NSPLocalizedString(@"Any", nil), NSPLocalizedString(@"Success", nil),
+          NSPLocalizedString(@"No Data", nil), NSPLocalizedString(@"Error", nil)
+        ];
         segmentedControl =
-            [[UISegmentedControl alloc] initWithItems:NETWORK_RESPONSE_ITEMS];
+            [[UISegmentedControl alloc] initWithItems:localizedNetworkItems];
         segmentedControl.selectedSegmentIndex =
             _filteredNetworkResponse
                 ? [NETWORK_RESPONSE_ITEMS
@@ -574,8 +480,12 @@ static NSDictionary* getLogPreferences() {
                              action:@selector(networkResponseFilterUpdated:)
                    forControlEvents:UIControlEventValueChanged];
       } else {
+        NSArray* localizedEndResultItems = @[
+          NSPLocalizedString(@"Any", nil), NSPLocalizedString(@"Blocked", nil),
+          NSPLocalizedString(@"Pushed", nil)
+        ];
         segmentedControl =
-            [[UISegmentedControl alloc] initWithItems:END_RESULT_ITEMS];
+            [[UISegmentedControl alloc] initWithItems:localizedEndResultItems];
         segmentedControl.selectedSegmentIndex =
             _filteredEndResult
                 ? [END_RESULT_ITEMS indexOfObject:_filteredEndResult]
@@ -616,7 +526,9 @@ static NSDictionary* getLogPreferences() {
       if (_filteredAppID) {
         LSApplicationProxy* appProxy =
             [LSApplicationProxy applicationProxyForIdentifier:_filteredAppID];
-        cell.textLabel.text = XStr(@"App Filter: %@", [appProxy localizedName]);
+        NSString* appName = [appProxy localizedName]
+                                ?: NSPLocalizedString(@"Unknown App", nil);
+        cell.textLabel.text = XStr(NSPLocalizedString(@"App Filter: %@", nil), appName);
         cell.imageView.image = [UIImage
             _applicationIconImageForBundleIdentifier:_filteredAppID
                                               format:0

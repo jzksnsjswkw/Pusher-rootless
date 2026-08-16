@@ -1,4 +1,5 @@
 #import "NSPSNSListController.h"
+#import "NSPLocalization.h"
 #import "NSPSharedSpecifiers.h"
 
 @implementation NSPSNSListController
@@ -58,16 +59,16 @@
 
     PSSpecifier* synchronizedGroup = [PSSpecifier emptyGroupSpecifier];
     [synchronizedGroup
-        setProperty:@"Synchronizes all values with the global preferences. "
-                    @"Modifying any of these settings will override that "
-                    @"preference, but synchronizing will remove the override "
-                    @"and follow the global preferences again."
+        setProperty:NSPLocalizedString(@"Synchronizes all values with the global preferences. "
+                                       @"Modifying any of these settings will override that "
+                                       @"preference, but synchronizing will remove the override "
+                                       @"and follow the global preferences again.", nil)
              forKey:@"footerText"];
 
     _synchronizeSpecifier =
         [PSSpecifier preferenceSpecifierNamed:(synchronizedWithGlobal
-                                                       ? @"Synchronized"
-                                                       : @"Synchronize With Global")
+                                                       ? NSPLocalizedString(@"Synchronized", nil)
+                                                       : NSPLocalizedString(@"Synchronize With Global", nil))
                                        target:self
                                           set:nil
                                           get:nil
@@ -91,7 +92,7 @@
       [self reloadSpecifier:spec animated:YES];
     }
   }
-  [specifier setName:@"Synchronized"];
+  [specifier setName:NSPLocalizedString(@"Synchronized", nil)];
   [specifier setProperty:@NO forKey:@"enabled"];
   [self reloadSpecifier:specifier animated:YES];
 }
@@ -104,14 +105,14 @@
                    containsString:@"SufficientNotificationSettingsIsAnd"]) {
     // if val is bool value true, set allow notifications on, else turn it off
     PSSpecifier* allowNotificationsSpecifier =
-        [self specifierForID:@"Allow Notifications"];
+        [self specifierForID:NSPLocalizedString(@"Allow Notifications", nil)];
     if (allowNotificationsSpecifier) {
       [allowNotificationsSpecifier performSetterWithValue:value];
       [self reloadSpecifier:allowNotificationsSpecifier animated:YES];
     }
     if (!NSPushBoolValue(value)) {
       PSSpecifier* requireANWithORSpecifier =
-          [self specifierForID:@"Require Allow Notifications with OR"];
+          [self specifierForID:NSPLocalizedString(@"Require Allow Notifications with OR", nil)];
       if (requireANWithORSpecifier) {
         [requireANWithORSpecifier performSetterWithValue:@YES];
         [self reloadSpecifier:requireANWithORSpecifier animated:YES];
@@ -123,7 +124,7 @@
   }
   // enable synchronize button if we change a value
   if (_synchronizeSpecifier) {
-    [_synchronizeSpecifier setName:@"Synchronize With Global"];
+    [_synchronizeSpecifier setName:NSPLocalizedString(@"Synchronize With Global", nil)];
     [_synchronizeSpecifier setProperty:@YES forKey:@"enabled"];
     [self reloadSpecifier:_synchronizeSpecifier animated:YES];
   }

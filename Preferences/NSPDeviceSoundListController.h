@@ -19,10 +19,13 @@
 - (void)updateItems;
 - (void)showActivityIndicator;
 - (void)hideActivityIndicator;
-- (void)updatePushoverDevices;
-- (void)updatePushbulletDevices;
-- (void)updatePushoverSounds;
-- (void)updatePushbulletSounds;
+// Subclass hooks.
+- (BOOL)isSoundMode;
+- (NSString*)storageKey;
+- (BOOL)onlyAllowOne;
+- (NSString*)footerText;
+- (void)updatePushoverItems;
+- (void)updatePushbulletItems;
 - (void)saveServiceItems;
 - (NSArray*)sortedItemList:(NSArray*)items;
 @end

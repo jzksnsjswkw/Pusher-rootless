@@ -3,22 +3,6 @@
 #import "../NSPushConfig.h"
 #import "../NSPushSupport.h"
 
-static BOOL NSPCustomPrefsBool(id value) {
-  if ([value isKindOfClass:NSNumber.class] ||
-      [value isKindOfClass:NSString.class]) {
-    return [value boolValue];
-  }
-  return NO;
-}
-
-static NSInteger NSPCustomPrefsInt(id value) {
-  if ([value isKindOfClass:NSNumber.class] ||
-      [value isKindOfClass:NSString.class]) {
-    return [value integerValue];
-  }
-  return 0;
-}
-
 @implementation NSPCustomService
 
 + (NSString*)serviceName {
@@ -31,7 +15,7 @@ static NSInteger NSPCustomPrefsInt(id value) {
   NSMutableDictionary* infoDict =
       [[self baseInfoDictForBulletinContext:context config:config] mutableCopy];
 
-  NSInteger authMethod = NSPCustomPrefsInt(config.rawPrefs[@"authenticationMethod"]);
+  NSInteger authMethod = NSPushIntegerValue(config.rawPrefs[@"authenticationMethod"], 0);
   // authMethod 2 = body auth: embed key inside the JSON payload instead.
   if (authMethod == 2) {
     NSString* paramName = XStrDefault(config.rawPrefs[@"paramName"], @"");
@@ -58,11 +42,11 @@ static NSInteger NSPCustomPrefsInt(id value) {
 }
 
 + (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config {
-  return NSPCustomPrefsBool(config.rawPrefs[@"includeIcon"]);
+  return NSPushBoolValue(config.rawPrefs[@"includeIcon"]);
 }
 
 + (BOOL)shouldIncludeImageForConfig:(NSPushServiceConfig*)config {
-  return NSPCustomPrefsBool(config.rawPrefs[@"includeImage"]);
+  return NSPushBoolValue(config.rawPrefs[@"includeImage"]);
 }
 
 @end

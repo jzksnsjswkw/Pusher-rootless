@@ -3,19 +3,6 @@
 #import "../NSPushConfig.h"
 #import "../NSPushSupport.h"
 
-// Guarded prefs integer accessor: prefs can hold non-NSNumber values, and
-// agentID is sent as an NSNumber to the WeChat API. NSNumber and NSString are
-// accepted; anything else (including NSNull) falls back to 0.
-static NSInteger NSPWechatInteger(id value) {
-  if ([value isKindOfClass:NSNumber.class]) {
-    return [value integerValue];
-  }
-  if ([value isKindOfClass:NSString.class]) {
-    return [(NSString*)value integerValue];
-  }
-  return 0;
-}
-
 @implementation NSPWechatService
 
 + (void)load {
@@ -38,8 +25,8 @@ static NSInteger NSPWechatInteger(id value) {
     @"corpid" : XStrDefault(servicePrefs[NSPPreferenceServiceCorpidKey], @""),
     @"corpsecret" :
         XStrDefault(servicePrefs[NSPPreferenceServiceCorpsecretKey], @""),
-    @"agentID" : @(NSPWechatInteger(
-        servicePrefs[NSPPreferenceServiceAgentIDKey])),
+    @"agentID" : @(NSPushIntegerValue(
+        servicePrefs[NSPPreferenceServiceAgentIDKey], 0)),
     @"touser" : XStrDefault(servicePrefs[NSPPreferenceServiceTouserKey], @"")
   };
 }
@@ -55,7 +42,7 @@ static NSInteger NSPWechatInteger(id value) {
   NSString* touser = XStrDefault(config.rawPrefs[@"touser"], @"");
   // agentid and safe must be integers for the WeChat Work message/send API.
   // Use the guarded accessor so malformed prefs can't crash the send path.
-  NSInteger agentIDValue = NSPWechatInteger(config.rawPrefs[@"agentID"]);
+  NSInteger agentIDValue = NSPushIntegerValue(config.rawPrefs[@"agentID"], 0);
   NSDictionary* infoDict = @{
     @"touser" : (touser.length != 0) ? touser : @"@all",
     @"msgtype" : @"text",
