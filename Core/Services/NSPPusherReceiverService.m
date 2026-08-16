@@ -3,16 +3,6 @@
 #import "../NSPushConfig.h"
 #import "../NSPushSupport.h"
 
-// Guarded prefs bool accessor: prefs can be hand-edited to non-NSNumber
-// values; only NSNumber/NSString implement boolValue safely.
-static BOOL NSPReceiverBool(id value) {
-  if ([value isKindOfClass:NSNumber.class] ||
-      [value isKindOfClass:NSString.class]) {
-    return [value boolValue];
-  }
-  return NO;
-}
-
 @implementation NSPPusherReceiverService
 
 + (void)load {
@@ -70,11 +60,11 @@ static BOOL NSPReceiverBool(id value) {
 }
 
 + (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config {
-  return NSPReceiverBool(config.rawPrefs[@"includeIcon"]);
+  return NSPushBoolValue(config.rawPrefs[@"includeIcon"]);
 }
 
 + (BOOL)shouldIncludeImageForConfig:(NSPushServiceConfig*)config {
-  return NSPReceiverBool(config.rawPrefs[@"includeImage"]);
+  return NSPushBoolValue(config.rawPrefs[@"includeImage"]);
 }
 
 @end

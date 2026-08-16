@@ -1,5 +1,10 @@
 #import <Foundation/Foundation.h>
 
+// PUSHER_SEGMENT_CELL_DEFAULT (used by NSPushIntegerValueResolved below) lives
+// in the Core constants header; pulling it in here is harmless (it is
+// dependency-free) and keeps the resolved accessor usable everywhere.
+#import "Core/NSPushConstants.h"
+
 NS_INLINE BOOL NSPushBoolValue(id value) {
   if ([value isKindOfClass:NSNumber.class] ||
       [value isKindOfClass:NSString.class]) {
@@ -24,6 +29,46 @@ NS_INLINE NSInteger NSPushIntegerValue(id value, NSInteger defaultValue) {
     return [(NSString*)value integerValue];
   }
   return defaultValue;
+}
+
+// Strict integer accessor: only a complete integer literal is accepted
+// (NSNumber, or an NSString that trims to a wholly numeric string like "12").
+// Partial or non-numeric strings ("abc", "12x") fall back to defaultValue
+// instead of silently parsing to 0.
+NS_INLINE NSInteger NSPushIntegerValueStrict(id value, NSInteger defaultValue) {
+  if ([value isKindOfClass:NSNumber.class]) {
+    return [value integerValue];
+  }
+  if ([value isKindOfClass:NSString.class]) {
+    NSString* stringValue = [(NSString*)value
+        stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (stringValue.length == 0) {
+      return defaultValue;
+    }
+    NSScanner* scanner = [NSScanner scannerWithString:stringValue];
+    NSInteger result = 0;
+    if ([scanner scanInteger:&result] && [scanner isAtEnd]) {
+      return result;
+    }
+  }
+  return defaultValue;
+}
+
+NS_INLINE NSString* NSPushStringValue(id value, NSString* defaultValue) {
+  return [value isKindOfClass:NSString.class] ? (NSString*)value
+                                              : defaultValue;
+}
+
+// Resolved integer accessor: strict parse result, treating both invalid values
+// (NSIntegerMin sentinel) and the "-1 means default" segment-cell sentinel as
+// "use defaultValue".
+NS_INLINE NSInteger NSPushIntegerValueResolved(id value,
+                                               NSInteger defaultValue) {
+  NSInteger v = NSPushIntegerValueStrict(value, NSIntegerMin);
+  return (v == NSIntegerMin || v == PUSHER_SEGMENT_CELL_DEFAULT)
+             ? defaultValue
+             : v;
 }
 
 NS_INLINE NSDictionary* NSPushDictionaryValue(id value) {

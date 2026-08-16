@@ -1,7 +1,7 @@
 #import "NSPushSupport.h"
 #import "NSPBBServer.h"
 #import "../helpers.h"
-#import "iOSVersion.m"
+#import "iOSVersion.h"
 
 @implementation NSPBulletinContext
 

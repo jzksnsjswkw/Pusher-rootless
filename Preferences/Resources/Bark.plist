@@ -20,13 +20,21 @@
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
-			<string>serverURL</string>
+			<string>key</string>
 			<key>service</key>
 			<string>Bark</string>
 			<key>label</key>
-			<string>Server URL:</string>
+			<string>Key:</string>
 			<key>noAutoCorrect</key>
 			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Options</string>
+			<key>footerText</key>
+			<string>Leave empty to use the official default server.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -38,16 +46,14 @@
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
-			<string>key</string>
+			<string>serverURL</string>
 			<key>service</key>
 			<string>Bark</string>
 			<key>label</key>
-			<string>Key:</string>
+			<string>Server URL:</string>
 			<key>noAutoCorrect</key>
 			<true/>
 		</dict>
-
-		<!-- App List -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -92,9 +98,9 @@
 			<key>service</key>
 			<string>Bark</string>
 			<key>useSearchBar</key>
-			<true />
+			<true/>
 			<key>alphabeticIndexingEnabled</key>
-			<true />
+			<true/>
 		</dict>
 	</array>
 	<key>title</key>

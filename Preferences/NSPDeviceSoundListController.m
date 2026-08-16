@@ -1,14 +1,12 @@
 #import "NSPDeviceSoundListController.h"
+#import "NSPLocalization.h"
 
 #import "../Generated/BuiltinServices.generated.h"
+#import "../Shared/NSPushPrefsStore.h"
 #import "../global.h"
 #import "../helpers.h"
 #import "NSPSharedSpecifiers.h"
 #import <notify.h>
-
-static NSDictionary* NSPJSONDictionary(id object) {
-  return [object isKindOfClass:NSDictionary.class] ? (NSDictionary*)object : @{};
-}
 
 @implementation NSPDeviceSoundListController
 
@@ -16,7 +14,7 @@ static NSDictionary* NSPJSONDictionary(id object) {
   [super viewDidLoad];
 
   // Create buttons
-  _updateBn = [[UIBarButtonItem alloc] initWithTitle:@"Update"
+  _updateBn = [[UIBarButtonItem alloc] initWithTitle:NSPLocalizedString(@"Update", nil)
                                                style:UIBarButtonItemStylePlain
                                               target:self
                                               action:@selector(updateItems)];
@@ -27,14 +25,14 @@ static NSDictionary* NSPJSONDictionary(id object) {
 
   _prefsKey = [self.specifier propertyForKey:@"prefsKey"];
   _service = [self.specifier propertyForKey:@"service"];
-  _isSound = NSPushBoolResolved([self.specifier propertyForKey:@"isSound"], NO);
+  _isSound = [self isSoundMode];
   _isCustomApp = NSPushBoolResolved(
       [self.specifier propertyForKey:@"isCustomApp"], NO);
   if (_isCustomApp) {
     _customAppIDKey = [self.specifier propertyForKey:@"customAppIDKey"];
   }
 
-  _onlyAllowOne = _isSound || XEq(_service, PUSHER_SERVICE_PUSHBULLET);
+  _onlyAllowOne = [self onlyAllowOne];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -71,7 +69,7 @@ static NSDictionary* NSPJSONDictionary(id object) {
       NSPushDictionaryValue(_prefs[NSPPreferenceBuiltInServicesKey]) ?: @{};
   NSDictionary* serviceObj =
       NSPushDictionaryValue(builtInServices[_service]) ?: @{};
-  NSString* subkey = _isSound ? @"sounds" : @"devices";
+  NSString* subkey = [self storageKey];
   NSArray* val = nil;
   if (_isCustomApp) {
     NSDictionary* customApps =
@@ -117,45 +115,36 @@ static NSDictionary* NSPJSONDictionary(id object) {
 }
 
 - (void)saveServiceItems {
-  NSMutableDictionary* builtInServices =
-      [(NSPushDictionaryValue([NSPSharedSpecifiers
-            getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey]) ?: @{}) mutableCopy];
-  NSMutableDictionary* serviceObj =
-      [(NSPushDictionaryValue(builtInServices[_service]) ?: @{}) mutableCopy];
-  NSString* subkey = _isSound ? @"sounds" : @"devices";
+  NSString* subkey = [self storageKey];
   if (_isCustomApp) {
-    NSMutableDictionary* customApps =
-        [(NSPushDictionaryValue(serviceObj[NSPPreferenceServiceCustomAppsKey]) ?: @{}) mutableCopy];
-    NSMutableDictionary* customApp =
-        [(NSPushDictionaryValue(customApps[_customAppIDKey]) ?: @{}) mutableCopy];
+    NSMutableDictionary* customApp = [[NSPushPrefsStore
+        customAppPrefsForService:_service
+                    customAppID:_customAppIDKey
+                isCustomService:NO] mutableCopy];
     customApp[subkey] = _serviceItems;
-    customApps[_customAppIDKey] = customApp;
-    serviceObj[NSPPreferenceServiceCustomAppsKey] = customApps;
+    [NSPushPrefsStore setCustomAppPrefs:customApp
+                             forService:_service
+                           customAppID:_customAppIDKey
+                       isCustomService:NO
+                          shouldNotify:YES];
   } else {
+    NSMutableDictionary* serviceObj = [[NSPushPrefsStore
+        serviceForName:_service isCustomService:NO] mutableCopy];
     serviceObj[subkey] = _serviceItems;
+    [NSPushPrefsStore setService:serviceObj
+                         forName:_service
+                 isCustomService:NO
+                    shouldNotify:YES];
   }
-  builtInServices[_service] = serviceObj;
-  [NSPSharedSpecifiers
-      setPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey
-              value:(__bridge CFPropertyListRef)builtInServices
-       shouldNotify:YES];
 }
 
 - (void)updateItems {
   [self showActivityIndicator];
 
   if (XEq(_service, PUSHER_SERVICE_PUSHOVER)) {
-    if (_isSound) {
-      [self updatePushoverSounds];
-    } else {
-      [self updatePushoverDevices];
-    }
+    [self updatePushoverItems];
   } else if (XEq(_service, PUSHER_SERVICE_PUSHBULLET)) {
-    if (_isSound) {
-      [self updatePushbulletSounds];
-    } else {
-      [self updatePushbulletDevices];
-    }
+    [self updatePushbulletItems];
   }
 }
 
@@ -165,18 +154,9 @@ static NSDictionary* NSPJSONDictionary(id object) {
 
     if (_serviceItems.count) {
       PSSpecifier* groupSpecifier = [PSSpecifier emptyGroupSpecifier];
-      if (!_isSound) {
-        if (XEq(_service, PUSHER_SERVICE_PUSHOVER)) {
-          [groupSpecifier setProperty:@"Selecting none will forward push "
-                                      @"notifications to all devices."
-                               forKey:@"footerText"];
-        } else if (XEq(_service, PUSHER_SERVICE_PUSHBULLET)) {
-          [groupSpecifier
-              setProperty:@"Pushbullet only allows one receiving device. "
-                          @"Selecting none "
-                          @"will forward push notifications to all devices."
-                   forKey:@"footerText"];
-        }
+      NSString* footer = [self footerText];
+      if (footer) {
+        [groupSpecifier setProperty:footer forKey:@"footerText"];
       }
       [allSpecifiers addObject:groupSpecifier];
     }
@@ -266,566 +246,31 @@ static NSDictionary* NSPJSONDictionary(id object) {
   return @NO;
 }
 
-- (void)updatePushoverDevices {
-  NSDictionary* builtInServices =
-      NSPushDictionaryValue(_prefs[NSPPreferenceBuiltInServicesKey]) ?: @{};
-  NSDictionary* serviceObj =
-      NSPushDictionaryValue(builtInServices[_service]) ?: @{};
-  NSString* pushoverToken =
-      XStrDefault(serviceObj[NSPPreferenceServiceTokenKey], @"");
-  NSString* pushoverUser =
-      XStrDefault(serviceObj[NSPPreferenceServiceUserKey], @"");
-  NSDictionary* userDictionary =
-      @{@"token" : pushoverToken, @"user" : pushoverUser};
-  NSData* jsonData =
-      [NSJSONSerialization dataWithJSONObject:userDictionary
-                                      options:NSJSONWritingPrettyPrinted
-                                        error:nil];
-  NSMutableURLRequest* request = [NSMutableURLRequest
-       requestWithURL:
-           [NSURL
-               URLWithString:@"https://api.pushover.net/1/users/validate.json"]
-          cachePolicy:NSURLRequestUseProtocolCachePolicy
-      timeoutInterval:10];
-  [request setHTTPMethod:@"POST"];
-  [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
-  [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-  [request setValue:XStr(@"%d", (int)jsonData.length)
-      forHTTPHeaderField:@"Content-length"];
-  [request setHTTPBody:jsonData];
 
-  // use async way to connect network
-  [[[NSURLSession sharedSession]
-      dataTaskWithRequest:request
-        completionHandler:^(NSData* data, NSURLResponse* response,
-                            NSError* error) {
-          // Run the whole response handling on the main thread: _serviceItems
-          // is mutated here and read by the table view, so touching it from
-          // NSURLSession's background queue races with cell rendering.
-          dispatch_async(dispatch_get_main_queue(), ^{
-          if (data.length && error == nil) {
-            XLog(@"Success");
-            NSError* jsonError = nil;
-            NSDictionary* json = NSPJSONDictionary(
-                [NSJSONSerialization JSONObjectWithData:data
-                                               options:kNilOptions
-                                                 error:&jsonError]);
-            if (jsonError) {
-              XLog(@"JSON Error: %@", jsonError);
-            }
-            // 0 error, 1 success
-            int status = (int)NSPushIntegerValue(json[@"status"], 0);
-            if (status == 0) {
-              XLog(@"Something went wrong");
-              NSArray* errors =
-                  [json[@"errors"] isKindOfClass:NSArray.class]
-                      ? (NSArray*)json[@"errors"]
-                      : nil;
-              NSString* title;
-              NSString* msg = @"";
-              if (errors == nil || errors.count == 0) {
-                title = @"Unknown Error";
-                msg = XStr(@"Server response: %@", json);
-              } else {
-                title = @"Server Error";
-                msg = XStr(@"%@", [errors componentsJoinedByString:@"\n"]);
-              }
-              UIAlertController* alert = XAlertTitle(title, msg);
-              id handler = ^(UIAlertAction* action) {
-                [self.navigationController popViewControllerAnimated:YES];
-              };
-              [alert addAction:XAlertBtnHandler(@"Ok", handler)];
-              dispatch_async(dispatch_get_main_queue(), ^{
-                [self presentViewController:alert animated:YES completion:nil];
-              });
-              [self hideActivityIndicator];
-              return;
-            }
+#pragma mark - Subclass hooks
 
-            id rawDevices = json[@"devices"];
-            NSMutableArray* serviceDevices =
-                [rawDevices isKindOfClass:NSArray.class]
-                    ? [(NSArray*)rawDevices mutableCopy]
-                    : [NSMutableArray new];
-            NSMutableArray* serviceDevicesToRemove = [NSMutableArray new];
-            for (NSDictionary* device in _serviceItems) {
-              if (![serviceDevices containsObject:device[@"id"]]) {
-                [serviceDevicesToRemove addObject:device];
-              } else {
-                [serviceDevices removeObject:device[@"id"]];
-              }
-            }
-            for (id rawDevice in serviceDevices) {
-              if (![rawDevice isKindOfClass:NSString.class] ||
-                  [(NSString*)rawDevice length] == 0) {
-                continue;
-              }
-              NSString* device = (NSString*)rawDevice;
-              [_serviceItems addObject:[@{
-                               @"name" : device,
-                               @"id" : device,
-                               @"enabled" : @NO
-                             } mutableCopy]];
-            }
-            for (NSDictionary* device in serviceDevicesToRemove) {
-              [_serviceItems removeObject:device];
-            }
-
-            [self saveServiceItems];
-
-            XLog(@"Saved devices");
-
-            // Reload specifiers on current screen
-            dispatch_async(dispatch_get_main_queue(), ^{
-              [self reloadSpecifiers];
-            });
-
-          } else {
-            id handler = ^(UIAlertAction* action) {
-              [self.navigationController popViewControllerAnimated:YES];
-            };
-            NSString* msg;
-            if (data.length == 0 && error == nil) {
-              msg = @"Server did not respond. Please check your internet "
-                    @"connection or try again later.";
-            } else if (error) {
-              msg = error.localizedDescription;
-            } else {
-              msg = @"Unknown Error. Contact Developer.";
-            }
-            UIAlertController* alert = XAlertTitle(@"Network Error", msg);
-            [alert addAction:XAlertBtnHandler(@"Ok", handler)];
-            dispatch_async(dispatch_get_main_queue(), ^{
-              [self presentViewController:alert animated:YES completion:nil];
-            });
-          }
-
-          [self hideActivityIndicator];
-          });
-        }] resume];
+- (BOOL)isSoundMode {
+  return NSPushBoolResolved([self.specifier propertyForKey:@"isSound"], NO);
 }
 
-- (void)updatePushoverSounds {
-  NSDictionary* builtInServices =
-      NSPushDictionaryValue(_prefs[NSPPreferenceBuiltInServicesKey]) ?: @{};
-  NSDictionary* serviceObj =
-      NSPushDictionaryValue(builtInServices[_service]) ?: @{};
-  NSString* pushoverToken =
-      XStrDefault(serviceObj[NSPPreferenceServiceTokenKey], @"");
-  NSMutableURLRequest* request = [NSMutableURLRequest
-       requestWithURL:[NSURL URLWithString:XStr(@"https://api.pushover.net/1/"
-                                                @"sounds.json?token=%@",
-                                                pushoverToken)]
-          cachePolicy:NSURLRequestUseProtocolCachePolicy
-      timeoutInterval:10];
-  [request setHTTPMethod:@"GET"];
-  [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
-
-  // use async way to connect network
-  [[[NSURLSession sharedSession]
-      dataTaskWithRequest:request
-        completionHandler:^(NSData* data, NSURLResponse* response,
-                            NSError* error) {
-          // Run the whole response handling on the main thread: _serviceItems
-          // is mutated here and read by the table view, so touching it from
-          // NSURLSession's background queue races with cell rendering.
-          dispatch_async(dispatch_get_main_queue(), ^{
-          if (data.length && error == nil) {
-            XLog(@"Success");
-            NSError* jsonError = nil;
-            NSDictionary* json = NSPJSONDictionary(
-                [NSJSONSerialization JSONObjectWithData:data
-                                               options:kNilOptions
-                                                 error:&jsonError]);
-            if (jsonError) {
-              XLog(@"JSON Error: %@", jsonError);
-            }
-            // 0 error, 1 success
-            int status = (int)NSPushIntegerValue(json[@"status"], 0);
-            if (status == 0) {
-              XLog(@"Something went wrong");
-              NSArray* errors =
-                  [json[@"errors"] isKindOfClass:NSArray.class]
-                      ? (NSArray*)json[@"errors"]
-                      : nil;
-              NSString* title;
-              NSString* msg = @"";
-              if (errors == nil || errors.count == 0) {
-                title = @"Unknown Error";
-                msg = XStr(@"Server response: %@", json);
-              } else {
-                title = @"Server Error";
-                msg = XStr(@"%@", [errors componentsJoinedByString:@"\n"]);
-              }
-              UIAlertController* alert = XAlertTitle(title, msg);
-              id handler = ^(UIAlertAction* action) {
-                [self.navigationController popViewControllerAnimated:YES];
-              };
-              [alert addAction:XAlertBtnHandler(@"Ok", handler)];
-              dispatch_async(dispatch_get_main_queue(), ^{
-                [self presentViewController:alert animated:YES completion:nil];
-              });
-              [self hideActivityIndicator];
-              return;
-            }
-
-            id rawSounds = json[@"sounds"];
-            NSMutableDictionary* serviceSounds =
-                [rawSounds isKindOfClass:NSDictionary.class]
-                    ? [(NSDictionary*)rawSounds mutableCopy]
-                    : [NSMutableDictionary new];
-
-            NSMutableArray* serviceSoundsToRemove = [NSMutableArray new];
-            for (NSDictionary* sound in _serviceItems) {
-              if (![serviceSounds.allKeys containsObject:sound[@"id"]]) {
-                [serviceSoundsToRemove addObject:sound];
-              } else {
-                [serviceSounds removeObjectForKey:sound[@"id"]];
-              }
-            }
-            for (NSString* soundID in serviceSounds.allKeys) {
-              id rawName = serviceSounds[soundID];
-              NSString* name = [rawName isKindOfClass:NSString.class]
-                                   ? (NSString*)rawName
-                                   : soundID;
-              [_serviceItems addObject:[@{
-                               @"name" : name,
-                               @"id" : soundID,
-                               @"enabled" : @NO
-                             } mutableCopy]];
-            }
-            for (NSDictionary* sound in serviceSoundsToRemove) {
-              [_serviceItems removeObject:sound];
-            }
-
-            [self saveServiceItems];
-
-            XLog(@"Saved sounds");
-
-            // Reload specifiers on current screen
-            dispatch_async(dispatch_get_main_queue(), ^{
-              [self reloadSpecifiers];
-            });
-
-          } else {
-            id handler = ^(UIAlertAction* action) {
-              [self.navigationController popViewControllerAnimated:YES];
-            };
-            NSString* msg;
-            if (data.length == 0 && error == nil) {
-              msg = @"Server did not respond. Please check your internet "
-                    @"connection or try again later.";
-            } else if (error) {
-              msg = error.localizedDescription;
-            } else {
-              msg = @"Unknown Error. Contact Developer.";
-            }
-            UIAlertController* alert = XAlertTitle(@"Network Error", msg);
-            [alert addAction:XAlertBtnHandler(@"Ok", handler)];
-            dispatch_async(dispatch_get_main_queue(), ^{
-              [self presentViewController:alert animated:YES completion:nil];
-            });
-          }
-
-          [self hideActivityIndicator];
-          });
-        }] resume];
+- (NSString*)storageKey {
+  return [self isSoundMode] ? @"sounds" : @"devices";
 }
 
-- (void)updatePushbulletDevices {
-  NSDictionary* builtInServices =
-      NSPushDictionaryValue(_prefs[NSPPreferenceBuiltInServicesKey]) ?: @{};
-  NSDictionary* serviceObj =
-      NSPushDictionaryValue(builtInServices[_service]) ?: @{};
-  NSString* pushbulletToken =
-      XStrDefault(serviceObj[NSPPreferenceServiceTokenKey], @"");
-  NSMutableURLRequest* request = [NSMutableURLRequest
-       requestWithURL:
-           [NSURL URLWithString:@"https://api.pushbullet.com/v2/devices"]
-          cachePolicy:NSURLRequestUseProtocolCachePolicy
-      timeoutInterval:10];
-  [request setHTTPMethod:@"GET"];
-  [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
-  [request setValue:pushbulletToken forHTTPHeaderField:@"Access-Token"];
-
-  // use async way to connect network
-  [[[NSURLSession sharedSession]
-      dataTaskWithRequest:request
-        completionHandler:^(NSData* data, NSURLResponse* response,
-                            NSError* error) {
-          // Run the whole response handling on the main thread: _serviceItems
-          // is mutated here and read by the table view, so touching it from
-          // NSURLSession's background queue races with cell rendering.
-          dispatch_async(dispatch_get_main_queue(), ^{
-          if (data.length && error == nil) {
-            XLog(@"Success");
-            NSError* jsonError = nil;
-            NSDictionary* json = NSPJSONDictionary(
-                [NSJSONSerialization JSONObjectWithData:data
-                                               options:kNilOptions
-                                                 error:&jsonError]);
-            if (jsonError) {
-              XLog(@"JSON Error: %@", jsonError);
-            }
-
-            NSDictionary* error =
-                [json[@"error"] isKindOfClass:NSDictionary.class]
-                    ? (NSDictionary*)json[@"error"]
-                    : nil;
-            if (error) {
-              XLog(@"Something went wrong");
-              NSString* title = @"Server Error";
-              NSString* msg = error[@"message"] ?: @"Unknown Error";
-              UIAlertController* alert = XAlertTitle(title, msg);
-              id handler = ^(UIAlertAction* action) {
-                [self.navigationController popViewControllerAnimated:YES];
-              };
-              [alert addAction:XAlertBtnHandler(@"Ok", handler)];
-              dispatch_async(dispatch_get_main_queue(), ^{
-                [self presentViewController:alert animated:YES completion:nil];
-              });
-              [self hideActivityIndicator];
-              return;
-            }
-
-            id rawDevices = json[@"devices"];
-            NSMutableArray* serviceDevices =
-                [rawDevices isKindOfClass:NSArray.class]
-                    ? [(NSArray*)rawDevices mutableCopy]
-                    : [NSMutableArray new];
-
-            NSMutableArray* serviceDevicesToRemove = [NSMutableArray new];
-            for (NSDictionary* savedDevice in _serviceItems) {
-              NSDictionary* foundNewDevice = nil;
-              for (id rawNewDevice in serviceDevices) {
-                if (![rawNewDevice isKindOfClass:NSDictionary.class]) {
-                  continue;
-                }
-                NSDictionary* newDevice = (NSDictionary*)rawNewDevice;
-                if (XEq(savedDevice[@"id"], newDevice[@"iden"])) {
-                  foundNewDevice = newDevice;
-                  break;
-                }
-              }
-              if (foundNewDevice) {
-                // prevent from adding later because already exists
-                [serviceDevices removeObject:foundNewDevice];
-              } else {
-                [serviceDevicesToRemove addObject:savedDevice];
-              }
-            }
-
-            for (id rawDevice in serviceDevices) {
-              if (![rawDevice isKindOfClass:NSDictionary.class]) {
-                continue;
-              }
-              NSDictionary* newDevice = (NSDictionary*)rawDevice;
-              // pushable deprecated
-              if (!NSPushBoolResolved(newDevice[@"active"], YES)) {
-                continue;
-              }
-              id deviceID = newDevice[@"iden"];
-              if (![deviceID isKindOfClass:NSString.class] ||
-                  [(NSString*)deviceID length] == 0) {
-                continue;
-              }
-              id rawName = newDevice[@"nickname"];
-              if (![rawName isKindOfClass:NSString.class]) {
-                rawName = newDevice[@"model"];
-              }
-              NSString* name = [rawName isKindOfClass:NSString.class]
-                                   ? (NSString*)rawName
-                                   : @"";
-              [_serviceItems addObject:[@{
-                               @"name" : name,
-                               @"id" : deviceID,
-                               @"enabled" : @NO
-                             } mutableCopy]];
-            }
-            for (NSDictionary* savedDevice in serviceDevicesToRemove) {
-              [_serviceItems removeObject:savedDevice];
-            }
-
-            [self saveServiceItems];
-
-            XLog(@"Saved devices");
-
-            // Reload specifiers on current screen
-            dispatch_async(dispatch_get_main_queue(), ^{
-              [self reloadSpecifiers];
-            });
-
-          } else {
-            id handler = ^(UIAlertAction* action) {
-              [self.navigationController popViewControllerAnimated:YES];
-            };
-            NSString* msg;
-            if (data.length == 0 && error == nil) {
-              msg = @"Server did not respond. Please check your internet "
-                    @"connection or try again later.";
-            } else if (error) {
-              msg = error.localizedDescription;
-            } else {
-              msg = @"Unknown Error. Contact Developer.";
-            }
-            UIAlertController* alert = XAlertTitle(@"Network Error", msg);
-            [alert addAction:XAlertBtnHandler(@"Ok", handler)];
-            dispatch_async(dispatch_get_main_queue(), ^{
-              [self presentViewController:alert animated:YES completion:nil];
-            });
-          }
-
-          [self hideActivityIndicator];
-          });
-        }] resume];
+- (BOOL)onlyAllowOne {
+  return [self isSoundMode] || XEq(_service, PUSHER_SERVICE_PUSHBULLET);
 }
 
-- (void)updatePushbulletSounds {
-  NSDictionary* builtInServices =
-      NSPushDictionaryValue(_prefs[NSPPreferenceBuiltInServicesKey]) ?: @{};
-  NSDictionary* serviceObj =
-      NSPushDictionaryValue(builtInServices[_service]) ?: @{};
-  NSString* pushbulletToken =
-      XStrDefault(serviceObj[NSPPreferenceServiceTokenKey], @"");
-  NSMutableURLRequest* request = [NSMutableURLRequest
-       requestWithURL:[NSURL
-                          URLWithString:@"https://api.pushbullet.com/v2/sounds"]
-          cachePolicy:NSURLRequestUseProtocolCachePolicy
-      timeoutInterval:10];
-  [request setHTTPMethod:@"GET"];
-  [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
-  [request setValue:pushbulletToken forHTTPHeaderField:@"Access-Token"];
+- (NSString*)footerText {
+  return nil;
+}
 
-  // use async way to connect network
-  [[[NSURLSession sharedSession]
-      dataTaskWithRequest:request
-        completionHandler:^(NSData* data, NSURLResponse* response,
-                            NSError* error) {
-          // Run the whole response handling on the main thread: _serviceItems
-          // is mutated here and read by the table view, so touching it from
-          // NSURLSession's background queue races with cell rendering.
-          dispatch_async(dispatch_get_main_queue(), ^{
-          if (data.length && error == nil) {
-            XLog(@"Success");
-            NSError* jsonError = nil;
-            NSDictionary* json = NSPJSONDictionary(
-                [NSJSONSerialization JSONObjectWithData:data
-                                               options:kNilOptions
-                                                 error:&jsonError]);
-            if (jsonError) {
-              XLog(@"JSON Error: %@", jsonError);
-            }
+- (void)updatePushoverItems {
+  [self doesNotRecognizeSelector:_cmd];
+}
 
-            NSDictionary* error =
-                [json[@"error"] isKindOfClass:NSDictionary.class]
-                    ? (NSDictionary*)json[@"error"]
-                    : nil;
-            if (error) {
-              XLog(@"Something went wrong");
-              NSString* title = @"Server Error";
-              NSString* msg = error[@"message"] ?: @"Unknown Error";
-              UIAlertController* alert = XAlertTitle(title, msg);
-              id handler = ^(UIAlertAction* action) {
-                [self.navigationController popViewControllerAnimated:YES];
-              };
-              [alert addAction:XAlertBtnHandler(@"Ok", handler)];
-              dispatch_async(dispatch_get_main_queue(), ^{
-                [self presentViewController:alert animated:YES completion:nil];
-              });
-              [self hideActivityIndicator];
-              return;
-            }
-
-            id rawSounds = json[@"sounds"];
-            NSMutableArray* serviceSounds =
-                [rawSounds isKindOfClass:NSArray.class]
-                    ? [(NSArray*)rawSounds mutableCopy]
-                    : [NSMutableArray new];
-
-            NSMutableArray* serviceSoundsToRemove = [NSMutableArray new];
-            for (NSDictionary* savedSound in _serviceItems) {
-              NSDictionary* foundNewSound = nil;
-              for (id rawNewSound in serviceSounds) {
-                if (![rawNewSound isKindOfClass:NSDictionary.class]) {
-                  continue;
-                }
-                NSDictionary* newSound = (NSDictionary*)rawNewSound;
-                if (XEq(savedSound[@"id"], newSound[@"iden"])) {
-                  foundNewSound = newSound;
-                  break;
-                }
-              }
-              if (foundNewSound) {
-                // prevent from adding later because already exists
-                [serviceSounds removeObject:foundNewSound];
-              } else {
-                [serviceSoundsToRemove addObject:savedSound];
-              }
-            }
-
-            for (id rawSound in serviceSounds) {
-              if (![rawSound isKindOfClass:NSDictionary.class]) {
-                continue;
-              }
-              NSDictionary* newSound = (NSDictionary*)rawSound;
-              // pushable deprecated
-              if (!NSPushBoolResolved(newSound[@"active"], YES)) {
-                continue;
-              }
-              id soundID = newSound[@"iden"];
-              if (![soundID isKindOfClass:NSString.class] ||
-                  [(NSString*)soundID length] == 0) {
-                continue;
-              }
-              id rawName = newSound[@"nickname"];
-              if (![rawName isKindOfClass:NSString.class]) {
-                rawName = newSound[@"model"];
-              }
-              NSString* name = [rawName isKindOfClass:NSString.class]
-                                   ? (NSString*)rawName
-                                   : @"";
-              [_serviceItems addObject:[@{
-                               @"name" : name,
-                               @"id" : soundID,
-                               @"enabled" : @NO
-                             } mutableCopy]];
-            }
-            for (NSDictionary* savedSound in serviceSoundsToRemove) {
-              [_serviceItems removeObject:savedSound];
-            }
-
-            [self saveServiceItems];
-
-            XLog(@"Saved sounds");
-
-            // Reload specifiers on current screen
-            dispatch_async(dispatch_get_main_queue(), ^{
-              [self reloadSpecifiers];
-            });
-
-          } else {
-            id handler = ^(UIAlertAction* action) {
-              [self.navigationController popViewControllerAnimated:YES];
-            };
-            NSString* msg;
-            if (data.length == 0 && error == nil) {
-              msg = @"Server did not respond. Please check your internet "
-                    @"connection or try again later.";
-            } else if (error) {
-              msg = error.localizedDescription;
-            } else {
-              msg = @"Unknown Error. Contact Developer.";
-            }
-            UIAlertController* alert = XAlertTitle(@"Network Error", msg);
-            [alert addAction:XAlertBtnHandler(@"Ok", handler)];
-            dispatch_async(dispatch_get_main_queue(), ^{
-              [self presentViewController:alert animated:YES completion:nil];
-            });
-          }
-
-          [self hideActivityIndicator];
-          });
-        }] resume];
+- (void)updatePushbulletItems {
+  [self doesNotRecognizeSelector:_cmd];
 }
 
 @end

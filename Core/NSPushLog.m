@@ -1,7 +1,7 @@
 #import "NSPushLog.h"
 #import "NSPushConstants.h"
+#import "../Shared/NSPushLogStore.h"
 #import "helpers.h"
-#import <notify.h>
 
 @interface NSPushLog (Private)
 + (NSString*)stringForObject:(id)object
@@ -87,6 +87,9 @@
                            label:(NSString*)label
                           object:(id)object
                     dontTruncate:(BOOL)dontTruncate {
+  if (![service isKindOfClass:NSString.class]) {
+    service = @"";
+  }
   // allow global service which is @"" so empty
   if (!XIsEmpty(service)) {
     id val = CFBridgingRelease(CFPreferencesCopyAppValue(
@@ -104,20 +107,7 @@
     }
   }
 
-  CFPreferencesSynchronize(PUSHER_LOG_ID, kCFPreferencesCurrentUser,
-                           kCFPreferencesAnyHost);
-  CFArrayRef keyList = CFPreferencesCopyKeyList(
-      PUSHER_LOG_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-  NSDictionary* prefs = @{};
-  if (keyList) {
-    prefs = (__bridge_transfer NSDictionary*)CFPreferencesCopyMultiple(
-        keyList, PUSHER_LOG_ID, kCFPreferencesCurrentUser,
-        kCFPreferencesAnyHost);
-    if (!prefs) {
-      prefs = @{};
-    }
-    CFRelease(keyList);
-  }
+  NSDictionary* prefs = [NSPushLogStore snapshot];
 
   NSString* logKey = XStr(@"%@Log", service);
   // Guard against malformed log prefs: the value must be an array before we
@@ -202,12 +192,9 @@
     [logSections removeObjectsInRange:rangeToDelete];
   }
 
-  CFPreferencesSetValue((__bridge CFStringRef)logKey,
-                        (__bridge CFPropertyListRef)logSections, PUSHER_LOG_ID,
-                        kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-  CFPreferencesSynchronize(PUSHER_LOG_ID, kCFPreferencesCurrentUser,
-                           kCFPreferencesAnyHost);
-  notify_post(PUSHER_LOG_PREFS_NOTIFICATION);
+  [NSPushLogStore setLogSections:logSections
+                     forService:service
+                   shouldNotify:YES];
 }
 
 + (void)addToLogIfEnabledForService:(NSString*)service

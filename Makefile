@@ -19,7 +19,7 @@ endif
 include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = Pusher
-Pusher_FILES = Tweak.xm NSPTestPush.xm UIImage+ReplaceColor.m iOSVersion.m 	$(wildcard Core/*.m) $(wildcard Core/Services/*.m)
+Pusher_FILES = Tweak.xm NSPTestPush.xm UIImage+ReplaceColor.m Shared/NSPushPrefsStore.m Shared/NSPushLogStore.m 	$(wildcard Core/*.m) $(wildcard Core/Services/*.m)
 Pusher_CFLAGS += -fobjc-arc
 Pusher_FRAMEWORKS = UIKit Foundation
 Pusher_PRIVATE_FRAMEWORKS = AppSupport BulletinBoard

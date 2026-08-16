@@ -1,30 +1,27 @@
 #import "NSPSharedSpecifiers.h"
-#import "NSPDeviceSoundListController.h"
-
+#import "NSPLocalization.h"
+#import "NSPSharedSpecifiers+ServiceBuilders.h"
 #import "../Generated/BuiltinServices.generated.h"
+#import "../Shared/NSPushPrefsStore.h"
 #import "../global.h"
 #import "../helpers.h"
-#import <notify.h>
 
 @implementation NSPSharedSpecifiers
 
+// Thin re-exports of the shared preference store, kept for callers outside
+// this file (see NSPSharedSpecifiers.h). All nested built-in / custom /
+// global navigation below goes through NSPushPrefsStore directly.
+
 + (id)getPreference:(CFStringRef)keyRef {
-  CFPropertyListRef val = CFPreferencesCopyValue(
-      keyRef, PUSHER_APP_ID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-  return val ? (__bridge_transfer id)val : nil;
+  return [NSPushPrefsStore preferenceValueForKey:(__bridge NSString*)keyRef];
 }
 
 + (void)setPreference:(CFStringRef)keyRef
                 value:(CFPropertyListRef)val
          shouldNotify:(BOOL)shouldNotify {
-  CFPreferencesSetValue(keyRef, val, PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                        kCFPreferencesAnyHost);
-  CFPreferencesSynchronize(PUSHER_APP_ID, kCFPreferencesCurrentUser,
-                           kCFPreferencesAnyHost);
-  if (shouldNotify) {
-    // Reload stuff
-    notify_post(PUSHER_PREFS_NOTIFICATION);
-  }
+  [NSPushPrefsStore setPreferenceValue:(__bridge id)val
+                                forKey:(__bridge NSString*)keyRef
+                          shouldNotify:shouldNotify];
 }
 
 + (NSArray*)get:(NSString*)service
@@ -65,12 +62,14 @@
             containsObject:@(specifier
                                  .cellType)]) { // don't set these properties on
                                                 // group specifiers
-      if (XEq(specifier.name, @"App List")) {
+      if (XEq(specifier.name, @"App List") ||
+        XEq(specifier.name, NSPLocalizedString(@"App List", nil))) {
         // Custom service app lists live nested inside the service object
         // (CustomServices[service][appList]), like built-in services. The app
         // list controller needs to know which storage to use.
         [specifier setProperty:@YES forKey:@"isCustomService"];
-      } else if (XEq(specifier.name, @"App Customization")) {
+      } else if (XEq(specifier.name, @"App Customization") ||
+                 XEq(specifier.name, NSPLocalizedString(@"App Customization", nil))) {
         [specifier setProperty:service forKey:@"service"];
       }
       continue;
@@ -85,489 +84,114 @@
   return specifiers;
 }
 
-+ (NSArray*)getCustomShared:(NSString*)service withAppID:(NSString*)appID {
-  BOOL isCustomApp = appID != nil;
-
-  PSSpecifier* includeIcon = [PSSpecifier
-      preferenceSpecifierNamed:@"Include Icon"
-                        target:self
-                           set:@selector(setPreferenceValue:forCustomSpecifier:)
-                           get:@selector(readCustomPreferenceValue:)
-                        detail:nil
-                          cell:PSSwitchCell
-                          edit:nil];
-  [includeIcon setProperty:@"includeIcon" forKey:@"key"];
-  [includeIcon setProperty:@YES forKey:@"enabled"];
-  [includeIcon setProperty:@NO forKey:@"default"];
-  [includeIcon setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [includeIcon setProperty:service forKey:@"service"];
-
-  PSSpecifier* includeImage = [PSSpecifier
-      preferenceSpecifierNamed:@"Include Image"
-                        target:self
-                           set:@selector(setPreferenceValue:forCustomSpecifier:)
-                           get:@selector(readCustomPreferenceValue:)
-                        detail:nil
-                          cell:PSSwitchCell
-                          edit:nil];
-  [includeImage setProperty:@"includeImage" forKey:@"key"];
-  [includeImage setProperty:@YES forKey:@"enabled"];
-  [includeImage setProperty:@NO forKey:@"default"];
-  [includeImage setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [includeImage setProperty:service forKey:@"service"];
-
-  PSSpecifier* imageMaxWidth = [PSSpecifier
-      preferenceSpecifierNamed:@"Maximum Image Width (pixels)"
-                        target:self
-                           set:@selector(setPreferenceValue:forCustomSpecifier:)
-                           get:@selector(readCustomPreferenceValue:)
-                        detail:nil
-                          cell:PSEditTextCell
-                          edit:nil];
-  [imageMaxWidth setProperty:@"imageMaxWidth" forKey:@"key"];
-  [imageMaxWidth setProperty:@YES forKey:@"enabled"];
-  [imageMaxWidth setProperty:@YES forKey:@"isDecimalPad"];
-  [imageMaxWidth setProperty:@(PUSHER_DEFAULT_MAX_WIDTH) forKey:@"default"];
-  [imageMaxWidth setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [imageMaxWidth setProperty:service forKey:@"service"];
-
-  PSSpecifier* imageMaxHeight = [PSSpecifier
-      preferenceSpecifierNamed:@"Maximum Image Height (pixels)"
-                        target:self
-                           set:@selector(setPreferenceValue:forCustomSpecifier:)
-                           get:@selector(readCustomPreferenceValue:)
-                        detail:nil
-                          cell:PSEditTextCell
-                          edit:nil];
-  [imageMaxHeight setProperty:@"imageMaxHeight" forKey:@"key"];
-  [imageMaxHeight setProperty:@YES forKey:@"enabled"];
-  [imageMaxHeight setProperty:@YES forKey:@"isDecimalPad"];
-  [imageMaxHeight setProperty:@(PUSHER_DEFAULT_MAX_HEIGHT) forKey:@"default"];
-  [imageMaxHeight setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [imageMaxHeight setProperty:service forKey:@"service"];
-
-  PSSpecifier* imageShrinkFactor = [PSSpecifier
-      preferenceSpecifierNamed:@"Image Shrink Factor Upon Retry"
-                        target:self
-                           set:@selector(setPreferenceValue:forCustomSpecifier:)
-                           get:@selector(readCustomPreferenceValue:)
-                        detail:nil
-                          cell:PSEditTextCell
-                          edit:nil];
-  [imageShrinkFactor setProperty:@"imageShrinkFactor" forKey:@"key"];
-  [imageShrinkFactor setProperty:@YES forKey:@"enabled"];
-  [imageShrinkFactor setProperty:@YES forKey:@"isDecimalPad"];
-  [imageShrinkFactor setProperty:@(PUSHER_DEFAULT_SHRINK_FACTOR)
-                          forKey:@"default"];
-  [imageShrinkFactor setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [imageShrinkFactor setProperty:service forKey:@"service"];
-
-  if (isCustomApp) {
-    [includeIcon setProperty:appID forKey:@"customAppID"];
-    [includeImage setProperty:appID forKey:@"customAppID"];
-    [imageMaxWidth setProperty:appID forKey:@"customAppID"];
-    [imageMaxHeight setProperty:appID forKey:@"customAppID"];
-    [imageShrinkFactor setProperty:appID forKey:@"customAppID"];
-  }
-
-  return @[
-    includeIcon, includeImage, imageMaxWidth, imageMaxHeight, imageShrinkFactor
-  ];
-}
-
-+ (NSArray*)getCustomShared:(NSString*)service {
-  return [NSPSharedSpecifiers getCustomShared:service withAppID:nil];
-}
-
-+ (NSArray*)pushover:(NSString*)appID {
-  PSSpecifier* devices =
-      [PSSpecifier preferenceSpecifierNamed:@"Receiving Devices"
-                                     target:nil
-                                        set:nil
-                                        get:nil
-                                     detail:NSPDeviceSoundListController.class
-                                       cell:PSLinkCell
-                                       edit:nil];
-  PSSpecifier* sounds =
-      [PSSpecifier preferenceSpecifierNamed:@"Notification Sound"
-                                     target:nil
-                                        set:nil
-                                        get:nil
-                                     detail:NSPDeviceSoundListController.class
-                                       cell:PSLinkCell
-                                       edit:nil];
-
-  [devices setProperty:PUSHER_SERVICE_PUSHOVER forKey:@"service"];
-  [sounds setProperty:PUSHER_SERVICE_PUSHOVER forKey:@"service"];
-
-  BOOL isCustomApp = appID != nil;
-
-  [devices setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [sounds setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-
-  [devices setProperty:@NO forKey:@"isSound"];
-  [sounds setProperty:@YES forKey:@"isSound"];
-
-  if (isCustomApp) {
-    [devices setProperty:appID forKey:@"customAppIDKey"];
-    [sounds setProperty:appID forKey:@"customAppIDKey"];
-  }
-
-  return @[ devices, sounds ];
-}
-
-+ (NSArray*)pushbullet:(NSString*)appID {
-  PSSpecifier* devices =
-      [PSSpecifier preferenceSpecifierNamed:@"Receiving Devices"
-                                     target:nil
-                                        set:nil
-                                        get:nil
-                                     detail:NSPDeviceSoundListController.class
-                                       cell:PSLinkCell
-                                       edit:nil];
-  [devices setProperty:PUSHER_SERVICE_PUSHBULLET forKey:@"service"];
-  BOOL isCustomApp = appID != nil;
-  [devices setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [devices setProperty:@NO forKey:@"isSound"];
-  if (isCustomApp) {
-    [devices setProperty:appID forKey:@"customAppIDKey"];
-  }
-  return @[ devices ];
-}
-
-+ (NSArray*)ifttt:(NSString*)appID {
-  BOOL isCustomApp = appID != nil;
-
-  PSSpecifier* eventName = [PSSpecifier
-      preferenceSpecifierNamed:@"Event Name"
-                        target:self
-                           set:@selector(setPreferenceValue:
-                                         forBuiltInServiceSpecifier:)
-                           get:@selector(readBuiltInServicePreferenceValue:)
-                        detail:nil
-                          cell:PSEditTextCell
-                          edit:nil];
-  [eventName setProperty:NSPPreferenceServiceEventNameKey forKey:@"key"];
-  [eventName setProperty:@YES forKey:@"enabled"];
-  [eventName setProperty:@YES forKey:@"noAutoCorrect"];
-  [eventName setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [eventName setProperty:PUSHER_SERVICE_IFTTT forKey:@"service"];
-  [eventName setProperty:@"eventName" forKey:@"customAppsPrefsKey"];
-
-  PSSpecifier* includeIcon = [PSSpecifier
-      preferenceSpecifierNamed:@"Include Icon"
-                        target:self
-                           set:@selector(setPreferenceValue:
-                                         forBuiltInServiceSpecifier:)
-                           get:@selector(readBuiltInServicePreferenceValue:)
-                        detail:nil
-                          cell:PSSwitchCell
-                          edit:nil];
-  [includeIcon setProperty:NSPPreferenceServiceIncludeIconKey forKey:@"key"];
-  [includeIcon setProperty:@YES forKey:@"enabled"];
-  [includeIcon setProperty:@NO forKey:@"default"];
-  [includeIcon setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [includeIcon setProperty:PUSHER_SERVICE_IFTTT forKey:@"service"];
-  [includeIcon setProperty:@"includeIcon" forKey:@"customAppsPrefsKey"];
-
-  PSSpecifier* curateData = [PSSpecifier
-      preferenceSpecifierNamed:@"Curate Request Data"
-                        target:self
-                           set:@selector(setPreferenceValue:
-                                         forBuiltInServiceSpecifier:)
-                           get:@selector(readBuiltInServicePreferenceValue:)
-                        detail:nil
-                          cell:PSSwitchCell
-                          edit:nil];
-  [curateData setProperty:NSPPreferenceServiceCurateDataKey forKey:@"key"];
-  [curateData setProperty:@YES forKey:@"enabled"];
-  [curateData setProperty:@YES forKey:@"default"];
-  [curateData setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [curateData setProperty:PUSHER_SERVICE_IFTTT forKey:@"service"];
-  [curateData setProperty:@"curateData" forKey:@"customAppsPrefsKey"];
-
-  if (isCustomApp) {
-    [eventName setProperty:appID forKey:@"customAppID"];
-    [includeIcon setProperty:appID forKey:@"customAppID"];
-    [curateData setProperty:appID forKey:@"customAppID"];
-  }
-
-  return @[ eventName, includeIcon, curateData ];
-}
-
-+ (NSArray*)wechat:(NSString*)appID {
-  BOOL isCustomApp = appID != nil;
-
-  PSSpecifier* touser = [PSSpecifier
-      preferenceSpecifierNamed:@"Touser"
-                        target:self
-                           set:@selector(setPreferenceValue:
-                                         forBuiltInServiceSpecifier:)
-                           get:@selector(readBuiltInServicePreferenceValue:)
-                        detail:nil
-                          cell:PSEditTextCell
-                          edit:nil];
-  [touser setProperty:NSPPreferenceServiceTouserKey forKey:@"key"];
-  [touser setProperty:@YES forKey:@"enabled"];
-  [touser setProperty:@YES forKey:@"noAutoCorrect"];
-  [touser setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [touser setProperty:PUSHER_SERVICE_WECHAT forKey:@"service"];
-  [touser setProperty:@"touser" forKey:@"customAppsPrefsKey"];
-
-  if (isCustomApp) {
-    [touser setProperty:appID forKey:@"customAppID"];
-  }
-
-  return @[ touser ];
-}
-
-+ (NSArray*)pusherReceiver:(NSString*)appID {
-  BOOL isCustomApp = appID != nil;
-
-  PSSpecifier* includeIcon = [PSSpecifier
-      preferenceSpecifierNamed:@"Include Icon"
-                        target:self
-                           set:@selector(setPreferenceValue:
-                                         forBuiltInServiceSpecifier:)
-                           get:@selector(readBuiltInServicePreferenceValue:)
-                        detail:nil
-                          cell:PSSwitchCell
-                          edit:nil];
-  [includeIcon setProperty:NSPPreferenceServiceIncludeIconKey forKey:@"key"];
-  [includeIcon setProperty:@YES forKey:@"enabled"];
-  [includeIcon setProperty:@YES forKey:@"default"];
-  [includeIcon setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [includeIcon setProperty:PUSHER_SERVICE_PUSHER_RECEIVER forKey:@"service"];
-  [includeIcon setProperty:@"includeIcon" forKey:@"customAppsPrefsKey"];
-
-  PSSpecifier* includeImage = [PSSpecifier
-      preferenceSpecifierNamed:@"Include Image"
-                        target:self
-                           set:@selector(setPreferenceValue:
-                                         forBuiltInServiceSpecifier:)
-                           get:@selector(readBuiltInServicePreferenceValue:)
-                        detail:nil
-                          cell:PSSwitchCell
-                          edit:nil];
-  [includeImage setProperty:NSPPreferenceServiceIncludeImageKey forKey:@"key"];
-  [includeImage setProperty:@YES forKey:@"enabled"];
-  [includeImage setProperty:@YES forKey:@"default"];
-  [includeImage setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [includeImage setProperty:PUSHER_SERVICE_PUSHER_RECEIVER forKey:@"service"];
-  [includeImage setProperty:@"includeImage" forKey:@"customAppsPrefsKey"];
-
-  PSSpecifier* imageMaxWidth = [PSSpecifier
-      preferenceSpecifierNamed:@"Maximum Image Width (pixels)"
-                        target:self
-                           set:@selector(setPreferenceValue:
-                                         forBuiltInServiceSpecifier:)
-                           get:@selector(readBuiltInServicePreferenceValue:)
-                        detail:nil
-                          cell:PSEditTextCell
-                          edit:nil];
-  [imageMaxWidth setProperty:NSPPreferenceServiceImageMaxWidthKey
-                      forKey:@"key"];
-  [imageMaxWidth setProperty:@YES forKey:@"enabled"];
-  [imageMaxWidth setProperty:@YES forKey:@"isDecimalPad"];
-  [imageMaxWidth setProperty:@(PUSHER_DEFAULT_MAX_WIDTH) forKey:@"default"];
-  [imageMaxWidth setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [imageMaxWidth setProperty:PUSHER_SERVICE_PUSHER_RECEIVER forKey:@"service"];
-  [imageMaxWidth setProperty:@"imageMaxWidth" forKey:@"customAppsPrefsKey"];
-
-  PSSpecifier* imageMaxHeight = [PSSpecifier
-      preferenceSpecifierNamed:@"Maximum Image Height (pixels)"
-                        target:self
-                           set:@selector(setPreferenceValue:
-                                         forBuiltInServiceSpecifier:)
-                           get:@selector(readBuiltInServicePreferenceValue:)
-                        detail:nil
-                          cell:PSEditTextCell
-                          edit:nil];
-  [imageMaxHeight setProperty:NSPPreferenceServiceImageMaxHeightKey
-                       forKey:@"key"];
-  [imageMaxHeight setProperty:@YES forKey:@"enabled"];
-  [imageMaxHeight setProperty:@YES forKey:@"isDecimalPad"];
-  [imageMaxHeight setProperty:@(PUSHER_DEFAULT_MAX_HEIGHT) forKey:@"default"];
-  [imageMaxHeight setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [imageMaxHeight setProperty:PUSHER_SERVICE_PUSHER_RECEIVER forKey:@"service"];
-  [imageMaxHeight setProperty:@"imageMaxHeight" forKey:@"customAppsPrefsKey"];
-
-  PSSpecifier* imageShrinkFactor = [PSSpecifier
-      preferenceSpecifierNamed:@"Image Shrink Factor Upon Retry"
-                        target:self
-                           set:@selector(setPreferenceValue:
-                                         forBuiltInServiceSpecifier:)
-                           get:@selector(readBuiltInServicePreferenceValue:)
-                        detail:nil
-                          cell:PSEditTextCell
-                          edit:nil];
-  [imageShrinkFactor setProperty:NSPPreferenceServiceImageShrinkFactorKey
-                          forKey:@"key"];
-  [imageShrinkFactor setProperty:@YES forKey:@"enabled"];
-  [imageShrinkFactor setProperty:@YES forKey:@"isDecimalPad"];
-  [imageShrinkFactor setProperty:@(PUSHER_DEFAULT_SHRINK_FACTOR)
-                          forKey:@"default"];
-  [imageShrinkFactor setProperty:@(isCustomApp) forKey:@"isCustomApp"];
-  [imageShrinkFactor setProperty:PUSHER_SERVICE_PUSHER_RECEIVER
-                          forKey:@"service"];
-  [imageShrinkFactor setProperty:@"imageShrinkFactor"
-                          forKey:@"customAppsPrefsKey"];
-
-  if (isCustomApp) {
-    [includeIcon setProperty:appID forKey:@"customAppID"];
-    [includeImage setProperty:appID forKey:@"customAppID"];
-    [imageMaxWidth setProperty:appID forKey:@"customAppID"];
-    [imageMaxHeight setProperty:appID forKey:@"customAppID"];
-    [imageShrinkFactor setProperty:appID forKey:@"customAppID"];
-  }
-
-  return @[
-    includeIcon, includeImage, imageMaxWidth, imageMaxHeight, imageShrinkFactor
-  ];
-}
-
 + (void)setPreferenceValue:(id)value
     forBuiltInServiceSpecifier:(PSSpecifier*)specifier {
   NSString* service = [specifier propertyForKey:@"service"];
-  NSMutableDictionary* builtInServices =
-      [(NSPushDictionaryValue([NSPSharedSpecifiers
-            getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey]) ?: @{}) mutableCopy];
-  NSMutableDictionary* serviceObj =
-      [(NSPushDictionaryValue(builtInServices[service]) ?: @{}) mutableCopy];
+  BOOL isCustomApp =
+      NSPushBoolResolved([specifier propertyForKey:@"isCustomApp"], NO);
 
-  BOOL isCustomApp = NSPushBoolResolved(
-      [specifier propertyForKey:@"isCustomApp"], NO);
   if (isCustomApp) {
-    NSMutableDictionary* customApps =
-        [(NSPushDictionaryValue(serviceObj[NSPPreferenceServiceCustomAppsKey]) ?: @{}) mutableCopy];
-    NSMutableDictionary* customApp =
-        [(NSPushDictionaryValue(customApps[[specifier propertyForKey:@"customAppID"]]) ?: @{}) mutableCopy];
+    NSMutableDictionary* customApp = [[NSPushPrefsStore
+        customAppPrefsForService:service
+                    customAppID:[specifier propertyForKey:@"customAppID"]
+                isCustomService:NO] mutableCopy];
     customApp[[specifier propertyForKey:@"customAppsPrefsKey"]] = value;
-    customApps[[specifier propertyForKey:@"customAppID"]] = customApp;
-    serviceObj[NSPPreferenceServiceCustomAppsKey] = customApps;
-  } else {
-    NSString* key = [specifier propertyForKey:@"key"];
-    // appListIsBlacklist defaults to YES, so a YES value is the default and is
-    // not stored (removing the entry keeps prefs clean; reads fall back to the
-    // default). Only non-default values are persisted.
-    if (value &&
-        !(XEq(key, NSPPreferenceServiceAppListIsBlacklistKey) &&
-          NSPushBoolValue(value))) {
-      serviceObj[key] = value;
-    } else {
-      [serviceObj removeObjectForKey:key];
-    }
+    [NSPushPrefsStore setCustomAppPrefs:customApp
+                             forService:service
+                           customAppID:[specifier propertyForKey:@"customAppID"]
+                       isCustomService:NO
+                          shouldNotify:YES];
+    return;
   }
 
-  builtInServices[service] = serviceObj;
-  [NSPSharedSpecifiers
-      setPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey
-              value:(__bridge CFPropertyListRef)builtInServices
-       shouldNotify:YES];
+  NSMutableDictionary* serviceObj =
+      [[NSPushPrefsStore serviceForName:service isCustomService:NO] mutableCopy];
+  NSString* key = [specifier propertyForKey:@"key"];
+  // appListIsBlacklist defaults to YES, so a YES value is the default and is
+  // not stored (removing the entry keeps prefs clean; reads fall back to the
+  // default). Only non-default values are persisted.
+  if (value &&
+      !(XEq(key, NSPPreferenceServiceAppListIsBlacklistKey) &&
+        NSPushBoolValue(value))) {
+    serviceObj[key] = value;
+  } else {
+    [serviceObj removeObjectForKey:key];
+  }
+  [NSPushPrefsStore setService:serviceObj
+                       forName:service
+               isCustomService:NO
+                  shouldNotify:YES];
 }
 
 + (id)readBuiltInServicePreferenceValue:(PSSpecifier*)specifier {
   NSString* service = [specifier propertyForKey:@"service"];
-  NSDictionary* builtInServices =
-      NSPushDictionaryValue([NSPSharedSpecifiers
-          getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey])
-      ?: @{};
-  NSDictionary* serviceObj =
-      NSPushDictionaryValue(builtInServices[service]) ?: @{};
-
-  BOOL isCustomApp = NSPushBoolResolved(
-      [specifier propertyForKey:@"isCustomApp"], NO);
+  BOOL isCustomApp =
+      NSPushBoolResolved([specifier propertyForKey:@"isCustomApp"], NO);
   if (isCustomApp) {
-    NSDictionary* customApps =
-        NSPushDictionaryValue(serviceObj[NSPPreferenceServiceCustomAppsKey])
-        ?: @{};
-    NSDictionary* customApp =
-        NSPushDictionaryValue(
-            customApps[[specifier propertyForKey:@"customAppID"]])
-        ?: @{};
-    return customApp[[specifier propertyForKey:@"customAppsPrefsKey"]];
+    return [[NSPushPrefsStore customAppPrefsForService:service
+                                          customAppID:[specifier propertyForKey:@"customAppID"]
+                                      isCustomService:NO]
+        objectForKey:[specifier propertyForKey:@"customAppsPrefsKey"]];
   }
-  id value = serviceObj[[specifier propertyForKey:@"key"]];
+  id value =
+      [[NSPushPrefsStore serviceForName:service isCustomService:NO]
+          objectForKey:[specifier propertyForKey:@"key"]];
   NSString* globalKey = [specifier propertyForKey:@"globalKey"];
   if (!value && globalKey) {
-    value = [NSPSharedSpecifiers getPreference:(__bridge CFStringRef)globalKey];
+    value = [NSPushPrefsStore preferenceValueForKey:globalKey];
   }
   return value ?: [specifier propertyForKey:@"default"];
 }
 
 + (NSArray*)builtInServiceAppListForService:(NSString*)service {
-  NSDictionary* builtInServices =
-      NSPushDictionaryValue([NSPSharedSpecifiers
-          getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey])
-      ?: @{};
-  NSDictionary* serviceObj =
-      NSPushDictionaryValue(builtInServices[service]) ?: @{};
-  return NSPushArrayValue(serviceObj[NSPPreferenceServiceAppListKey]) ?: @[];
+  return NSPushArrayValue(
+      [[NSPushPrefsStore serviceForName:service isCustomService:NO]
+          objectForKey:NSPPreferenceServiceAppListKey]) ?: @[];
 }
 
 + (void)setBuiltInServiceAppList:(NSArray*)appList
                       forService:(NSString*)service {
-  NSMutableDictionary* builtInServices =
-      [(NSPushDictionaryValue([NSPSharedSpecifiers
-            getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey]) ?: @{}) mutableCopy];
   NSMutableDictionary* serviceObj =
-      [(NSPushDictionaryValue(builtInServices[service]) ?: @{}) mutableCopy];
+      [[NSPushPrefsStore serviceForName:service isCustomService:NO] mutableCopy];
   serviceObj[NSPPreferenceServiceAppListKey] = appList;
-  builtInServices[service] = serviceObj;
-  [NSPSharedSpecifiers
-      setPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey
-              value:(__bridge CFPropertyListRef)builtInServices
-       shouldNotify:YES];
+  [NSPushPrefsStore setService:serviceObj
+                       forName:service
+               isCustomService:NO
+                  shouldNotify:YES];
 }
 
 + (NSArray*)customServiceAppListForService:(NSString*)service {
-  NSDictionary* customServices =
-      NSPushDictionaryValue([NSPSharedSpecifiers
-          getPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey])
-      ?: @{};
-  NSDictionary* serviceObj =
-      NSPushDictionaryValue(customServices[service]) ?: @{};
-  return NSPushArrayValue(serviceObj[NSPPreferenceServiceAppListKey]) ?: @[];
+  return NSPushArrayValue(
+      [[NSPushPrefsStore serviceForName:service isCustomService:YES]
+          objectForKey:NSPPreferenceServiceAppListKey]) ?: @[];
 }
 
 + (void)setCustomServiceAppList:(NSArray*)appList
                      forService:(NSString*)service {
-  NSMutableDictionary* customServices = [(NSPushDictionaryValue([NSPSharedSpecifiers
-          getPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey]) ?: @{}) mutableCopy];
   NSMutableDictionary* serviceObj =
-      [(NSPushDictionaryValue(customServices[service]) ?: @{}) mutableCopy];
+      [[NSPushPrefsStore serviceForName:service isCustomService:YES] mutableCopy];
   serviceObj[NSPPreferenceServiceAppListKey] = appList;
-  customServices[service] = serviceObj;
-  [NSPSharedSpecifiers
-      setPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey
-              value:(__bridge CFPropertyListRef)customServices
-       shouldNotify:YES];
+  [NSPushPrefsStore setService:serviceObj
+                       forName:service
+               isCustomService:YES
+                  shouldNotify:YES];
 }
 
 + (NSArray*)globalAppList {
-  NSDictionary* global =
-      NSPushDictionaryValue([NSPSharedSpecifiers
-          getPreference:(__bridge CFStringRef)NSPPreferenceGlobalKey]);
-  if (![global isKindOfClass:NSDictionary.class]) {
-    return @[];
-  }
-  NSArray* appList = global[NSPPreferenceServiceAppListKey];
-  return [appList isKindOfClass:NSArray.class] ? appList : @[];
+  NSDictionary* global = [NSPushPrefsStore global];
+  return NSPushArrayValue(global[NSPPreferenceServiceAppListKey]) ?: @[];
 }
 
 + (void)setGlobalAppList:(NSArray*)appList {
-  NSMutableDictionary* global = [(NSPushDictionaryValue([NSPSharedSpecifiers
-          getPreference:(__bridge CFStringRef)NSPPreferenceGlobalKey]) ?: @{}) mutableCopy];
+  NSMutableDictionary* global = [[NSPushPrefsStore global] mutableCopy];
   global[NSPPreferenceServiceAppListKey] = appList;
-  [NSPSharedSpecifiers
-      setPreference:(__bridge CFStringRef)NSPPreferenceGlobalKey
-              value:(__bridge CFPropertyListRef)global
-       shouldNotify:YES];
+  [NSPushPrefsStore setPreferenceValue:global
+                                forKey:NSPPreferenceGlobalKey
+                          shouldNotify:YES];
 }
 
 + (void)setPreferenceValue:(id)value forGlobalSpecifier:(PSSpecifier*)specifier {
-  NSMutableDictionary* global = [(NSPushDictionaryValue([NSPSharedSpecifiers
-          getPreference:(__bridge CFStringRef)NSPPreferenceGlobalKey]) ?: @{}) mutableCopy];
+  NSMutableDictionary* global = [[NSPushPrefsStore global] mutableCopy];
   NSString* key = [specifier propertyForKey:@"key"];
   // appListIsBlacklist defaults to YES; YES is the default so it is not
   // stored (see setPreferenceValue:forBuiltInServiceSpecifier:).
@@ -578,103 +202,72 @@
   } else {
     [global removeObjectForKey:key];
   }
-  [NSPSharedSpecifiers
-      setPreference:(__bridge CFStringRef)NSPPreferenceGlobalKey
-              value:(__bridge CFPropertyListRef)global
-       shouldNotify:YES];
+  [NSPushPrefsStore setPreferenceValue:global
+                                forKey:NSPPreferenceGlobalKey
+                          shouldNotify:YES];
 }
 
 + (id)readGlobalPreferenceValue:(PSSpecifier*)specifier {
-  NSDictionary* global =
-      NSPushDictionaryValue([NSPSharedSpecifiers
-          getPreference:(__bridge CFStringRef)NSPPreferenceGlobalKey]);
-  id value = global[[specifier propertyForKey:@"key"]];
+  id value =
+      [[NSPushPrefsStore global] objectForKey:[specifier propertyForKey:@"key"]];
   return value ?: [specifier propertyForKey:@"default"];
 }
 
 + (void)setPreferenceValue:(id)value
         forCustomSpecifier:(PSSpecifier*)specifier {
-  BOOL isCustomApp = NSPushBoolResolved(
-      [specifier propertyForKey:@"isCustomApp"], NO);
+  BOOL isCustomApp =
+      NSPushBoolResolved([specifier propertyForKey:@"isCustomApp"], NO);
   NSString* service = [specifier propertyForKey:@"service"];
+
   if (isCustomApp) {
-    NSMutableDictionary* customServices = [(NSPushDictionaryValue([NSPSharedSpecifiers
-            getPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey]) ?: @{}) mutableCopy];
-    NSMutableDictionary* serviceObj =
-        [(NSPushDictionaryValue(customServices[service]) ?: @{}) mutableCopy];
-    NSMutableDictionary* customApps =
-        [(NSPushDictionaryValue(serviceObj[NSPPreferenceServiceCustomAppsKey]) ?: @{}) mutableCopy];
-    NSMutableDictionary* customApp =
-        [(NSPushDictionaryValue(customApps[[specifier propertyForKey:@"customAppID"]]) ?: @{}) mutableCopy];
+    NSMutableDictionary* customApp = [[NSPushPrefsStore
+        customAppPrefsForService:service
+                    customAppID:[specifier propertyForKey:@"customAppID"]
+                isCustomService:YES] mutableCopy];
     customApp[[specifier propertyForKey:@"key"]] = value;
-    customApps[[specifier propertyForKey:@"customAppID"]] = customApp;
-    serviceObj[NSPPreferenceServiceCustomAppsKey] = customApps;
-    customServices[service] = serviceObj;
-    [NSPSharedSpecifiers
-        setPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey
-                value:(__bridge CFPropertyListRef)customServices
-         shouldNotify:YES];
-  } else {
-    NSMutableDictionary* customServices = [(NSPushDictionaryValue([NSPSharedSpecifiers
-            getPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey]) ?: @{}) mutableCopy];
-    NSMutableDictionary* customService =
-        [(NSPushDictionaryValue(customServices[service]) ?: @{}) mutableCopy];
-    NSString* key = [specifier propertyForKey:@"key"];
-    // appListIsBlacklist defaults to YES; YES is the default so it is not
-    // stored (see setPreferenceValue:forBuiltInServiceSpecifier:).
-    if (value &&
-        !(XEq(key, NSPPreferenceServiceAppListIsBlacklistKey) &&
-          NSPushBoolValue(value))) {
-      customService[key] = value;
-    } else {
-      [customService removeObjectForKey:key];
-    }
-    customServices[service] = customService;
-    [NSPSharedSpecifiers
-        setPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey
-                value:(__bridge CFPropertyListRef)customServices
-         shouldNotify:YES];
+    [NSPushPrefsStore setCustomAppPrefs:customApp
+                             forService:service
+                           customAppID:[specifier propertyForKey:@"customAppID"]
+                       isCustomService:YES
+                          shouldNotify:YES];
+    return;
   }
+
+  NSMutableDictionary* customService =
+      [[NSPushPrefsStore serviceForName:service isCustomService:YES] mutableCopy];
+  NSString* key = [specifier propertyForKey:@"key"];
+  // appListIsBlacklist defaults to YES; YES is the default so it is not
+  // stored (see setPreferenceValue:forBuiltInServiceSpecifier:).
+  if (value &&
+      !(XEq(key, NSPPreferenceServiceAppListIsBlacklistKey) &&
+        NSPushBoolValue(value))) {
+    customService[key] = value;
+  } else {
+    [customService removeObjectForKey:key];
+  }
+  [NSPushPrefsStore setService:customService
+                       forName:service
+               isCustomService:YES
+                  shouldNotify:YES];
 }
 
 + (id)readCustomPreferenceValue:(PSSpecifier*)specifier {
-  BOOL isCustomApp = NSPushBoolResolved(
-      [specifier propertyForKey:@"isCustomApp"], NO);
+  BOOL isCustomApp =
+      NSPushBoolResolved([specifier propertyForKey:@"isCustomApp"], NO);
   NSString* service = [specifier propertyForKey:@"service"];
   if (isCustomApp) {
-    NSDictionary* customServices =
-        NSPushDictionaryValue([NSPSharedSpecifiers
-            getPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey])
-        ?: @{};
-    NSDictionary* serviceObj =
-      NSPushDictionaryValue(customServices[service]) ?: @{};
-    NSDictionary* customApps =
-        NSPushDictionaryValue(serviceObj[NSPPreferenceServiceCustomAppsKey])
-        ?: @{};
-    NSDictionary* customApp =
-        NSPushDictionaryValue(
-            customApps[[specifier propertyForKey:@"customAppID"]])
-        ?: @{};
-    return customApp[[specifier propertyForKey:@"key"]];
+    return [[NSPushPrefsStore customAppPrefsForService:service
+                                          customAppID:[specifier propertyForKey:@"customAppID"]
+                                      isCustomService:YES]
+        objectForKey:[specifier propertyForKey:@"key"]];
   }
-  NSDictionary* customServices =
-      NSPushDictionaryValue([NSPSharedSpecifiers
-          getPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey])
-      ?: @{};
-  id d = [specifier propertyForKey:@"default"];
-  NSDictionary* customServiceObj =
-      NSPushDictionaryValue(customServices[service]);
-  if (!customServiceObj) {
-    return d;
-  } else {
-    id value = customServiceObj[[specifier propertyForKey:@"key"]];
-    NSString* globalKey = [specifier propertyForKey:@"globalKey"];
-    if (!value && globalKey) {
-      value =
-          [NSPSharedSpecifiers getPreference:(__bridge CFStringRef)globalKey];
-    }
-    return value ?: d;
+  id value = [[NSPushPrefsStore serviceForName:service isCustomService:YES]
+      objectForKey:[specifier propertyForKey:@"key"]];
+  NSString* globalKey = [specifier propertyForKey:@"globalKey"];
+  if (!value && globalKey) {
+    value = [NSPushPrefsStore preferenceValueForKey:globalKey];
   }
+  return value ?: [specifier propertyForKey:@"default"];
 }
 
 @end

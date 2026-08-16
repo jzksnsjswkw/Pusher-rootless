@@ -1,4 +1,5 @@
 #import "NSPCustomAppController.h"
+#import "NSPLocalization.h"
 #import "NSPSharedSpecifiers.h"
 
 #import "../global.h"
@@ -29,7 +30,7 @@
 
 - (NSArray*)specifiers {
   if (!_specifiers) {
-    _specifiers = [[@[ [PSSpecifier groupSpecifierWithName:@"Customize"] ]
+    _specifiers = [[@[ [PSSpecifier groupSpecifierWithName:NSPLocalizedString(@"Customize", nil)] ]
         arrayByAddingObjectsFromArray:[NSPSharedSpecifiers
                                                       get:_service
                                                 withAppID:_appID

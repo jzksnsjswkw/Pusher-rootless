@@ -1,4 +1,5 @@
 #import <MobileCoreServices/LSApplicationProxy.h>
+#import "NSPLocalization.h"
 
 #import "NSPAppMultiSelectionController.h"
 #import "NSPCustomAppController.h"
@@ -8,6 +9,7 @@
 #import "NSPusherManager.h"
 
 #import "../Generated/BuiltinServices.generated.h"
+#import "../Shared/NSPushPrefsStore.h"
 #import "../global.h"
 #import "../helpers.h"
 #import <notify.h>
@@ -60,31 +62,15 @@
     }
   }
   [self updateTitle];
-  if (_isCustomService) {
-    NSMutableDictionary* customServices =
-        [(NSPushDictionaryValue([NSPSharedSpecifiers
-            getPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey]) ?: @{}) mutableCopy];
-    NSMutableDictionary* serviceObj =
-        [(NSPushDictionaryValue(customServices[_service]) ?: @{}) mutableCopy];
-    serviceObj[NSPPreferenceServiceCustomAppsKey] = _customApps;
-    customServices[_service] = serviceObj;
-    [NSPSharedSpecifiers
-        setPreference:(__bridge CFStringRef)NSPPreferenceCustomServicesKey
-                value:(__bridge CFPropertyListRef)customServices
-         shouldNotify:YES];
-  } else {
-    NSMutableDictionary* builtInServices =
-        [(NSPushDictionaryValue([NSPSharedSpecifiers
-            getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey]) ?: @{}) mutableCopy];
-    NSMutableDictionary* serviceObj =
-        [(NSPushDictionaryValue(builtInServices[_service]) ?: @{}) mutableCopy];
-    serviceObj[NSPPreferenceServiceCustomAppsKey] = _customApps;
-    builtInServices[_service] = serviceObj;
-    [NSPSharedSpecifiers
-        setPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey
-                value:(__bridge CFPropertyListRef)builtInServices
-         shouldNotify:YES];
-  }
+  BOOL isCustom = _isCustomService;
+  NSMutableDictionary* serviceObj =
+      [[NSPushPrefsStore serviceForName:_service isCustomService:isCustom]
+          mutableCopy];
+  serviceObj[NSPPreferenceServiceCustomAppsKey] = _customApps;
+  [NSPushPrefsStore setService:serviceObj
+                       forName:_service
+               isCustomService:isCustom
+                  shouldNotify:YES];
 }
 
 - (void)viewDidLoad {
@@ -114,9 +100,9 @@
   _table.delegate = self;
   [self.view addSubview:_table];
 
-  self.navigationItem.title = @"App Customization";
+  self.navigationItem.title = NSPLocalizedString(@"App Customization", nil);
   self.navigationItem.rightBarButtonItem =
-      [[UIBarButtonItem alloc] initWithTitle:@"Edit"
+      [[UIBarButtonItem alloc] initWithTitle:NSPLocalizedString(@"Edit", nil)
                                        style:UIBarButtonItemStylePlain
                                       target:self
                                       action:@selector(toggleEditing:)];
@@ -170,7 +156,16 @@
                         ?: @{}) mutableCopy];
   }
 
-  _label = [self.specifier.name componentsSeparatedByString:@" ("][0];
+  NSString* specifierName = self.specifier.name;
+  NSRange chineseParenRange = [specifierName rangeOfString:@"（"];
+  NSRange englishParenRange = [specifierName rangeOfString:@" ("];
+  NSRange parenRange = chineseParenRange.location != NSNotFound
+                           ? chineseParenRange
+                           : englishParenRange;
+  if (parenRange.location != NSNotFound) {
+    specifierName = [specifierName substringToIndex:parenRange.location];
+  }
+  _label = specifierName;
   [self updateTitle];
 
   if (XEq(_service, PUSHER_SERVICE_PUSHOVER) ||
@@ -238,7 +233,7 @@
 
   _sections = @[ @"", @"Apps" ];
   _data = [@{
-    @"" : @[ @"Add Apps" ],
+    @"" : @[ NSPLocalizedString(@"Add Apps", nil) ],
     @"Apps" : [NSMutableArray new],
   } mutableCopy];
 
@@ -250,7 +245,7 @@
 }
 
 - (void)updateTitle {
-  self.specifier.name = XStr(@"%@ (%d total)", _label, (int)_customApps.count);
+  self.specifier.name = XStr(NSPLocalizedString(@"%@ (%d total)", nil), _label, (int)_customApps.count);
   // psListRef is stored as a non-retaining NSValue to avoid a retain cycle
   // (controller -> specifiers -> psListRef -> controller); unwrap it here.
   NSValue* psListRefValue =
@@ -277,7 +272,7 @@
 
 - (void)toggleEditing:(UIBarButtonItem*)barButtonItem {
   [_table setEditing:![_table isEditing] animated:YES];
-  barButtonItem.title = [_table isEditing] ? @"Done" : @"Edit";
+  barButtonItem.title = [_table isEditing] ? NSPLocalizedString(@"Done", nil) : NSPLocalizedString(@"Edit", nil);
 }
 
 - (void)addAppIDs:(NSArray*)appIDs {
@@ -323,7 +318,7 @@
         [LSApplicationProxy applicationProxyForIdentifier:appID];
     NSString* appTitle;
     if (appProxy == nil) {
-      appTitle = @"UNKNOWN APP";
+      appTitle = NSPLocalizedString(@"UNKNOWN APP", nil);
     } else {
       appTitle = [appProxy localizedName];
     }
@@ -352,9 +347,9 @@
   NSString* title = _sections[section];
   if (XEq(title, @"Apps") && [self tableView:table
                                  numberOfRowsInSection:section] == 0) {
-    title = @"No Apps";
+    return NSPLocalizedString(@"No Apps", nil);
   }
-  return title;
+  return NSPLocalizedString(title, nil);
 }
 
 - (UITableViewCell*)tableView:(UITableView*)table
@@ -430,7 +425,7 @@
 
   UIContextualAction* deleteAction = [UIContextualAction
       contextualActionWithStyle:UIContextualActionStyleDestructive
-                          title:@"Delete"
+                          title:NSPLocalizedString(@"Delete", nil)
                         handler:^(UIContextualAction* action,
                                   UIView* sourceView,
                                   void (^completionHandler)(BOOL)) {
@@ -454,7 +449,7 @@
 //   }
 //   UITableViewRowAction *deleteAction = [UITableViewRowAction
 //       rowActionWithStyle:UITableViewRowActionStyleDestructive
-//                    title:@"Delete"
+//                    title:NSPLocalizedString(@"Delete", nil)
 //                  handler:^(UITableViewRowAction *action,
 //                            NSIndexPath *indexPath) {
 //                    [_data[_sections[indexPath.section]]

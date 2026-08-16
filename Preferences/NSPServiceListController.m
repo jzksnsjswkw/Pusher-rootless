@@ -1,16 +1,10 @@
 #import "NSPServiceListController.h"
+#import "NSPLocalization.h"
 #import "NSPServiceController.h"
 #import "NSPSharedSpecifiers.h"
 #import "NSPusherManager.h"
 #import "../Generated/BuiltinServices.generated.h"
-
-static BOOL NSPListPrefsBool(id value) {
-  if ([value isKindOfClass:NSNumber.class] ||
-      [value isKindOfClass:NSString.class]) {
-    return [value boolValue];
-  }
-  return NO;
-}
+#import "../Shared/NSPushPrefsStore.h"
 
 @implementation NSPServiceListController
 
@@ -36,14 +30,14 @@ static BOOL NSPListPrefsBool(id value) {
   _table.allowsSelectionDuringEditing = YES;
   [self.view addSubview:_table];
   _addNewServiceBarButtonItem =
-      [[UIBarButtonItem alloc] initWithTitle:@"Add"
+      [[UIBarButtonItem alloc] initWithTitle:NSPLocalizedString(@"Add", nil)
                                        style:UIBarButtonItemStylePlain
                                       target:self
                                       action:@selector(addNewService)];
 
-  self.navigationItem.title = @"Services";
+  self.navigationItem.title = NSPLocalizedString(@"Services", nil);
   self.navigationItem.rightBarButtonItem =
-      [[UIBarButtonItem alloc] initWithTitle:@"Edit"
+      [[UIBarButtonItem alloc] initWithTitle:NSPLocalizedString(@"Edit", nil)
                                        style:UIBarButtonItemStylePlain
                                       target:self
                                       action:@selector(toggleEditing:)];
@@ -95,7 +89,7 @@ static BOOL NSPListPrefsBool(id value) {
     NSDictionary* serviceObj =
         NSPushDictionaryValue(builtInServices[service]) ?: @{};
     if (serviceObj[NSPPreferenceServiceEnabledKey] &&
-        NSPListPrefsBool(serviceObj[NSPPreferenceServiceEnabledKey])) {
+        NSPushBoolValue(serviceObj[NSPPreferenceServiceEnabledKey])) {
       [_data[@"Enabled"] addObject:service];
     } else {
       [_data[@"Disabled"] addObject:service];
@@ -115,7 +109,7 @@ static BOOL NSPListPrefsBool(id value) {
             : [NSMutableDictionary new];
     _customServices[customService] = customServicePrefs;
     if (customServicePrefs[@"Enabled"] &&
-        NSPListPrefsBool(customServicePrefs[@"Enabled"])) {
+        NSPushBoolValue(customServicePrefs[@"Enabled"])) {
       [_data[@"Enabled"] addObject:customService];
     } else {
       [_data[@"Disabled"] addObject:customService];
@@ -137,7 +131,7 @@ static BOOL NSPListPrefsBool(id value) {
 - (void)viewDidAppear:(BOOL)animated {
   [super viewDidAppear:animated];
   if (!_prefs[@"ServiceListTutorialShown"] ||
-      !NSPListPrefsBool(_prefs[@"ServiceListTutorialShown"])) {
+      !NSPushBoolValue(_prefs[@"ServiceListTutorialShown"])) {
     [self showTutorial];
   }
 }
@@ -176,9 +170,9 @@ static BOOL NSPListPrefsBool(id value) {
                                size:UIFont.systemFontSize * 1.5f];
   label.textColor = UIColor.whiteColor;
   label.text =
-      @"After setting up your services, remember to enable them by using the "
-      @"'Edit' button in the top right of this page and dragging your services "
-      @"to the 'Enabled' section at the top.\n\nTap anywhere to continue.";
+      NSPLocalizedString(@"After setting up your services, remember to enable them by using the "
+                         @"'Edit' button in the top right of this page and dragging your services "
+                         @"to the 'Enabled' section at the top.\n\nTap anywhere to continue.", nil);
   label.lineBreakMode = NSLineBreakByWordWrapping;
   label.numberOfLines = 0;
   label.translatesAutoresizingMaskIntoConstraints = NO;
@@ -227,7 +221,8 @@ static BOOL NSPListPrefsBool(id value) {
   [NSPSharedSpecifiers setPreference:tutorialKeyRef
                                value:(__bridge CFNumberRef) @YES
                         shouldNotify:NO];
-  CFRelease(tutorialKeyRef);
+  // CFSTR() returns a compile-time constant; it is not owned and must not be
+  // released.
   NSMutableDictionary* mutablePrefs = [_prefs mutableCopy];
   mutablePrefs[@"ServiceListTutorialShown"] = @YES;
   _prefs = [mutablePrefs copy];
@@ -246,14 +241,13 @@ static BOOL NSPListPrefsBool(id value) {
 
 - (void)toggleEditing:(UIBarButtonItem*)barButtonItem {
   [_table setEditing:![_table isEditing] animated:YES];
-  barButtonItem.title = [_table isEditing] ? @"Done" : @"Edit";
+  barButtonItem.title = [_table isEditing] ? NSPLocalizedString(@"Done", nil) : NSPLocalizedString(@"Edit", nil);
   self.navigationItem.leftBarButtonItem =
       [_table isEditing] ? _addNewServiceBarButtonItem : nil;
   if (![_table isEditing]) {
     // Save
     NSMutableDictionary* builtInServices =
-        [(NSPushDictionaryValue([NSPSharedSpecifiers
-            getPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey]) ?: @{}) mutableCopy];
+        [[NSPushPrefsStore builtInServices] mutableCopy];
     for (NSString* service in _services) {
       NSMutableDictionary* serviceObj =
           [(NSPushDictionaryValue(builtInServices[service]) ?: @{}) mutableCopy];
@@ -261,10 +255,9 @@ static BOOL NSPListPrefsBool(id value) {
           @([_data[@"Enabled"] containsObject:service]);
       builtInServices[service] = serviceObj;
     }
-    [NSPSharedSpecifiers
-        setPreference:(__bridge CFStringRef)NSPPreferenceBuiltInServicesKey
-                value:(__bridge CFPropertyListRef)builtInServices
-         shouldNotify:NO];
+    [NSPushPrefsStore setPreferenceValue:builtInServices
+                                  forKey:NSPPreferenceBuiltInServicesKey
+                            shouldNotify:NO];
     for (NSString* customService in _customServices.allKeys) {
       NSNumber* customServiceEnabled =
           @([_data[@"Enabled"] containsObject:customService]);
@@ -282,12 +275,12 @@ static BOOL NSPListPrefsBool(id value) {
 
 - (void)addNewService {
   __weak NSPServiceListController* weakSelf = self;
-  UIAlertController* alert = XAlertTitle(@"Add Custom Service", nil);
+  UIAlertController* alert = XAlertTitle(NSPLocalizedString(@"Add Custom Service", nil), nil);
   __weak UIAlertController* weakAlert = alert;
   [alert addTextFieldWithConfigurationHandler:^(UITextField* textField) {
-    textField.placeholder = @"Service Name";
+    textField.placeholder = NSPLocalizedString(@"Service Name", nil);
   }];
-  [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
+  [alert addAction:[UIAlertAction actionWithTitle:NSPLocalizedString(@"Cancel", nil)
                                             style:UIAlertActionStyleCancel
                                           handler:nil]];
   id handler = ^(UIAlertAction* action) {
@@ -329,8 +322,8 @@ static BOOL NSPListPrefsBool(id value) {
         [handlerSelf addNewService];
       };
       UIAlertController* existsAlert =
-          XAlertTitle(@"Error", @"A service with that name already exists.");
-      [existsAlert addAction:XAlertBtnHandler(@"Ok", existsHandler)];
+          XAlertTitle(NSPLocalizedString(@"Error", nil), NSPLocalizedString(@"A service with that name already exists.", nil));
+      [existsAlert addAction:XAlertBtnHandler(NSPLocalizedString(@"Ok", nil), existsHandler)];
       [strongSelf presentViewController:existsAlert animated:YES
                              completion:nil];
       XLog(@"newServiceName already exists");
@@ -353,7 +346,7 @@ static BOOL NSPListPrefsBool(id value) {
                     withRowAnimation:UITableViewRowAnimationAutomatic];
     [strongSelf saveCustomServices];
   };
-  [alert addAction:XAlertBtnHandler(@"Add", handler)];
+  [alert addAction:XAlertBtnHandler(NSPLocalizedString(@"Add", nil), handler)];
   [self presentViewController:alert animated:YES completion:nil];
 }
 
@@ -400,7 +393,7 @@ static BOOL NSPListPrefsBool(id value) {
 
 - (NSString*)tableView:(UITableView*)tableView
     titleForHeaderInSection:(NSInteger)section {
-  return _sections[section];
+  return NSPLocalizedString(_sections[section], nil);
 }
 
 - (BOOL)tableView:(UITableView*)tableView
@@ -414,7 +407,7 @@ static BOOL NSPListPrefsBool(id value) {
       [table dequeueReusableCellWithIdentifier:@"ServiceCell"
                                   forIndexPath:indexPath];
   NSString* service = _data[_sections[indexPath.section]][indexPath.row];
-  cell.textLabel.text = service;
+  cell.textLabel.text = NSPushServiceDisplayName(service);
   cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
   cell.imageView.image = _serviceImages[service];
   return cell;
@@ -524,13 +517,13 @@ static BOOL NSPListPrefsBool(id value) {
 - (void)renameService:(NSString*)currService {
 
   __weak NSPServiceListController* weakSelf = self;
-  UIAlertController* alert = XAlertTitle(XStr(@"Rename %@", currService), nil);
+  UIAlertController* alert = XAlertTitle(XStr(NSPLocalizedString(@"Rename %@", nil), currService), nil);
   __weak UIAlertController* weakAlert = alert;
   [alert addTextFieldWithConfigurationHandler:^(UITextField* textField) {
-    textField.placeholder = @"Service Name";
+    textField.placeholder = NSPLocalizedString(@"Service Name", nil);
     textField.text = currService;
   }];
-  [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
+  [alert addAction:[UIAlertAction actionWithTitle:NSPLocalizedString(@"Cancel", nil)
                                             style:UIAlertActionStyleCancel
                                           handler:nil]];
   id handler = ^(UIAlertAction* action) {
@@ -561,9 +554,9 @@ static BOOL NSPListPrefsBool(id value) {
         [handlerSelf renameService:currService];
       };
       UIAlertController* existsAlert =
-          XAlertTitle(XStr(@"Rename %@", currService),
-                      @"A service with that name already exists.");
-      [existsAlert addAction:XAlertBtnHandler(@"Ok", existsHandler)];
+          XAlertTitle(XStr(NSPLocalizedString(@"Rename %@", nil), currService),
+                      NSPLocalizedString(@"A service with that name already exists.", nil));
+      [existsAlert addAction:XAlertBtnHandler(NSPLocalizedString(@"Ok", nil), existsHandler)];
       [strongSelf presentViewController:existsAlert animated:YES
                              completion:nil];
       return;
@@ -656,7 +649,7 @@ static BOOL NSPListPrefsBool(id value) {
     notify_post(PUSHER_PREFS_NOTIFICATION);
 
     NSString* currSection =
-        NSPListPrefsBool(strongSelf->_customServices[newServiceName][@"Enabled"])
+        NSPushBoolValue(strongSelf->_customServices[newServiceName][@"Enabled"])
             ? @"Enabled"
             : @"Disabled";
     [strongSelf->_data[currSection] removeObject:currService];
@@ -668,7 +661,7 @@ static BOOL NSPListPrefsBool(id value) {
                           [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0, 2)]
                     withRowAnimation:UITableViewRowAnimationFade];
   };
-  [alert addAction:XAlertBtnHandler(@"Rename", handler)];
+  [alert addAction:XAlertBtnHandler(NSPLocalizedString(@"Rename", nil), handler)];
   [self presentViewController:alert animated:YES completion:nil];
 }
 
