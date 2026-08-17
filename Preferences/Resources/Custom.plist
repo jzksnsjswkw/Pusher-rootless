@@ -11,7 +11,7 @@
 			<key>label</key>
 			<string>Endpoint</string>
 			<key>footerText</key>
-			<string>GET sends the data in the query string while POST sends the data in a JSON-formatted request body (Content-Type: application/json).</string>
+			<string>GET/HEAD send the data in the query string. Other methods send the data in the request body; choose JSON or Form (application/x-www-form-urlencoded).</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -34,15 +34,53 @@
 			<string>PSListItemsController</string>
 			<key>key</key>
 			<string>method</string>
+			<key>label</key>
+			<string>HTTP Method:</string>
 			<key>validTitles</key>
 			<array>
 				<string>GET</string>
 				<string>POST</string>
+				<string>PUT</string>
+				<string>PATCH</string>
+				<string>DELETE</string>
+				<string>HEAD</string>
+				<string>OPTIONS</string>
+				<string>TRACE</string>
+				<string>CONNECT</string>
 			</array>
 			<key>validValues</key>
 			<array>
 				<string>GET</string>
 				<string>POST</string>
+				<string>PUT</string>
+				<string>PATCH</string>
+				<string>DELETE</string>
+				<string>HEAD</string>
+				<string>OPTIONS</string>
+				<string>TRACE</string>
+				<string>CONNECT</string>
+			</array>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSegmentCell</string>
+			<key>default</key>
+			<string>json</string>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+			<key>key</key>
+			<string>bodyType</string>
+			<key>label</key>
+			<string>Request Body Format:</string>
+			<key>validTitles</key>
+			<array>
+				<string>JSON</string>
+				<string>Form</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<string>json</string>
+				<string>form</string>
 			</array>
 		</dict>
 
@@ -179,7 +217,7 @@
 			<key>footerText</key>
 			<string>The server may reject the request if the data is too large, which is usually a result of the image being high resolution. Pusher will try to forward the notification 5 times, shrinking the image each time by the factor you specify (if the body is too large). If by the last retry the image is too large, it will remove the image but set the "image" property to a 1 to indicate that an image is attached. The image will initially be resized to fit the maximum width and height unless it is already smaller. The image shrink factor must be greater than 1.0 to work since it is division (a factor of 2 means it will divide the image dimensions in half).
 
-The following properties will be passed to the URL endpoint (via GET or POST parameters) specified above (property names in parentheses) [Must Turn on "Include Icon" and "Include Image" switches above in order to get the corresponding properties below]:
+The following properties will be passed to the URL endpoint (via the selected HTTP method/body format) specified above (property names in parentheses) [Must Turn on "Include Icon" and "Include Image" switches above in order to get the corresponding properties below]:
 
 Device Name (deviceName), App Name (appName), App Bundle ID (appID), Title (title), Subtitle (subtitle), Message (message), Date (date), Base64 Encoded PNG Icon 58x58 (icon), Base64 Encoded Image (image)</string>
 		</dict>
