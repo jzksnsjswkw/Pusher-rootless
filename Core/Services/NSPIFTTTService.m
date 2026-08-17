@@ -49,6 +49,7 @@
   // curateData = curated single-field webhook format (value1-3, icon or date
   // as value3); otherwise the whole info dict is JSON-serialized into value1.
   NSDictionary* infoDict;
+  NSDictionary* logInfoDict;
   if (NSPushBoolValue(config.rawPrefs[@"curateData"])) {
     NSString* dateStr = [self dateStringForDate:context.bulletin.date
                                          config:config];
@@ -56,6 +57,11 @@
       @"value1" : context.title ?: @"",
       @"value2" : context.message ?: @"",
       @"value3" : data[@"icon"] ?: dateStr
+    };
+    logInfoDict = @{
+      @"value1" : context.title ?: @"",
+      @"value2" : context.message ?: @"",
+      @"value3" : data[@"icon"] ? PUSHER_LOG_IMAGE_DATA_REPLACEMENT : dateStr
     };
   } else {
     id json = data;
@@ -66,12 +72,25 @@
       json = [[NSString alloc] initWithData:jsonData
                                    encoding:NSUTF8StringEncoding];
     }
+
+    id logJSON = [self logInfoDictForInfoDict:data];
+    NSData* logJSONData = [NSJSONSerialization dataWithJSONObject:logJSON
+                                                          options:0
+                                                            error:nil];
+    if (logJSONData) {
+      logJSON = [[NSString alloc] initWithData:logJSONData
+                                     encoding:NSUTF8StringEncoding];
+    }
     infoDict = @{@"value1" : json};
+    logInfoDict = @{@"value1" : logJSON};
   }
 
-  return [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
-                                     headers:nil
-                                    infoDict:infoDict];
+  NSPushRequest* request =
+      [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
+                                 headers:nil
+                                infoDict:infoDict];
+  request.logInfoDict = logInfoDict;
+  return request;
 }
 
 @end

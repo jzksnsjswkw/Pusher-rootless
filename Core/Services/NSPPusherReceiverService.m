@@ -15,11 +15,14 @@
 
 + (NSPushRequest*)requestForBulletinContext:(NSPBulletinContext*)context
                                      config:(NSPushServiceConfig*)config {
-  return [NSPushRequest
-      requestWithURLString:[self replacedKeyURLStringForConfig:config]
-                   headers:@{@"x-apikey" : XStrDefault(config.rawPrefs[@"key"], @"")}
-                  infoDict:[self baseInfoDictForBulletinContext:context
-                                                         config:config]];
+  NSDictionary* infoDict = [self baseInfoDictForBulletinContext:context
+                                                         config:config];
+  NSPushRequest* request =
+      [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
+                                 headers:@{@"x-apikey" : XStrDefault(config.rawPrefs[@"key"], @"")}
+                                infoDict:infoDict];
+  request.logInfoDict = [self logInfoDictForInfoDict:infoDict];
+  return request;
 }
 
 + (NSString*)urlForEventName:(NSString*)eventName

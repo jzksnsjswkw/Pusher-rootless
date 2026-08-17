@@ -48,12 +48,16 @@
     }
   }
 
-  return [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
-                                     headers:nil
-                                    infoDict:@{
-                                      @"msg_type" : @"text",
-                                      @"content" : @{@"text" : message ?: @""}
-                                    }];
+  NSDictionary* infoDict = @{
+    @"msg_type" : @"text",
+    @"content" : @{@"text" : message ?: @""}
+  };
+  NSPushRequest* request =
+      [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
+                                 headers:nil
+                                infoDict:infoDict];
+  request.logInfoDict = [self logInfoDictForInfoDict:infoDict];
+  return request;
 }
 
 @end
