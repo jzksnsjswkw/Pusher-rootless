@@ -115,3 +115,20 @@
 #define NSPPreferenceServiceWhatNetworkKey @"whatNetwork"
 #define NSPPreferenceServiceSNSIsAndKey @"snsIsAnd"
 #define NSPPreferenceServiceSNSRequireANWithORKey @"snsRequireANWithOR"
+
+// Bark-specific optional push parameters (each maps to a JSON body key of the
+// Bark push API; empty value = not configured).
+#define NSPPreferenceBarkLevelKey @"level"
+#define NSPPreferenceBarkVolumeKey @"volume"
+#define NSPPreferenceBarkBadgeKey @"badge"
+#define NSPPreferenceBarkCallKey @"call"
+#define NSPPreferenceBarkAutoCopyKey @"autoCopy"
+#define NSPPreferenceBarkSoundKey @"sound"
+#define NSPPreferenceBarkImageKey @"image"
+#define NSPPreferenceBarkGroupKey @"group"
+#define NSPPreferenceBarkIsArchiveKey @"isArchive"
+#define NSPPreferenceBarkTTLKey @"ttl"
+#define NSPPreferenceBarkClickURLKey @"clickURL"
+#define NSPPreferenceBarkActionKey @"action"
+#define NSPPreferenceBarkIDKey @"id"
+#define NSPPreferenceBarkDeleteKey @"delete"
