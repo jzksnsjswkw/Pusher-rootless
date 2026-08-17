@@ -19,10 +19,6 @@
   return PUSHER_SERVICE_PUSHOVER_URL;
 }
 
-+ (NSString*)loopPreventionAppID {
-  return PUSHER_SERVICE_PUSHOVER_APP_ID;
-}
-
 + (NSPushRequest*)requestForBulletinContext:(NSPBulletinContext*)context
                                      config:(NSPushServiceConfig*)config {
   NSMutableArray* deviceIDs = [NSMutableArray new];
@@ -47,9 +43,12 @@
     infoDict[@"sound"] = firstSoundID;
   }
 
-  return [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
-                                     headers:nil
-                                    infoDict:infoDict];
+  NSPushRequest* request =
+      [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
+                                 headers:nil
+                                infoDict:infoDict];
+  request.logInfoDict = [self logInfoDictForInfoDict:infoDict];
+  return request;
 }
 
 @end

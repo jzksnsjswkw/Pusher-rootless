@@ -19,10 +19,6 @@
   return PUSHER_SERVICE_PUSHBULLET_URL;
 }
 
-+ (NSString*)loopPreventionAppID {
-  return PUSHER_SERVICE_PUSHBULLET_APP_ID;
-}
-
 + (NSPushRequest*)requestForBulletinContext:(NSPBulletinContext*)context
                                      config:(NSPushServiceConfig*)config {
   NSMutableArray* deviceIDs = [NSMutableArray new];
@@ -45,9 +41,12 @@
     infoDict[@"device_iden"] = firstDevice;
   }
 
-  return [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
-                                     headers:@{@"Access-Token" : XStrDefault(config.rawPrefs[@"token"], @"")}
-                                    infoDict:infoDict];
+  NSPushRequest* request =
+      [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
+                                 headers:@{@"Access-Token" : XStrDefault(config.rawPrefs[@"token"], @"")}
+                                infoDict:infoDict];
+  request.logInfoDict = [self logInfoDictForInfoDict:infoDict];
+  return request;
 }
 
 @end
