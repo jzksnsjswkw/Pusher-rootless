@@ -40,6 +40,8 @@
     return [NSPSharedSpecifiers pusherReceiver:appID];
   } else if (XEq(service, PUSHER_SERVICE_WECHAT)) {
     return [NSPSharedSpecifiers wechat:appID];
+  } else if (XEq(service, PUSHER_SERVICE_BARK)) {
+    return [NSPSharedSpecifiers bark:appID];
   }
   return @[];
 }
