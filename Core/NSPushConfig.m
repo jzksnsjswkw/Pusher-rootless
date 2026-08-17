@@ -172,8 +172,8 @@ static NSArray* getSNSKeys(NSDictionary* prefs, NSString* prefix,
                             isCustomService:YES];
     serviceConfigs[service] = config;
 
-    if (customService[@"Enabled"] == nil || !NSPushBoolValue(customService[@"Enabled"])) {
-    } else {
+    if (customService[@"Enabled"] &&
+        NSPushBoolValue(customService[@"Enabled"])) {
       [enabledServiceNames addObject:service];
     }
   }
@@ -320,8 +320,8 @@ static NSArray* getSNSKeys(NSDictionary* prefs, NSString* prefix,
                             isCustomService:NO];
     serviceConfigs[service] = config;
 
-    if (serviceObj[@"enabled"] == nil || !NSPushBoolValue(serviceObj[@"enabled"])) {
-    } else {
+    if (serviceObj[@"enabled"] &&
+        NSPushBoolValue(serviceObj[@"enabled"])) {
       [enabledServiceNames addObject:service];
     }
   }
