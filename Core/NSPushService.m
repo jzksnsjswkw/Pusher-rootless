@@ -38,10 +38,6 @@ static dispatch_once_t gServiceRegistryToken;
   return nil;
 }
 
-+ (NSString*)loopPreventionAppID {
-  return @"";
-}
-
 + (NSDictionary*)extraPrefsForName:(NSString*)name
                       servicePrefs:(NSDictionary*)servicePrefs {
   return @{};
@@ -168,6 +164,18 @@ static dispatch_once_t gServiceRegistryToken;
   }
 
   return data;
+}
+
++ (NSDictionary*)logInfoDictForInfoDict:(NSDictionary*)infoDict {
+  NSMutableDictionary* logInfoDict = [infoDict mutableCopy];
+  for (NSString* prop in PUSHER_LOG_IMAGE_DATA_PROPERTIES) {
+    if (logInfoDict[prop]) {
+      logInfoDict[prop] = PUSHER_LOG_IMAGE_DATA_REPLACEMENT;
+    }
+  }
+  // imageShrinkFactor is an internal retry hint, never part of the real body.
+  [logInfoDict removeObjectForKey:@"imageShrinkFactor"];
+  return logInfoDict;
 }
 
 @end

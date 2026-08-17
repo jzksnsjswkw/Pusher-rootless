@@ -16,6 +16,7 @@
                           ((NSString*)method).length > 0)
                          ? (NSString*)method
                          : @"POST";
+  request.bodyType = @"json";
   return request;
 }
 
