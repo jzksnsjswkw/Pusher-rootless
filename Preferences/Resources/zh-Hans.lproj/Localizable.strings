@@ -1,6 +1,6 @@
 "Pusher" = "Pusher";
-"Enabled" = "已启用";
-"Disabled" = "已禁用";
+"Enabled" = "启用";
+"Disabled" = "禁用";
 "Global Settings" = "全局设置";
 "Services" = "服务";
 "Support" = "支持";
@@ -86,13 +86,18 @@
 "None" = "无";
 "Header" = "Header";
 "Request Body" = "Request Body";
+"HTTP Method:" = "HTTP 方法：";
+"Request Body Format:" = "请求体格式：";
+"JSON" = "JSON";
+"Form" = "Form 表单";
+"GET/HEAD send the data in the query string. Other methods send the data in the request body; choose JSON or Form (application/x-www-form-urlencoded)." = "GET/HEAD 会把数据放在查询字符串中；其他方法会把数据放在请求体中，可选择 JSON 或 Form（application/x-www-form-urlencoded）。";
 "Param/Header Name:" = "Param/Header Name：";
 "Value:" = "值：";
 "Open Date Format Instructions" = "打开日期格式说明";
 "Date Format:" = "日期格式：";
 "GET sends the data in the query string while POST sends the data in a JSON-formatted request body (Content-Type: application/json)." = "GET 会把数据放在查询字符串中，POST 会把数据放在 JSON 格式的 Request Body 中（Content-Type: application/json）。";
 "Param/Header Name is used to determine the name of the parameter to pass. For example, header authentication is typically passed through the 'Access-Token' header. If you are using the Request Body option and your API takes a parameter named 'token', you would enter 'token' as the name." = "Param/Header Name 用于确定要传递的参数名称。例如，header 身份验证通常通过 'Access-Token' header 传递。如果使用 Request Body 选项且 API 需要名为 'token' 的参数，请在名称栏输入 'token'。";
-"The server may reject the request if the data is too large, which is usually a result of the image being high resolution. Pusher will try to forward the notification 5 times, shrinking the image each time by the factor you specify (if the body is too large). If by the last retry the image is too large, it will remove the image but set the \"image\" property to a 1 to indicate that an image is attached. The image will initially be resized to fit the maximum width and height unless it is already smaller. The image shrink factor must be greater than 1.0 to work since it is division (a factor of 2 means it will divide the image dimensions in half).\n\nThe following properties will be passed to the URL endpoint (via GET or POST parameters) specified above (property names in parentheses) [Must Turn on \"Include Icon\" and \"Include Image\" switches above in order to get the corresponding properties below]:\n\nDevice Name (deviceName), App Name (appName), App Bundle ID (appID), Title (title), Subtitle (subtitle), Message (message), Date (date), Base64 Encoded PNG Icon 58x58 (icon), Base64 Encoded Image (image)" = "如果数据过大（通常是因为图片分辨率过高），服务器可能会拒绝请求。Pusher 会尝试转发通知 5 次，每次按你指定的系数缩小图片（如果 Request Body 仍然过大）。如果最后一次重试时图片仍过大，它会移除图片，但将 \"image\" 属性设为 1 以表示附有图片。图片最初会被缩放到最大宽度和高度以内（如果尚未小于该尺寸）。图片缩小系数必须大于 1.0 才能生效，因为它是除法运算（系数为 2 表示将图片尺寸减半）。\n\n以下属性会通过 GET 或 POST 参数传递给上方指定的 URL Endpoint（括号内为属性名）[必须开启上方的“包含图标”和“包含图片”开关才能获得对应属性]：\n\n设备名称 (deviceName)、应用名称 (appName)、应用 Bundle ID (appID)、标题 (title)、副标题 (subtitle)、消息 (message)、日期 (date)、Base64 编码的 58x58 PNG 图标 (icon)、Base64 编码的图片 (image)";
+"The server may reject the request if the data is too large, which is usually a result of the image being high resolution. Pusher will try to forward the notification 5 times, shrinking the image each time by the factor you specify (if the body is too large). If by the last retry the image is too large, it will remove the image but set the \"image\" property to a 1 to indicate that an image is attached. The image will initially be resized to fit the maximum width and height unless it is already smaller. The image shrink factor must be greater than 1.0 to work since it is division (a factor of 2 means it will divide the image dimensions in half).\n\nThe following properties will be passed to the URL endpoint (via the selected HTTP method/body format) specified above (property names in parentheses) [Must Turn on \"Include Icon\" and \"Include Image\" switches above in order to get the corresponding properties below]:\n\nDevice Name (deviceName), App Name (appName), App Bundle ID (appID), Title (title), Subtitle (subtitle), Message (message), Date (date), Base64 Encoded PNG Icon 58x58 (icon), Base64 Encoded Image (image)" = "如果数据过大（通常是因为图片分辨率过高），服务器可能会拒绝请求。Pusher 会尝试转发通知 5 次，每次按你指定的系数缩小图片（如果 Request Body 仍然过大）。如果最后一次重试时图片仍过大，它会移除图片，但将 \"image\" 属性设为 1 以表示附有图片。图片最初会被缩放到最大宽度和高度以内（如果尚未小于该尺寸）。图片缩小系数必须大于 1.0 才能生效，因为它是除法运算（系数为 2 表示将图片尺寸减半）。\n\n以下属性会通过所选 HTTP 方法和请求体格式传递给上方指定的 URL Endpoint（括号内为属性名）[必须开启上方的“包含图标”和“包含图片”开关才能获得对应属性]：\n\n设备名称 (deviceName)、应用名称 (appName)、应用 Bundle ID (appID)、标题 (title)、副标题 (subtitle)、消息 (message)、日期 (date)、Base64 编码的 58x58 PNG 图标 (icon)、Base64 编码的图片 (image)";
 "INSTRUCTIONS:\n1. Click 'Open Date Format Instructions' above (https://nsdateformatter.com).\n2. Using the reference and examples, create your desired date format and enter it above. If you don't care about the date, you may leave it as the default\n\nExample formats for Saturday, April 13, 2019 @ 3:12 AM:\nEEEE, MMM d, yyyy = Saturday, Apr 13, 2019\nMM/dd/yyyy = 04/13/2019\nMM-dd-yyyy HH:mm = 04-13-2019 03:12\nMMM d, h:mm a = Apr 13, 3:12 AM\nE, d MMM yyyy HH:mm:ss Z = Sat, 13 Apr 2019 03:12:11 +0000\nyyyy-MM-dd'T'HH:mm:ssZ = 2019-04-13T03:12:11+0000\ndd.MM.yy = 13.04.19\nHH:mm:ss.SSS = 03:12:11.678\n" = "说明：\n1. 点击上方的“打开日期格式说明”(https://nsdateformatter.com)。\n2. 参考示例创建你想要的日期格式并输入上方。如果不关心日期，可以保留默认值。\n\n2019 年 4 月 13 日星期六 @ 上午 3:12 的示例格式：\nEEEE, MMM d, yyyy = Saturday, Apr 13, 2019\nMM/dd/yyyy = 04/13/2019\nMM-dd-yyyy HH:mm = 04-13-2019 03:12\nMMM d, h:mm a = Apr 13, 3:12 AM\nE, d MMM yyyy HH:mm:ss Z = Sat, 13 Apr 2019 03:12:11 +0000\nyyyy-MM-dd'T'HH:mm:ssZ = 2019-04-13T03:12:11+0000\ndd.MM.yy = 13.04.19\nHH:mm:ss.SSS = 03:12:11.678\n";
 "SETUP:\n1. Click 'Open IFTTT Maker Webhooks Account' above (https://ifttt.com/services/maker_webhooks/settings).\n2. Click the 'Connect' button if it is not already connected.\n3. Copy the key at the end of the URL displayed (https://maker.ifttt.com/use/YOUR_KEY) into the associated field above.\n4. When you make an applet on IFTTT with the Maker Webhooks service, it will ask you for an event name. Enter that event name in the associated field above.\n\nWEBHOOK REQUEST DATA:\nIf Curate Request Data is enabled:\nThe \"Value1\" ingredient is set to the title (which includes app name), \"Value2\" is set to the message (which includes subtitle), and \"Value3\" is either the base64 encoded PNG 58x58 icon if \"Include Icon\" is turned on or the date string if \"Include Icon\" is turned off.\n\nIf Curate Request Data is disabled:\nThe following properties will be passed to the webhook trigger under the \"Value1\" ingredient (property names in parentheses) [Must Turn on \"Include Icon\" switch above in order to get the icon property]:\nDevice Name (deviceName), App Name (appName), App Bundle ID (appID), Title (title), Subtitle (subtitle), Message (message), Date (date), Base64 Encoded PNG Icon 58x58 (icon)" = "设置：\n1. 点击上方的“打开 IFTTT Maker Webhooks 账户”(https://ifttt.com/services/maker_webhooks/settings)。\n2. 如果尚未连接，请点击“Connect”按钮。\n3. 将显示的 URL（https://maker.ifttt.com/use/YOUR_KEY）末尾的 Key 复制到上方对应字段。\n4. 在 IFTTT 上使用 Maker Webhooks 服务创建 applet 时，它会要求你输入事件名称。请将事件名称输入到上方对应字段。\n\nWEBHOOK REQUEST DATA：\n如果启用了“整理请求数据”：\n\"Value1\" 会设置为标题（包含应用名称），\"Value2\" 会设置为消息（包含副标题），\"Value3\" 为 Base64 编码的 58x58 PNG 图标（如果开启“包含图标”）或日期字符串（如果关闭“包含图标”）。\n\n如果未启用“整理请求数据”：\n以下属性会作为 \"Value1\" 成分传递给 Webhook 触发器（括号内为属性名）[必须开启上方的“包含图标”开关才能获得图标属性]：\n设备名称 (deviceName)、应用名称 (appName)、应用 Bundle ID (appID)、标题 (title)、副标题 (subtitle)、消息 (message)、日期 (date)、Base64 编码的 58x58 PNG 图标 (icon)";
 "SETUP:\n1. Click 'Open Pushbullet Account' above (https://www.pushbullet.com/#settings/account).\n2. Scroll down and click 'Create Access Token' on your account page.\n3. Copy the displayed access token into the associated field above.\n4. Click 'Receiving Devices' to validate your credentials and load the receiving device list." = "设置：\n1. 点击上方的“打开 Pushbullet 账户”(https://www.pushbullet.com/#settings/account)。\n2. 在账户页面向下滚动并点击“Create Access Token”。\n3. 将显示的 Access Token 复制到上方对应字段。\n4. 点击“接收设备”以验证凭据并加载接收设备列表。";
@@ -151,3 +156,48 @@
 "After setting up your services, remember to enable them by using the 'Edit' button in the top right of this page and dragging your services to the 'Enabled' section at the top.\n\nTap anywhere to continue." = "设置好服务后，记得点击本页右上角的“编辑”按钮，把你的服务拖到顶部的“已启用”分区。\n\n点击任意位置继续。";
 "After using the app filter, you can swipe to delete to unset it and show all apps again.\n\nTap on any truncated log to expand it.\n\n Tap and hold on a log to copy it to the clipboard.\n\nTap anywhere to continue." = "使用应用筛选后，可以左滑删除以取消筛选，重新显示所有应用。\n\n点击任意被截断的日志可展开。\n\n长按日志可复制到剪贴板。\n\n点击任意位置继续。";
 "Leave empty to use the official default server." = "留空则使用官方默认服务器。";
+"Optional Parameters" = "可选参数";
+"Level:" = "Level：";
+"Volume:" = "Volume：";
+"Badge:" = "Badge：";
+"Call:" = "Call：";
+"AutoCopy:" = "AutoCopy：";
+"Sound:" = "Sound：";
+"Image:" = "Image：";
+"Group:" = "Group：";
+"IsArchive:" = "IsArchive：";
+"TTL:" = "TTL：";
+"URL:" = "URL：";
+"Action:" = "Action：";
+"ID:" = "ID：";
+"Delete:" = "Delete：";
+"Optional Bark push parameters. Leave empty to not send that parameter.
+Level: critical / active / timeSensitive / passive (default active)
+Volume: 0-10, only for critical alerts (default 5)
+Badge: badge number
+Call: 1 to repeat the ringtone for 30 seconds
+AutoCopy: 1 to auto-copy push content
+Sound: ringtone name
+Image: HTTPS image URL
+Group: group name to group notifications
+IsArchive: 1 to save the push to history
+TTL: retention time in seconds for archived pushes
+URL: URL to open when the push is tapped
+Action: alert shows an action popup, none makes tapping do nothing
+ID: update the push with the same ID
+Delete: 1 to delete the push with the given ID (requires ID)" = "可选的 Bark 推送参数，留空则不发送该参数。
+Level：critical / active / timeSensitive / passive（默认 active）
+Volume：0-10，仅对 critical 级别生效（默认 5）
+Badge：角标数字
+Call：填 1 让铃声重复响 30 秒
+AutoCopy：填 1 自动复制推送内容
+Sound：铃声名称
+Image：HTTPS 图片 URL
+Group：分组名称，用于将通知分组
+IsArchive：填 1 将推送保存到历史记录
+TTL：存档推送的保留时间（秒）
+URL：点击推送时打开的链接
+Action：alert 打开应用时显示操作弹窗，none 点击无动作
+ID：相同 ID 会更新对应推送
+Delete：填 1 删除对应 ID 的推送（需同时填写 ID）";
+

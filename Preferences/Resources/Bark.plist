@@ -4,6 +4,7 @@
 <dict>
 	<key>items</key>
 	<array>
+		<!-- Credentials -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -28,6 +29,8 @@
 			<key>noAutoCorrect</key>
 			<true/>
 		</dict>
+
+		<!-- Options -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -54,6 +57,8 @@
 			<key>noAutoCorrect</key>
 			<true/>
 		</dict>
+
+		<!-- App List -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -101,6 +106,42 @@
 			<true/>
 			<key>alphabeticIndexingEnabled</key>
 			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>label</key>
+			<string>App Customization</string>
+			<key>icon</key>
+			<string>app_list</string>
+			<key>detail</key>
+			<string>NSPCustomizeAppsController</string>
+			<key>service</key>
+			<string>Bark</string>
+		</dict>
+
+		<!-- Optional Parameters -->
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Optional Parameters</string>
+			<key>footerText</key>
+			<string>Optional Bark push parameters. Leave empty to not send that parameter.
+Level: critical / active / timeSensitive / passive (default active)
+Volume: 0-10, only for critical alerts (default 5)
+Badge: badge number
+Call: 1 to repeat the ringtone for 30 seconds
+AutoCopy: 1 to auto-copy push content
+Sound: ringtone name
+Image: HTTPS image URL
+Group: group name to group notifications
+IsArchive: 1 to save the push to history
+TTL: retention time in seconds for archived pushes
+URL: URL to open when the push is tapped
+Action: alert shows an action popup, none makes tapping do nothing
+ID: update the push with the same ID
+Delete: 1 to delete the push with the given ID (requires ID)</string>
 		</dict>
 	</array>
 	<key>title</key>

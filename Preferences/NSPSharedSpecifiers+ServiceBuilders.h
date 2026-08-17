@@ -13,4 +13,5 @@
 + (NSArray*)ifttt:(NSString*)appID;
 + (NSArray*)pusherReceiver:(NSString*)appID;
 + (NSArray*)wechat:(NSString*)appID;
++ (NSArray*)bark:(NSString*)appID;
 @end
