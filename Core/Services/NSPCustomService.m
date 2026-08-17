@@ -36,9 +36,14 @@
     };
   }
 
-  return [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
-                                     headers:headers
-                                    infoDict:infoDict];
+  NSPushRequest* request =
+      [NSPushRequest requestWithURLString:[self replacedKeyURLStringForConfig:config]
+                                 headers:headers
+                                infoDict:infoDict];
+  request.method = XStrDefault(config.rawPrefs[@"method"], @"POST");
+  request.bodyType = XStrDefault(config.rawPrefs[@"bodyType"], @"json");
+  request.logInfoDict = [self logInfoDictForInfoDict:infoDict];
+  return request;
 }
 
 + (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config {
