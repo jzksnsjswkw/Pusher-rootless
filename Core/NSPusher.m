@@ -166,9 +166,8 @@
   }
 }
 
-// Per-service pipeline: look up the service class, skip loops back to the
-// service's own app, then apply app-list / SNS / device-condition filters
-// before building and sending the request.
+// Per-service pipeline: look up the service class, then apply app-list / SNS /
+// device-condition filters before building and sending the request.
 - (void)sendToService:(NSString*)service
              bulletin:(BBBulletin*)bulletin
                 appID:(NSString*)appID
@@ -182,17 +181,6 @@
   }
   Class<NSPPushService> serviceClass =
       (Class<NSPPushService>)[NSPushServiceManager serviceClassForName:service];
-
-  // A push forwarded to a service whose own iOS app just generated the
-  // notification would bounce straight back and loop.
-  if (!isTest && XEq(appID, [serviceClass loopPreventionAppID])) {
-    XLog(@"Prevented loop from same app");
-    [NSPushLog addToLogIfEnabledForService:service
-                                  bulletin:bulletin
-                                     label:@"Prevented loop from same app"
-                                    object:nil];
-    return;
-  }
 
   NSPushServiceConfig* effectiveConfig = serviceConfig;
   if (!isTest) {
@@ -295,10 +283,9 @@
                                }
                                return;
                              }
-                             // The HTTP method is a per-service user pref;
-                             // apply it on top of the service's default.
-                             request.method = XStrDefault(
-                                 effectiveConfig.rawPrefs[@"method"], @"POST");
+                             // The service is responsible for fully assembling
+                             // the request (URL, headers, body, method, body
+                             // encoding). The main framework sends it as-is.
                              [[NSPushRequestSender sharedInstance]
                                  sendRequest:request
                                    logString:XStr(@"[S:%@,A:%@]", service,
