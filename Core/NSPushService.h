@@ -10,10 +10,6 @@
 // Registry key. Must match the service name used in prefs (e.g. "Pushover").
 + (NSString*)serviceName;
 
-// Bundle ID used for same-app loop prevention. @"" for services that
-// don't participate (only Pushover and Pushbullet return their app ID).
-+ (NSString*)loopPreventionAppID;
-
 // Final, fully-authorized request (URL + headers + body) for the bulletin
 // context. The service composes its own body and applies its own auth here
 // (e.g. Pushover merges its token/user credentials into the body, Pushbullet
@@ -72,6 +68,12 @@
 // (IFTTT, Pusher Receiver, custom).
 + (NSDictionary*)baseInfoDictForBulletinContext:(NSPBulletinContext*)context
                                          config:(NSPushServiceConfig*)config;
+
+// Returns a copy of infoDict safe for logging: large Base64 image fields are
+// replaced with a placeholder. Services should set NSPushRequest.logInfoDict
+// to this (or their own sanitized body) so the sender can log without knowing
+// service-specific payload layout.
++ (NSDictionary*)logInfoDictForInfoDict:(NSDictionary*)infoDict;
 
 // Whether the service should include the app icon in the shared data dict.
 + (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config;
