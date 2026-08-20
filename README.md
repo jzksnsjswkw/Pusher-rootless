@@ -20,6 +20,7 @@ THEOS_PACKAGE_SCHEME=roothide make clean package
 安装到设备（需先在 Makefile 里配置 `THEOS_DEVICE_IP` / `THEOS_DEVICE_PORT`）：
 
 ```bash
+# rootless
 THEOS_PACKAGE_SCHEME=rootless make clean do
 # roothide:
 THEOS_PACKAGE_SCHEME=roothide make clean do
