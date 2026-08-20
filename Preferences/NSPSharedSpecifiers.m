@@ -1,7 +1,7 @@
 #import "NSPSharedSpecifiers.h"
 #import "NSPLocalization.h"
 #import "NSPSharedSpecifiers+ServiceBuilders.h"
-#import "../Generated/BuiltinServices.generated.h"
+#import "NSPushServicePrefs.h"
 #import "../Shared/NSPushPrefsStore.h"
 #import "../global.h"
 #import "../helpers.h"
@@ -30,18 +30,14 @@
   if (isCustomService) {
     return [NSPSharedSpecifiers getCustomShared:service withAppID:appID];
   }
-  if (XEq(service, PUSHER_SERVICE_PUSHOVER)) {
-    return [NSPSharedSpecifiers pushover:appID];
-  } else if (XEq(service, PUSHER_SERVICE_PUSHBULLET)) {
-    return [NSPSharedSpecifiers pushbullet:appID];
-  } else if (XEq(service, PUSHER_SERVICE_IFTTT)) {
-    return [NSPSharedSpecifiers ifttt:appID];
-  } else if (XEq(service, PUSHER_SERVICE_PUSHER_RECEIVER)) {
-    return [NSPSharedSpecifiers pusherReceiver:appID];
-  } else if (XEq(service, PUSHER_SERVICE_WECHAT)) {
-    return [NSPSharedSpecifiers wechat:appID];
-  } else if (XEq(service, PUSHER_SERVICE_BARK)) {
-    return [NSPSharedSpecifiers bark:appID];
+  // Built-in services self-register their specifier builders (see
+  // NSPushServicePrefs.h); look the service up instead of maintaining a
+  // per-service dispatch chain here. Services without a registered builder
+  // (e.g. Feishu) simply get no extra shared specifiers.
+  NSPSharedSpecifierBuilder builder =
+      [NSPushServicePrefsManager builderForService:service];
+  if (builder) {
+    return builder(appID);
   }
   return @[];
 }
