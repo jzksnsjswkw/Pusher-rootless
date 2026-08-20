@@ -32,7 +32,7 @@ before-all::
 	./scripts/generate_builtin_services.sh
 
 after-install::
-	install.exec "killall -9 SpringBoard"
+# 	install.exec "killall -9 SpringBoard"
 	# install.exec "killall -9 Preferences"
 SUBPROJECTS += Preferences
 SUBPROJECTS += Flipswitch
