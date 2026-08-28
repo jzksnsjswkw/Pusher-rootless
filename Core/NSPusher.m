@@ -10,7 +10,7 @@
 #import "NSPushSupport.h"
 
 @implementation NSPusher {
-  NSMutableArray* _recentNotificationTitles;
+  NSMutableArray* _recentNotificationContents;
 }
 
 + (instancetype)sharedInstance {
@@ -24,7 +24,7 @@
 
 - (instancetype)init {
   if (self = [super init]) {
-    _recentNotificationTitles = [NSMutableArray new];
+    _recentNotificationContents = [NSMutableArray new];
   }
   return self;
 }
@@ -123,17 +123,19 @@
       bulletin.message ? bulletin.message : @"");
 
   // Loop prevention: a forwarded push can itself produce a notification that
-  // would get forwarded again. Count how many times this exact title already
-  // appeared in the recent window and only drop it once it repeats enough
-  // times (10 of the last 25) to look like a genuine loop, so a legitimate
-  // single duplicate isn't mistaken for one.
-  NSUInteger titleCount = 0;
-  for (NSString* recentNotificationTitle in _recentNotificationTitles) {
-    if (XEq(title, recentNotificationTitle)) {
-      titleCount++;
+  // would get forwarded again. Count how many times this exact bulletin
+  // content already appeared in the recent window and only drop it once it
+  // repeats enough times (10 of the last 25) to look like a genuine loop, so
+  // a legitimate single duplicate isn't mistaken for one.
+  NSString* bulletinContent = XStr(@"%@\n%@\n%@", title, bulletin.subtitle ?: @"",
+                                    bulletin.message ?: @"");
+  NSUInteger contentCount = 0;
+  for (NSString* recentContent in _recentNotificationContents) {
+    if (XEq(bulletinContent, recentContent)) {
+      contentCount++;
     }
   }
-  if (titleCount >= PUSHER_LOOP_PREVENTION_THRESHOLD) {
+  if (contentCount >= PUSHER_LOOP_PREVENTION_THRESHOLD) {
     XLog(@"Prevented loop");
     [NSPushLog addToLogIfEnabledForService:@""
                                   bulletin:bulletin
@@ -145,10 +147,10 @@
   // window fills up, instead of clearing the whole array. Clearing would reset
   // the duplicate count mid-loop, so a genuine loop (THRESHOLD repeats within
   // the last WINDOW notifications) could never be detected.
-  while (_recentNotificationTitles.count >= PUSHER_LOOP_PREVENTION_WINDOW) {
-    [_recentNotificationTitles removeObjectAtIndex:0];
+  while (_recentNotificationContents.count >= PUSHER_LOOP_PREVENTION_WINDOW) {
+    [_recentNotificationContents removeObjectAtIndex:0];
   }
-  [_recentNotificationTitles addObject:title];
+  [_recentNotificationContents addObject:bulletinContent];
 
   if (self.config.enabledServiceNames.count == 0) {
     XLog(@"No services enabled!");

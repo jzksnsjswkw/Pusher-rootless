@@ -13,8 +13,8 @@
 #define PUSHER_LOG_ID CFSTR("com.noahsaso.pusher~log")
 
 #define PUSHER_TRIES 5 // how many times pusher will try to send the web request
-#define PUSHER_LOOP_PREVENTION_WINDOW 25   // recent titles to scan
-#define PUSHER_LOOP_PREVENTION_THRESHOLD 10 // repeats of the same title to block
+#define PUSHER_LOOP_PREVENTION_WINDOW 25   // recent bulletin contents to scan
+#define PUSHER_LOOP_PREVENTION_THRESHOLD 10 // repeats of the same content to block
 #define PUSHER_LOG_MAX_STRING_LENGTH 50
 #define PUSHER_LOG_IMAGE_DATA_PROPERTIES                                       \
   @[                                                                           \
