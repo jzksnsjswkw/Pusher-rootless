@@ -51,16 +51,16 @@
   NSDictionary* infoDict;
   NSDictionary* logInfoDict;
   if (NSPushBoolValue(config.rawPrefs[@"curateData"])) {
-    NSString* dateStr = [self dateStringForDate:context.bulletin.date
+    NSString* dateStr = [self dateStringForDate:context.date
                                          config:config];
     infoDict = @{
-      @"value1" : context.title ?: @"",
-      @"value2" : context.message ?: @"",
+      @"value1" : context.displayTitle ?: @"",
+      @"value2" : context.displayMessage ?: @"",
       @"value3" : data[@"icon"] ?: dateStr
     };
     logInfoDict = @{
-      @"value1" : context.title ?: @"",
-      @"value2" : context.message ?: @"",
+      @"value1" : context.displayTitle ?: @"",
+      @"value2" : context.displayMessage ?: @"",
       @"value3" : data[@"icon"] ? PUSHER_LOG_IMAGE_DATA_REPLACEMENT : dateStr
     };
   } else {

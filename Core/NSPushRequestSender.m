@@ -47,23 +47,23 @@ static NSString* NSPushFormEncodedStringFromDictionary(NSDictionary* dictionary)
 - (void)sendAttemptWithRequest:(NSPushRequest*)pushRequest
                      logString:(NSString*)logString
                        service:(NSString*)service
-                      bulletin:(BBBulletin*)bulletin;
+                      context:(NSPBulletinContext*)context;
 - (void)handleResponseForRequest:(NSPushRequest*)pushRequest
                             data:(NSData*)data
                         response:(NSURLResponse*)response
                            error:(NSError*)error
                        logString:(NSString*)logString
                          service:(NSString*)service
-                        bulletin:(BBBulletin*)bulletin;
+                        context:(NSPBulletinContext*)context;
 - (NSNumber*)retriesLeftForRetryKey:(NSString*)retryKey;
 - (void)setRetriesLeft:(NSNumber*)count forRetryKey:(NSString*)retryKey;
 - (NSInteger)decrementRetriesLeftForRetryKey:(NSString*)retryKey;
 @end
 
-static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
+static NSString* retryKeyForContextAndService(NSPBulletinContext* context,
                                                NSString* service) {
-  return XStr(@"%@_%@_%@", bulletin.bulletinID ?: @"empty_bulletin_id",
-              bulletin.sectionID, service);
+  return XStr(@"%@_%@_%@", context.bulletinID ?: @"empty_bulletin_id",
+              context.appID, service);
 }
 
 @implementation NSPushRequestSender
@@ -120,19 +120,19 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
 - (void)sendRequest:(NSPushRequest*)pushRequest
           logString:(NSString*)logString
             service:(NSString*)service
-           bulletin:(BBBulletin*)bulletin {
-  NSString* retryKey = retryKeyForBulletinAndService(bulletin, service);
+           context:(NSPBulletinContext*)context {
+  NSString* retryKey = retryKeyForContextAndService(context, service);
   [self setRetriesLeft:@(PUSHER_TRIES - 1) forRetryKey:retryKey];
   [self sendAttemptWithRequest:pushRequest
                      logString:logString
                        service:service
-                      bulletin:bulletin];
+                      context:context];
 }
 
 - (void)sendAttemptWithRequest:(NSPushRequest*)pushRequest
                      logString:(NSString*)logString
                        service:(NSString*)service
-                      bulletin:(BBBulletin*)bulletin {
+                      context:(NSPBulletinContext*)context {
   NSMutableDictionary* infoDictForRequest = [pushRequest.infoDict mutableCopy];
   if (infoDictForRequest[@"imageShrinkFactor"]) {
     [infoDictForRequest removeObjectForKey:@"imageShrinkFactor"];
@@ -180,19 +180,19 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
       stringByTrimmingCharactersInSet:[NSCharacterSet
                                           whitespaceAndNewlineCharacterSet]];
   [NSPushLog addToLogIfEnabledForService:service
-                                bulletin:bulletin
+                                context:context
                                    label:@"URL"
                                   object:newUrlString];
   NSURL* requestURL = [NSURL URLWithString:newUrlString];
   if (!requestURL) {
     XLog(@"Invalid URL: %@", newUrlString);
     [NSPushLog addToLogIfEnabledForService:service
-                                  bulletin:bulletin
+                                  context:context
                                      label:@"Invalid URL"
                                     object:nil];
     // Clear the retry key so a bad URL doesn't leak an entry in the
     // long-running SpringBoard process (it would otherwise grow unbounded).
-    [self setRetriesLeft:nil forRetryKey:retryKeyForBulletinAndService(bulletin, service)];
+    [self setRetriesLeft:nil forRetryKey:retryKeyForContextAndService(context, service)];
     return;
   }
   NSMutableURLRequest* request =
@@ -201,7 +201,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                           timeoutInterval:10];
 
   [NSPushLog addToLogIfEnabledForService:service
-                                bulletin:bulletin
+                                context:context
                                    label:@"Method"
                                   object:httpMethod];
   [request setHTTPMethod:httpMethod];
@@ -210,7 +210,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
         XStrDefault(pushRequest.headers[headerName], @"");
     [request setValue:headerValue forHTTPHeaderField:headerName];
     [NSPushLog addToLogIfEnabledForService:service
-                                  bulletin:bulletin
+                                  context:context
                                      label:@"Header"
                                     object:XStr(@"%@: %@", headerName,
                                                 headerValue)];
@@ -221,7 +221,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
     // logs what the service gave it and does not rewrite request bodies.
     NSDictionary* infoDictForLog = pushRequest.logInfoDict ?: infoDictForRequest;
     [NSPushLog addToLogIfEnabledForService:service
-                                  bulletin:bulletin
+                                  context:context
                                      label:@"Request Body Dictionary"
                                     object:infoDictForLog];
 
@@ -247,12 +247,12 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
       if (!requestData) {
         XLog(@"%@ JSON serialization failed: %@", logString, jsonError);
         [NSPushLog addToLogIfEnabledForService:service
-                                      bulletin:bulletin
+                                      context:context
                                          label:@"JSON Serialization Error"
                                         object:jsonError.description
                                   dontTruncate:YES];
         [self setRetriesLeft:nil
-                 forRetryKey:retryKeyForBulletinAndService(bulletin, service)];
+                 forRetryKey:retryKeyForContextAndService(context, service)];
         return;
       }
     }
@@ -267,7 +267,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
         completionHandler:^(NSData* data, NSURLResponse* response,
                             NSError* error) {
           XLog(@"%@ Got response back", logString);
-          NSString* retryKey = retryKeyForBulletinAndService(bulletin, service);
+          NSString* retryKey = retryKeyForContextAndService(context, service);
 
           if (!pushRequest.resendHandler) {
             [self handleResponseForRequest:pushRequest
@@ -276,7 +276,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                                      error:error
                                  logString:logString
                                    service:service
-                                  bulletin:bulletin];
+                                  context:context];
             return;
           }
 
@@ -294,7 +294,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                          logString, (unsigned long)newRequest.resendCount + 1);
                     [NSPushLog
                         addToLogIfEnabledForService:service
-                                           bulletin:bulletin
+                                           context:context
                                               label:
                                                   XStr(
                                                       @"----- Resending via "
@@ -307,14 +307,14 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                     [self sendAttemptWithRequest:newRequest
                                        logString:logString
                                          service:service
-                                        bulletin:bulletin];
+                                        context:context];
                   } else {
                     NSString* reason = newRequest.failureReason
                                            ?: pushRequest.failureReason
                                            ?: @"Resend attempts exhausted";
                     [NSPushLog
                         addToLogIfEnabledForService:service
-                                           bulletin:bulletin
+                                           context:context
                                               label:
                                                   @"Network Response: "
                                                   @"Failed after all resend "
@@ -333,7 +333,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                                          ?: @"Resend handler marked request "
                                             @"as failed";
                   [NSPushLog addToLogIfEnabledForService:service
-                                                bulletin:bulletin
+                                                context:context
                                                    label:@"Network Response: "
                                                          @"Failed by resend "
                                                          @"handler"
@@ -349,7 +349,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                                          error:error
                                      logString:logString
                                        service:service
-                                      bulletin:bulletin];
+                                      context:context];
               });
         }] resume];
 }
@@ -361,8 +361,8 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
                            error:(NSError*)error
                        logString:(NSString*)logString
                          service:(NSString*)service
-                        bulletin:(BBBulletin*)bulletin {
-  NSString* retryKey = retryKeyForBulletinAndService(bulletin, service);
+                        context:(NSPBulletinContext*)context {
+  NSString* retryKey = retryKeyForContextAndService(context, service);
 
   if (error == nil) {
     // A body-less success (e.g. 204 or an empty 200) is still a
@@ -433,7 +433,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
              dataStr);
         [NSPushLog
             addToLogIfEnabledForService:service
-                               bulletin:bulletin
+                               context:context
                                   label:
                                       XStr(
                                           @"----- Retrying. Try %d of %d "
@@ -465,7 +465,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
           [self sendAttemptWithRequest:retryRequest
                               logString:logString
                                 service:service
-                               bulletin:bulletin];
+                               context:context];
         });
         return;
       }
@@ -476,7 +476,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
       // too large even after dropping the image. Log an honest failure
       // instead of a misleading "Success".
       [NSPushLog addToLogIfEnabledForService:service
-                                    bulletin:bulletin
+                                    context:context
                                        label:@"Network Response: "
                                              @"Image too large on "
                                              @"final attempt"
@@ -487,7 +487,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
       return;
     }
     [NSPushLog addToLogIfEnabledForService:service
-                                  bulletin:bulletin
+                                  context:context
                                      label:@"Network Response: Success"
                                     object:dataStr];
     XLog(@"%@ Success: %@", logString, dataStr);
@@ -495,7 +495,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
   } else {
     if (error) {
       [NSPushLog addToLogIfEnabledForService:service
-                                    bulletin:bulletin
+                                    context:context
                                        label:@"Network Response: Error"
                                       object:error.description
                                 dontTruncate:YES];
@@ -503,7 +503,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
     } else {
       [NSPushLog
           addToLogIfEnabledForService:service
-                             bulletin:bulletin
+                             context:context
                                 label:@"Network Response: No Data"
                                object:nil];
       XLog(@"%@ No data", logString);
@@ -522,7 +522,7 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
              (int)tryNumber, PUSHER_TRIES);
         [NSPushLog
             addToLogIfEnabledForService:service
-                               bulletin:bulletin
+                               context:context
                                   label:
                                       XStr(@"----- Retrying. Try %d of "
                                            @"%d -----",
@@ -549,13 +549,13 @@ static NSString* retryKeyForBulletinAndService(BBBulletin* bulletin,
           [self sendAttemptWithRequest:retryRequest
                               logString:logString
                                 service:service
-                               bulletin:bulletin];
+                               context:context];
         });
       } else {
         // Retries exhausted with no successful response: log an honest
         // final failure instead of silently clearing the retry state.
         [NSPushLog addToLogIfEnabledForService:service
-                                      bulletin:bulletin
+                                      context:context
                                          label:@"Network Response: "
                                                @"Failed after all "
                                                @"retries"

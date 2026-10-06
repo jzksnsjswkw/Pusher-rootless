@@ -20,31 +20,29 @@
 
 + (NSPushRequest*)requestForBulletinContext:(NSPBulletinContext*)context
                                      config:(NSPushServiceConfig*)config {
-  BBBulletin* bulletin = context.bulletin;
-
   NSString* message = nil;
   if (context.appName) {
     message = context.appName;
   }
-  if (bulletin.title) {
+  if (context.title) {
     if (message) {
-      message = XStr(@"%@: %@", message, bulletin.title);
+      message = XStr(@"%@: %@", message, context.title);
     } else {
-      message = bulletin.title;
+      message = context.title;
     }
   }
-  if (bulletin.subtitle) {
+  if (context.subtitle) {
     if (message) {
-      message = XStr(@"%@\r\n%@", message, bulletin.subtitle);
+      message = XStr(@"%@\r\n%@", message, context.subtitle);
     } else {
-      message = bulletin.subtitle;
+      message = context.subtitle;
     }
   }
-  if (bulletin.message) {
+  if (context.message) {
     if (message) {
-      message = XStr(@"%@\r\n%@", message, bulletin.message);
+      message = XStr(@"%@\r\n%@", message, context.message);
     } else {
-      message = bulletin.message;
+      message = context.message;
     }
   }
 

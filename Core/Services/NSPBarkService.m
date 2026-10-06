@@ -13,11 +13,19 @@
   return PUSHER_SERVICE_BARK;
 }
 
+// Bark's "image" param is a user-entered image URL string, not Base64 image
+// data, so the default icon/image replacement would wrongly hide it in logs.
+// Nothing in Bark's body carries Base64 image data.
++ (NSArray*)logImageDataProperties {
+  return @[];
+}
+
 + (NSPushRequest*)requestForBulletinContext:(NSPBulletinContext*)context
                                      config:(NSPushServiceConfig*)config {
-  NSMutableDictionary* infoDict =
-      [@{ @"title" : context.title ?: @"", @"body" : context.message ?: @"" }
-          mutableCopy];
+  NSMutableDictionary* infoDict = [@{
+    @"title" : context.displayTitle ?: @"",
+    @"body" : context.displayMessage ?: @""
+  } mutableCopy];
   NSDictionary<NSString*, NSString*>* barkParams = @{
     NSPPreferenceBarkLevelKey : @"level",
     NSPPreferenceBarkVolumeKey : @"volume",

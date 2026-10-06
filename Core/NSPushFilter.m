@@ -1,23 +1,22 @@
 #import "NSPushFilter.h"
 #import "NSPushConfig.h"
 #import "NSPushConstants.h"
-#import "NSPBBServer.h"
+#import "NSPushSupport.h"
 #import "helpers.h"
 
 @implementation NSPushFilter
 
-+ (NSString*)globalReasonIfAnyWithServer:(BBServer*)server
-                                bulletin:(BBBulletin*)bulletin
-                                  config:(NSPushConfigSnapshot*)config {
-  XLog(@"-------Bulletin------- %@", bulletin.sectionID);
++ (NSString*)globalReasonIfAnyWithContext:(NSPBulletinContext*)context
+                                   config:(NSPushConfigSnapshot*)config {
+  XLog(@"-------Bulletin------- %@", context.appID);
   if (!config.enabled) {
     return XStr(@"Pusher %@abled", config.enabled ? @"En" : @"Dis");
   }
 
-  if (bulletin.sectionID &&
-      XEq(bulletin.sectionID, PUSHER_TEST_NOTIFICATION_SECTION_ID) &&
-      bulletin.title && XEq(bulletin.title, @"Pusher") && bulletin.message &&
-      [bulletin.message hasPrefix:PUSHER_TEST_PUSH_RESULT_PREFIX]) {
+  if (context.appID &&
+      XEq(context.appID, PUSHER_TEST_NOTIFICATION_SECTION_ID) &&
+      context.title && XEq(context.title, @"Pusher") && context.message &&
+      [context.message hasPrefix:PUSHER_TEST_PUSH_RESULT_PREFIX]) {
     return @"Not forwarding test notification result banner";
   }
 
@@ -27,14 +26,12 @@
                 config.globalAppList);
   }
 
-  if (!server) {
-    return @"Server is nil, it shouldn't be";
-  }
-
-  BBSectionInfo* sectionInfo =
-      [server _sectionInfoForSectionID:bulletin.sectionID effective:YES];
-  if (!sectionInfo) {
-    return @"Section info is nil, it shouldn't be";
+  // The adapter reports why SpringBoard had no settings for this app ("Server
+  // is nil, it shouldn't be" / "Section info is nil, it shouldn't be"). These
+  // are the two reasons this used to check with its own BBServer and
+  // BBSectionInfo lookups.
+  if (context.notificationSettingsUnavailableReason) {
+    return context.notificationSettingsUnavailableReason;
   }
 
   if (!config.enabledServiceNames ||
@@ -71,10 +68,10 @@
 }
 
 + (NSString*)snsReasonIfAnyWithSNS:(NSArray*)sns
-                       sectionInfo:(BBSectionInfo*)sectionInfo
+                          settings:(NSPushNotificationSettings*)settings
                              isAnd:(BOOL)isAnd
                    requireANWithOR:(BOOL)requireANWithOR {
-  if (!isAnd && requireANWithOR && !sectionInfo.allowsNotifications) {
+  if (!isAnd && requireANWithOR && !settings.allowsNotifications) {
     return @"'OR' and 'Require Allow Notifications with OR' both on, but Allow "
            @"Notifications is disabled in this app's settings.";
   }
@@ -90,21 +87,19 @@
   for (NSString* key in sns) {
     BOOL sufficient = NO;
     if (XEq(key, PUSHER_SUFFICIENT_ALLOW_NOTIFICATIONS_KEY)) {
-      sufficient = sectionInfo.allowsNotifications;
+      sufficient = settings.allowsNotifications;
     } else if (XEq(key, PUSHER_SUFFICIENT_LOCK_SCREEN_KEY)) {
-      sufficient = sectionInfo.showsInLockScreen;
+      sufficient = settings.showsInLockScreen;
     } else if (XEq(key, PUSHER_SUFFICIENT_NOTIFICATION_CENTER_KEY)) {
-      sufficient = sectionInfo.showsInNotificationCenter;
+      sufficient = settings.showsInNotificationCenter;
     } else if (XEq(key, PUSHER_SUFFICIENT_BANNERS_KEY)) {
-      sufficient = sectionInfo.alertType == BBSectionInfoAlertTypeBanner;
+      sufficient = settings.isBanner;
     } else if (XEq(key, PUSHER_SUFFICIENT_BADGES_KEY)) {
-      sufficient = (sectionInfo.pushSettings &
-                    BBActualSectionInfoPushSettingsBadges) != 0;
+      sufficient = settings.showsBadges;
     } else if (XEq(key, PUSHER_SUFFICIENT_SOUNDS_KEY)) {
-      sufficient = (sectionInfo.pushSettings &
-                    BBActualSectionInfoPushSettingsSounds) != 0;
+      sufficient = settings.showsSounds;
     } else if (XEq(key, PUSHER_SUFFICIENT_SHOWS_PREVIEWS_KEY)) {
-      sufficient = sectionInfo.showsMessagePreview;
+      sufficient = settings.showsMessagePreview;
     } else {
       // Unknown/misspelled condition key: treat it as not satisfied so a
       // config typo can't silently bypass the filter. This is defensive only;
@@ -135,14 +130,10 @@
 }
 
 + (NSString*)deviceReasonIfAnyWithWhenToPush:(int)whenToPush
-                                 whatNetwork:(int)whatNetwork {
-  BOOL deviceIsLocked =
-      ((SBLockScreenManager*)[NSClassFromString(@"SBLockScreenManager")
-           sharedInstance])
-          .isUILocked;
-  NSString* wifiName =
-      [[NSClassFromString(@"SBWiFiManager") sharedInstance] currentNetworkName];
-  BOOL onWiFi = wifiName != nil;
+                                 whatNetwork:(int)whatNetwork
+                                 deviceState:(NSPDeviceState*)deviceState {
+  BOOL deviceIsLocked = deviceState.isLocked;
+  BOOL onWiFi = deviceState.wifiName != nil;
   if ((whatNetwork == PUSHER_WHAT_NETWORK_WIFI_ONLY && !onWiFi) ||
       (whatNetwork == PUSHER_WHAT_NETWORK_OFF_WIFI_ONLY && onWiFi)) {
     return XStr(@"What Network set to %@ but %@on WiFi",

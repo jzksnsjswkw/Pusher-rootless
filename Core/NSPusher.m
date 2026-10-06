@@ -1,6 +1,6 @@
 #import "NSPusher.h"
 #import "NSPushConstants.h"
-#import "NSPBBServer.h"
+#import "NSPBulletinAdapter.h"
 #import "../helpers.h"
 #import "NSPushConfig.h"
 #import "NSPushFilter.h"
@@ -33,25 +33,28 @@
   _config = [NSPushPrefs loadSnapshot];
 }
 
-// Called from the BBServer hook every time a bulletin is published. Guards,
-// global prefs filter, loop prevention, then fan-out to all enabled services.
+// Called from the BBServer hook every time a bulletin is published.
+//
+// This is the SpringBoard boundary: the bulletin is converted once into an
+// NSPBulletinContext value object here, and the rest of the pipeline (filters,
+// request sender, service payload builders) only ever sees that. See
+// NSPBulletinAdapter.h.
 - (void)handleBulletin:(BBBulletin*)bulletin {
   if (!bulletin) {
     XLog(@"Bulletin nil");
     return;
   }
-  if (!bulletin.date) {
-    bulletin.date = [NSDate date];
-  }
 
-  // lastInterruptDate is nil when the bulletin was never actually presented
-  // (e.g. right after SpringBoard restarts and replays queued bulletins).
-  if (!bulletin.lastInterruptDate) {
-    XLog(@"Not forwarding, Last Interrupt Date: %@",
-         bulletin.lastInterruptDate);
+  NSPBulletinContext* context =
+      [NSPBulletinAdapter contextForBulletin:bulletin];
+
+  // Bulletins SpringBoard never actually presented (no lastInterruptDate) are
+  // queued bulletins being replayed, e.g. right after a SpringBoard restart.
+  if (![NSPBulletinAdapter wasPresented:bulletin]) {
+    XLog(@"Not forwarding, bulletin was never presented");
     [NSPushLog
         addToLogIfEnabledForService:@""
-                           bulletin:bulletin
+                           context:context
                               label:@"Last interrupt date nil (this should "
                                     @"only happen if SpringBoard just "
                                     @"restarted; if some other time, there is "
@@ -60,32 +63,25 @@
     return;
   }
 
-  if (!NSClassFromString(@"SBApplicationController") ||
-      ![NSClassFromString(@"SBApplicationController") sharedInstance]) {
+  if (![NSPBulletinAdapter isSpringBoardReady]) {
     XLog(@"SpringBoard not ready");
     [NSPushLog addToLogIfEnabledForService:@""
-                                  bulletin:bulletin
+                                  context:context
                                      label:@"SpringBoard not ready"
                                     object:nil];
     return;
   }
 
-  NSString* appID = bulletin.sectionID;
-  SBApplication* app = [[NSClassFromString(@"SBApplicationController")
-      sharedInstance] applicationWithBundleIdentifier:appID];
-  NSString* appName = app && app.displayName && app.displayName.length > 0
-                          ? app.displayName
-                          : XStr(@"Unknown App: %@", appID);
-
+  // Guards passed: global prefs filter, loop prevention, then fan-out to all
+  // enabled services.
+  NSString* appID = context.appID;
   NSString* prefsResponse =
-      [NSPushFilter globalReasonIfAnyWithServer:self.server
-                                       bulletin:bulletin
-                                         config:self.config];
+      [NSPushFilter globalReasonIfAnyWithContext:context config:self.config];
   if (prefsResponse) {
     XLog(@"Prefs say no: %@", prefsResponse);
     [NSPushLog
         addToLogIfEnabledForService:@""
-                           bulletin:bulletin
+                           context:context
                               label:XStr(@"Global prefs: %@", prefsResponse)
                              object:nil];
     return;
@@ -97,7 +93,7 @@
     XLog(@"[Global] Blocked by app list: %@", appID);
     [NSPushLog
         addToLogIfEnabledForService:@""
-                           bulletin:bulletin
+                           context:context
                               label:XStr(@"Blocked by global app list (%@)",
                                          self.config.globalAppListIsBlacklist
                                              ? @"blacklist"
@@ -106,29 +102,14 @@
     return;
   }
 
-  NSString* title = XStr(@"%@%@", appName,
-                         (bulletin.title && bulletin.title.length > 0
-                              ? XStr(@": %@", bulletin.title)
-                              : @""));
-  NSString* message = @"";
-  if (bulletin.showsSubtitle && bulletin.subtitle &&
-      bulletin.subtitle.length > 0) {
-    message = bulletin.subtitle;
-  }
-  message = XStr(
-      @"%@%@%@", message,
-      (message.length > 0 && bulletin.message && bulletin.message.length > 0
-           ? @"\n"
-           : @""),
-      bulletin.message ? bulletin.message : @"");
-
   // Loop prevention: a forwarded push can itself produce a notification that
   // would get forwarded again. Count how many times this exact bulletin
   // content already appeared in the recent window and only drop it once it
   // repeats enough times (10 of the last 25) to look like a genuine loop, so
   // a legitimate single duplicate isn't mistaken for one.
-  NSString* bulletinContent = XStr(@"%@\n%@\n%@", title, bulletin.subtitle ?: @"",
-                                    bulletin.message ?: @"");
+  NSString* bulletinContent =
+      XStr(@"%@\n%@\n%@", context.displayTitle, context.subtitle ?: @"",
+           context.message ?: @"");
   NSUInteger contentCount = 0;
   for (NSString* recentContent in _recentNotificationContents) {
     if (XEq(bulletinContent, recentContent)) {
@@ -138,7 +119,7 @@
   if (contentCount >= PUSHER_LOOP_PREVENTION_THRESHOLD) {
     XLog(@"Prevented loop");
     [NSPushLog addToLogIfEnabledForService:@""
-                                  bulletin:bulletin
+                                  context:context
                                      label:@"Prevented loop"
                                     object:nil];
     return;
@@ -158,25 +139,14 @@
   }
 
   for (NSString* service in self.config.enabledServiceNames) {
-    [self sendToService:service
-               bulletin:bulletin
-                  appID:appID
-                appName:appName
-                  title:title
-                message:message
-                 isTest:NO];
+    [self sendToService:service context:context];
   }
 }
 
 // Per-service pipeline: look up the service class, then apply app-list / SNS /
 // device-condition filters before building and sending the request.
-- (void)sendToService:(NSString*)service
-             bulletin:(BBBulletin*)bulletin
-                appID:(NSString*)appID
-              appName:(NSString*)appName
-                title:(NSString*)title
-              message:(NSString*)message
-               isTest:(BOOL)isTest {
+- (void)sendToService:(NSString*)service context:(NSPBulletinContext*)context {
+  NSString* appID = context.appID;
   NSPushServiceConfig* serviceConfig = self.config.serviceConfigs[service];
   if (!serviceConfig) {
     return;
@@ -185,39 +155,44 @@
       (Class<NSPPushService>)[NSPushServiceManager serviceClassForName:service];
 
   NSPushServiceConfig* effectiveConfig = serviceConfig;
-  if (!isTest) {
+  if (!context.isTest) {
     NSString* appListResponse =
         [NSPushFilter appListReasonIfAnyWithConfig:serviceConfig appID:appID];
     if (appListResponse) {
       XLog(@"[S:%@] Blocked by app list: %@", service, appID);
       [NSPushLog addToLogIfEnabledForService:service
-                                    bulletin:bulletin
+                                    context:context
                                        label:appListResponse
                                       object:nil];
       return;
     }
 
-    BBSectionInfo* sectionInfo =
-        [self.server _sectionInfoForSectionID:bulletin.sectionID effective:YES];
-    if (!sectionInfo) {
+    // The settings were snapshotted from BBSectionInfo by the adapter; the
+    // global filter above already rejected a bulletin without them, so this is
+    // only a guard for callers that skip it.
+    NSPushNotificationSettings* settings = context.notificationSettings;
+    if (!settings) {
       XLog(@"[S:%@,A:%@] sectionInfo nil", service, appID);
-      [NSPushLog
-          addToLogIfEnabledForService:service
-                             bulletin:bulletin
-                                label:@"sectionInfo is nil, it should not be"
-                               object:nil];
+      NSString* reason = context.notificationSettingsUnavailableReason;
+      if (!reason) {
+        reason = @"sectionInfo is nil, it should not be";
+      }
+      [NSPushLog addToLogIfEnabledForService:service
+                                    context:context
+                                       label:reason
+                                      object:nil];
       return;
     }
     XLog(@"[S:%@,A:%@] Doing SNS", service, appID);
     NSString* snsResponse =
         [NSPushFilter snsReasonIfAnyWithSNS:serviceConfig.sns
-                                sectionInfo:sectionInfo
+                                   settings:settings
                                       isAnd:serviceConfig.snsIsAnd
                             requireANWithOR:serviceConfig.snsRequireANWithOR];
     if (snsResponse) {
       XLog(@"[S:%@,A:%@] SNS said no: %@", service, appID, snsResponse);
       [NSPushLog addToLogIfEnabledForService:service
-                                    bulletin:bulletin
+                                    context:context
                                        label:snsResponse
                                       object:nil];
       return;
@@ -226,14 +201,16 @@
     }
 
     XLog(@"[S:%@,A:%@] Doing Device Conditions", service, appID);
+    NSPDeviceState* deviceState = [NSPBulletinAdapter currentDeviceState];
     NSString* deviceConditionsResponse = [NSPushFilter
         deviceReasonIfAnyWithWhenToPush:(int)serviceConfig.whenToPush
-                            whatNetwork:(int)serviceConfig.whatNetwork];
+                            whatNetwork:(int)serviceConfig.whatNetwork
+                            deviceState:deviceState];
     if (deviceConditionsResponse) {
       XLog(@"[S:%@,A:%@] Device Conditions said no: %@", service, appID,
            deviceConditionsResponse);
       [NSPushLog addToLogIfEnabledForService:service
-                                    bulletin:bulletin
+                                    context:context
                                        label:deviceConditionsResponse
                                       object:nil];
       return;
@@ -247,21 +224,15 @@
   }
 
   // Build and send on a background queue: the filter decision (above) is done
-  // on the main thread where the SpringBoard/BBServer objects live, but
-  // building the payload can do heavy work (decoding/shrinking the attachment
-  // image, generating the icon) that must not stall SpringBoard. Everything
-  // used below is thread-safe: NSPushLog and the request sender's retry map
-  // use @synchronized, NSURLSession and WeChat's token cache are safe to use
-  // from background queues, and bulletin/config are read-only model objects.
+  // on the main thread where the SpringBoard objects live, but building the
+  // payload can do heavy work (decoding/shrinking the attachment image,
+  // generating the icon) that must not stall SpringBoard. Everything used
+  // below is thread-safe: the context and config are read-only value objects,
+  // NSPushLog and the request sender's retry map use @synchronized, and
+  // NSURLSession and WeChat's token cache are safe to use from background
+  // queues.
   dispatch_async(
       dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        NSPBulletinContext* context = [NSPBulletinContext
-            contextWithBulletin:bulletin
-                          appID:appID
-                        appName:appName
-                          title:title
-                        message:message
-                         isTest:isTest];
         // The request may resolve asynchronously (e.g. WeChat access token);
         // send it only once the final request is known.
         [serviceClass
@@ -273,11 +244,11 @@
                                // couldn't fetch an access token); log the
                                // failure and skip the send.
                                XLog(@"[S:%@,A:%@] Failed to build request",
-                                    service, appName);
-                               if (!isTest) {
+                                    service, context.appName);
+                               if (!context.isTest) {
                                  [NSPushLog
                                      addToLogIfEnabledForService:service
-                                                        bulletin:bulletin
+                                                        context:context
                                                            label:
                                                                @"Failed to "
                                                                @"build request"
@@ -291,16 +262,17 @@
                              [[NSPushRequestSender sharedInstance]
                                  sendRequest:request
                                    logString:XStr(@"[S:%@,A:%@]", service,
-                                                  appName)
+                                                  context.appName)
                                      service:service
-                                    bulletin:bulletin];
-                             XLog(@"[S:%@,T:%d,A:%@] Pushed", service, isTest,
-                                  appName);
-                             if (!isTest) {
-                               [NSPushLog addToLogIfEnabledForService:service
-                                                             bulletin:bulletin
-                                                                label:@"Pushed"
-                                                               object:nil];
+                                     context:context];
+                             XLog(@"[S:%@,T:%d,A:%@] Pushed", service,
+                                  context.isTest, context.appName);
+                             if (!context.isTest) {
+                               [NSPushLog
+                                   addToLogIfEnabledForService:service
+                                                      context:context
+                                                         label:@"Pushed"
+                                                        object:nil];
                              }
                            }];
       });

@@ -2,6 +2,7 @@
 
 #import "Core/NSPushService.h"
 #import "Core/NSPusher.h"
+#import "Core/NSPBulletinAdapter.h"
 #import "NSPTestPush.h"
 #import "global.h"
 #import "helpers.h"
@@ -21,13 +22,11 @@ static void pusherPrefsChanged() {
 %group SB
 %hook BBServer
 
-%new
-+ (BBServer*)pusherSharedInstance {
-  return [NSPusher sharedInstance].server;
-}
-
 - (void)_addObserver:(id)arg1 {
-  [NSPusher sharedInstance].server = self;
+  // The BBServer is SpringBoard state; it is handed to the adapter, which is
+  // the only place that resolves SpringBoard objects into the pipeline's value
+  // objects (per-app section info, device state, icons).
+  [NSPBulletinAdapter sharedInstance].server = self;
   %orig;
 }
 
@@ -38,19 +37,8 @@ static void pusherPrefsChanged() {
 
 %new
 - (void)sendToPusherService:(NSString*)service
-                   bulletin:(BBBulletin*)bulletin
-                      appID:(NSString*)appID
-                    appName:(NSString*)appName
-                      title:(NSString*)title
-                    message:(NSString*)message
-                     isTest:(BOOL)isTest {
-  [[NSPusher sharedInstance] sendToService:service
-                                  bulletin:bulletin
-                                     appID:appID
-                                   appName:appName
-                                     title:title
-                                   message:message
-                                    isTest:isTest];
+                    context:(NSPBulletinContext*)context {
+  [[NSPusher sharedInstance] sendToService:service context:context];
 }
 
 %end // %hook BBServer

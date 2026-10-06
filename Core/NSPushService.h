@@ -75,6 +75,13 @@
 // service-specific payload layout.
 + (NSDictionary*)logInfoDictForInfoDict:(NSDictionary*)infoDict;
 
+// Keys in infoDict whose values are large Base64 image data; these are
+// replaced with PUSHER_LOG_IMAGE_DATA_REPLACEMENT in the copy returned by
+// logInfoDictForInfoDict:. Override to match the service's own body layout
+// (e.g. return @[] if the service has no Base64 image fields). Default:
+// icon, image (the shared data dict keys).
++ (NSArray*)logImageDataProperties;
+
 // Whether the service should include the app icon in the shared data dict.
 + (BOOL)shouldIncludeIconForConfig:(NSPushServiceConfig*)config;
 

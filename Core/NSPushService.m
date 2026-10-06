@@ -1,6 +1,5 @@
 #import "NSPushService.h"
 #import "NSPushConstants.h"
-#import "NSPBBServer.h"
 #import "../helpers.h"
 #import "NSPushConfig.h"
 #import "NSPushSupport.h"
@@ -85,30 +84,35 @@ static dispatch_once_t gServiceRegistryToken;
 
 + (NSDictionary*)baseInfoDictForBulletinContext:(NSPBulletinContext*)context
                                          config:(NSPushServiceConfig*)config {
-  BBBulletin* bulletin = context.bulletin;
-
-  NSString* dateStr = [self dateStringForDate:bulletin.date config:config];
+  NSString* dateStr = [self dateStringForDate:context.date config:config];
 
   NSMutableDictionary* data = [@{
     @"deviceName" : UIDevice.currentDevice.name,
     @"appName" : context.appName ?: @"",
-    @"appID" : bulletin.sectionID ?: @"",
-    @"title" : bulletin.title ?: @"",
-    @"subtitle" : bulletin.subtitle ?: @"",
-    @"message" : bulletin.message ?: @"",
+    @"appID" : context.appID ?: @"",
+    @"title" : context.title ?: @"",
+    @"subtitle" : context.subtitle ?: @"",
+    @"message" : context.message ?: @"",
     @"date" : dateStr ?: @""
   } mutableCopy];
 
   if ([self shouldIncludeIconForConfig:config]) {
-    data[@"icon"] = [NSPushImage base64IconDataForBundleID:bulletin.sectionID];
+    // The provider resolves the icon through SpringBoard on demand and may hop
+    // to the main thread; it returns nil when no icon is available, in which
+    // case the field is simply omitted.
+    UIImage* icon =
+        context.iconImageProvider ? context.iconImageProvider() : nil;
+    NSString* iconBase64 = [NSPushImage base64RepresentationForImage:icon];
+    if (iconBase64) {
+      data[@"icon"] = iconBase64;
+    }
   }
 
   if ([self shouldIncludeImageForConfig:config]) {
-    BBAttachmentMetadata* metadata = bulletin.primaryAttachment;
     // Rather than trusting a hard-coded attachment type, try to load the
-    // attachment URL as an image; the metadata.URL is a file URL on disk.
-    if (metadata && metadata.URL) {
-      NSURL* URL = metadata.URL;
+    // attachment URL as an image; it is a file URL on disk.
+    NSURL* URL = context.attachmentURL;
+    if (URL) {
       UIImage* image = [UIImage imageWithContentsOfFile:URL.path];
       if (!image) {
         // Fall back to the raw data in case the URL is not a plain file path.
@@ -166,9 +170,15 @@ static dispatch_once_t gServiceRegistryToken;
   return data;
 }
 
++ (NSArray*)logImageDataProperties {
+  // Default: the shared data dict keys. Subclasses override to match their own
+  // body layout (e.g. return @[] when they have no Base64 image fields).
+  return PUSHER_LOG_IMAGE_DATA_PROPERTIES;
+}
+
 + (NSDictionary*)logInfoDictForInfoDict:(NSDictionary*)infoDict {
   NSMutableDictionary* logInfoDict = [infoDict mutableCopy];
-  for (NSString* prop in PUSHER_LOG_IMAGE_DATA_PROPERTIES) {
+  for (NSString* prop in [self logImageDataProperties]) {
     if (logInfoDict[prop]) {
       logInfoDict[prop] = PUSHER_LOG_IMAGE_DATA_REPLACEMENT;
     }

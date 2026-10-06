@@ -10,6 +10,8 @@
 #import <SpringBoard/SBApplication.h>
 #import <SpringBoard/SBApplicationController.h>
 
+@class NSPBulletinContext;
+
 typedef NS_OPTIONS(NSUInteger, BBActualSectionInfoPushSettings) {
   BBActualSectionInfoPushSettingsBadges = 1 << 3, // was 0
   BBActualSectionInfoPushSettingsSounds = 1 << 4, // was 1
@@ -38,15 +40,12 @@ typedef NS_OPTIONS(NSUInteger, BBActualSectionInfoPushSettings) {
 
 @interface BBServer (Pusher)
 - (BBSectionInfo*)_sectionInfoForSectionID:(id)arg1 effective:(BOOL)arg2;
-+ (BBServer*)pusherSharedInstance;
 - (void)sendBulletinToPusher:(BBBulletin*)bulletin;
+// `context` is the plain NSPBulletinContext value object built by
+// NSPBulletinAdapter (see Tweak.xm / NSPTestPush.xm); the pipeline below this
+// hook does not take BBBulletin.
 - (void)sendToPusherService:(NSString*)service
-                   bulletin:(BBBulletin*)bulletin
-                      appID:(NSString*)appID
-                    appName:(NSString*)appName
-                      title:(NSString*)title
-                    message:(NSString*)message
-                     isTest:(BOOL)isTest;
+                    context:(NSPBulletinContext*)context;
 @end
 
 @interface SBLockScreenManager

@@ -1,5 +1,6 @@
 #import "NSPushLog.h"
 #import "NSPushConstants.h"
+#import "NSPushSupport.h"
 #import "../Shared/NSPushLogStore.h"
 #import "helpers.h"
 
@@ -8,7 +9,7 @@
                   withPrefix:(NSString*)prefix
                 dontTruncate:(BOOL)dontTruncate;
 + (void)addToLogLockedForService:(NSString*)service
-                       bulletin:(BBBulletin*)bulletin
+                       context:(NSPBulletinContext*)context
                           label:(NSString*)label
                          object:(id)object
                    dontTruncate:(BOOL)dontTruncate;
@@ -65,7 +66,7 @@
 }
 
 + (void)addToLogIfEnabledForService:(NSString*)service
-                           bulletin:(BBBulletin*)bulletin
+                           context:(NSPBulletinContext*)context
                               label:(NSString*)label
                              object:(id)object
                        dontTruncate:(BOOL)dontTruncate {
@@ -75,7 +76,7 @@
   // serialized or log entries can be lost.
   @synchronized(NSPushLog.class) {
     [NSPushLog addToLogLockedForService:service
-                               bulletin:bulletin
+                               context:context
                                   label:label
                                  object:object
                            dontTruncate:dontTruncate];
@@ -83,7 +84,7 @@
 }
 
 + (void)addToLogLockedForService:(NSString*)service
-                        bulletin:(BBBulletin*)bulletin
+                        context:(NSPBulletinContext*)context
                            label:(NSString*)label
                           object:(id)object
                     dontTruncate:(BOOL)dontTruncate {
@@ -118,8 +119,8 @@
           ? [(NSArray*)rawLogSections mutableCopy]
           : [NSMutableArray new];
 
-  NSString* currBulletinID = bulletin.bulletinID ?: @"empty_bulletin_id";
-  NSString* currSectionID = bulletin.sectionID ?: @"empty_app_id";
+  NSString* currBulletinID = context.bulletinID ?: @"empty_bulletin_id";
+  NSString* currSectionID = context.appID ?: @"empty_app_id";
   NSMutableDictionary* existingLogSection = nil;
   int replaceIdx = -1;
   for (int i = 0; i < logSections.count; i++) {
@@ -141,7 +142,7 @@
       existingBulletinID = (NSString*)logSection[@"bulletinID"];
     }
     if (existingTimestamp &&
-        [existingTimestamp isEqualToDate:bulletin.date] &&
+        [existingTimestamp isEqualToDate:context.date] &&
         XEq(existingBulletinID, currBulletinID) &&
         XEq(existingSectionID, currSectionID)) {
       existingLogSection = [logSection mutableCopy];
@@ -154,7 +155,7 @@
     existingLogSection = [@{
       @"appID" : currSectionID,
       @"bulletinID" : currBulletinID,
-      @"timestamp" : bulletin.date
+      @"timestamp" : context.date
     } mutableCopy];
     [logSections addObject:existingLogSection];
   }
@@ -167,7 +168,7 @@
   existingLogSection[@"logs"] = logs;
 
   if (logs.count == 0) {
-    [logs addObject:XStr(@"Processing %@", bulletin.sectionID)];
+    [logs addObject:XStr(@"Processing %@", context.appID)];
   }
 
   NSString* logItem = nil;
@@ -198,11 +199,11 @@
 }
 
 + (void)addToLogIfEnabledForService:(NSString*)service
-                           bulletin:(BBBulletin*)bulletin
+                           context:(NSPBulletinContext*)context
                               label:(NSString*)label
                              object:(id)object {
   [NSPushLog addToLogIfEnabledForService:service
-                                bulletin:bulletin
+                                context:context
                                    label:label
                                   object:object
                             dontTruncate:NO];

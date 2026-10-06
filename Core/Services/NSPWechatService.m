@@ -61,7 +61,9 @@
     @"msgtype" : @"text",
     @"agentid" : @(agentIDValue),
     @"text" : @{
-      @"content" : XStr(@"%@\n%@", context.title ?: @"", context.message ?: @"")
+      @"content" :
+          XStr(@"%@\n%@", context.displayTitle ?: @"",
+               context.displayMessage ?: @"")
     },
     @"safe" : @0
   };

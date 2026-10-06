@@ -34,8 +34,8 @@
   NSString* firstDevice = [deviceIDs firstObject];
   NSMutableDictionary* infoDict = [@{
     @"type" : @"note",
-    @"title" : context.title ?: @"",
-    @"body" : context.message ?: @""
+    @"title" : context.displayTitle ?: @"",
+    @"body" : context.displayMessage ?: @""
   } mutableCopy];
   if (firstDevice) {
     infoDict[@"device_iden"] = firstDevice;

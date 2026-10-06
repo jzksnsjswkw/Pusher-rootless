@@ -1,4 +1,5 @@
 #import "NSPTestPush.h"
+#import "Core/NSPBulletinAdapter.h"
 
 @implementation NSPTestPush
 
@@ -40,7 +41,7 @@
 - (NSDictionary*)handleMessageNamed:(NSString*)name
                        withUserInfo:(NSDictionary*)userInfo {
   NSString* service = userInfo[@"service"];
-  BBServer* bbServer = [BBServer pusherSharedInstance];
+  BBServer* bbServer = [NSPBulletinAdapter sharedInstance].server;
   if (service == nil || ![service isKindOfClass:NSString.class] ||
       service.length < 1 || bbServer == nil ||
       ![bbServer isKindOfClass:BBServer.class]) {
@@ -76,14 +77,16 @@
     [bulletin setPrimaryAttachment:attachment];
   }
 
-  [bbServer
-      sendToPusherService:service
-                 bulletin:bulletin
-                    appID:bulletin.sectionID
-                  appName:PUSHER_TEST_NOTIFICATION_APP_NAME
-                    title:bulletin.title
-                  message:XStr(@"%@\n%@", bulletin.subtitle, bulletin.message)
-                   isTest:YES];
+  // Synthetic bulletin: a test push has no real app to derive a name or a
+  // "App: title" heading from, so the display strings are supplied directly.
+  NSPBulletinContext* context = [NSPBulletinAdapter
+      contextForBulletin:bulletin
+                  isTest:YES
+                 appName:PUSHER_TEST_NOTIFICATION_APP_NAME
+            displayTitle:bulletin.title
+          displayMessage:XStr(@"%@\n%@", bulletin.subtitle, bulletin.message)];
+
+  [bbServer sendToPusherService:service context:context];
 
   return @{@"success" : @YES};
 }

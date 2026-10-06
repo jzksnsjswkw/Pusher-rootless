@@ -33,8 +33,8 @@
   NSMutableDictionary* infoDict = [@{
     @"token" : XStrDefault(config.rawPrefs[@"token"], @""),
     @"user" : XStrDefault(config.rawPrefs[@"user"], @""),
-    @"title" : context.title ?: @"",
-    @"message" : context.message ?: @"",
+    @"title" : context.displayTitle ?: @"",
+    @"message" : context.displayMessage ?: @"",
     @"device" : [deviceIDs componentsJoinedByString:@","]
   } mutableCopy];
 
