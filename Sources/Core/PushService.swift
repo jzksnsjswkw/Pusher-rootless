@@ -1,0 +1,183 @@
+import Foundation
+import UIKit
+
+/// One push destination (Bark, Pushover, a custom webhook, …).
+///
+/// A service is a `enum`-like namespace of static functions rather than an
+/// instantiable object: it has no state of its own, and its only inputs are a
+/// ``BulletinContext`` and a ``ServiceConfig``. Conforming types are registered
+/// in ``ServiceRegistry`` and receive the whole send pipeline for free.
+///
+/// Only the two `request(...)` members are required. Everything else has a
+/// default implementation that matches the majority of services, so a simple
+/// service is a handful of lines.
+public protocol PushService {
+    /// Registry key. Must match the service name used in prefs
+    /// (e.g. `"Pushover"`).
+    static var serviceName: String { get }
+
+    /// The service's request URL, built from the configured options.
+    ///
+    /// `eventName` substitutes `REPLACE_EVENT_NAME` (IFTTT), `dbName`
+    /// substitutes `REPLACE_DB_NAME` (Pusher Receiver), and `serverURL` selects
+    /// a custom endpoint (Bark). The returned string may still contain
+    /// `REPLACE_KEY`, which is substituted with the configured key at send
+    /// time. Defaults to the empty string for custom / unknown services.
+    static func url(eventName: String, dbName: String, serverURL: String) -> String
+
+    /// Builds the request synchronously.
+    ///
+    /// The default synchronous path is enough for every service except those
+    /// that must first obtain a credential (Wechat's access token); those
+    /// override ``request(context:config:completion:)`` instead.
+    static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest?
+
+    /// Builds the request, possibly asynchronously.
+    ///
+    /// The completion receives `nil` when the request cannot be built (for
+    /// instance a credential fetch failed); the caller then logs the failure
+    /// and skips the send rather than firing a request that is guaranteed to
+    /// fail server-side.
+    static func request(
+        context: BulletinContext,
+        config: ServiceConfig,
+        completion: @escaping (PushRequest?) -> Void
+    )
+
+    // MARK: Options with defaults
+
+    /// Service-specific normalized prefs keys (beyond the shared template).
+    static func extraPrefs(_ servicePrefs: Prefs) -> [String: Any]?
+
+    /// Service-specific keys for one custom-app override.
+    static func extraCustomAppPrefs(_ appPrefs: Prefs) -> [String: Any]?
+
+    /// Whether the app icon belongs in the shared data dict.
+    static func shouldIncludeIcon(config: ServiceConfig) -> Bool
+
+    /// Whether the bulletin's attachment belongs in the shared data dict.
+    static func shouldIncludeImage(config: ServiceConfig) -> Bool
+
+    /// Keys in the payload holding large Base64 image data; these are replaced
+    /// with a placeholder in the log copy. Override with `[]` for a service
+    /// with no Base64 image fields.
+    static var logImageDataProperties: [String] { get }
+}
+
+// MARK: - Defaults
+
+public extension PushService {
+    static func extraPrefs(_ servicePrefs: Prefs) -> [String: Any]? { nil }
+    static func extraCustomAppPrefs(_ appPrefs: Prefs) -> [String: Any]? { nil }
+    static func shouldIncludeIcon(config: ServiceConfig) -> Bool { false }
+    static func shouldIncludeImage(config: ServiceConfig) -> Bool { false }
+    static var logImageDataProperties: [String] { Pusher.logImageDataProperties }
+
+    static func request(
+        context: BulletinContext,
+        config: ServiceConfig,
+        completion: @escaping (PushRequest?) -> Void
+    ) {
+        completion(request(context: context, config: config))
+    }
+
+    /// The configured URL with `REPLACE_KEY` substituted.
+    ///
+    /// Used by services whose URL follows the standard template pattern
+    /// (Bark, Feishu, IFTTT, Pushbullet, …).
+    static func replacedKeyURL(config: ServiceConfig) -> String {
+        config.raw.string(PrefKey.url, default: "")
+            .replacingOccurrences(of: replaceKeyToken, with: config.raw.string(PrefKey.key, default: ""))
+    }
+
+    /// The shared data dict used by IFTTT / Pusher Receiver / custom services:
+    /// `deviceName` / `appName` / `appID` / `title` / `subtitle` / `message` /
+    /// `date`, plus an optional icon and attachment image.
+    static func baseInfoDict(context: BulletinContext, config: ServiceConfig) -> [String: Any] {
+        var data: [String: Any] = [
+            "deviceName": UIDevice.current.name,
+            "appName": context.appName,
+            "appID": context.appID,
+            "title": context.title ?? "",
+            "subtitle": context.subtitle ?? "",
+            "message": context.message ?? "",
+            "date": dateString(context.date, config: config),
+        ]
+
+        if shouldIncludeIcon(config: config) {
+            // The provider resolves the icon through SpringBoard on demand and
+            // may hop to the main thread; it returns nil when no icon is
+            // available, in which case the field is omitted.
+            if let base64 = PushImage.base64(context.iconImage) {
+                data["icon"] = base64
+            }
+        }
+
+        if shouldIncludeImage(config: config), let url = context.attachmentURL,
+           let image = loadImage(at: url) {
+            data["imageShrinkFactor"] = config.raw[PrefKey.imageShrinkFactor]
+            data["image"] = shrinkIfNeeded(image, config: config)
+        } else if shouldIncludeImage(config: config), context.attachmentURL != nil {
+            // Tell the receiver there *is* an image even when it could not be
+            // decoded, so a missing attachment is distinguishable from none.
+            data["image"] = true
+        }
+
+        return data
+    }
+
+    /// The bulletin's attachment as an image.
+    ///
+    /// Rather than trusting a hard-coded attachment type, the URL is loaded as
+    /// an image; it is a file URL on disk, with a raw-data fallback.
+    static func loadImage(at url: URL) -> UIImage? {
+        if let image = UIImage(contentsOfFile: url.path) { return image }
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return UIImage(data: data)
+    }
+
+    /// Shrinks an attachment to the configured maximum dimensions.
+    static func shrinkIfNeeded(_ image: UIImage, config: ServiceConfig) -> UIImage {
+        let maxWidth = config.raw.double(PrefKey.imageMaxWidth)
+        let maxHeight = config.raw.double(PrefKey.imageMaxHeight)
+
+        var widthFactor: CGFloat = 0
+        var heightFactor: CGFloat = 0
+        if maxWidth > 0, image.size.width > maxWidth {
+            widthFactor = image.size.width / maxWidth
+        }
+        if maxHeight > 0, image.size.height > maxHeight {
+            heightFactor = image.size.height / maxHeight
+        }
+        // Shrink by the larger of the two factors when either applies.
+        let factor = max(widthFactor, heightFactor)
+        return factor > 0 ? PushImage.shrunk(image, by: factor) : image
+    }
+
+    /// The `date` field, formatted with the service's configured format.
+    static func dateString(_ date: Date, config: ServiceConfig) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = config.raw.string(PrefKey.dateFormat, default: "MMM d, h:mm a")
+        return formatter.string(from: date)
+    }
+
+    /// A copy of the payload that is safe to log: large Base64 image fields are
+    /// replaced with a placeholder.
+    ///
+    /// The `imageShrinkFactor` retry hint is dropped too — it is an internal
+    /// field, never part of the real body.
+    static func logInfoDict(_ infoDict: [String: Any]) -> [String: Any] {
+        var sanitized = infoDict
+        for property in logImageDataProperties where sanitized[property] != nil {
+            sanitized[property] = Pusher.logImageDataReplacement
+        }
+        sanitized.removeValue(forKey: "imageShrinkFactor")
+        return sanitized
+    }
+
+    /// Attaches the sanitized payload to a request.
+    static func withLogBody(_ request: PushRequest, _ infoDict: [String: Any]) -> PushRequest {
+        request.logInfoDict = logInfoDict(infoDict)
+        return request
+    }
+}

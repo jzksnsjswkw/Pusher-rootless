@@ -26,9 +26,22 @@ THEOS_PACKAGE_SCHEME=rootless make clean do
 THEOS_PACKAGE_SCHEME=roothide make clean do
 ```
 
-构建时 `scripts/generate_builtin_services.sh` 会自动扫描
-`Core/Services/NSP*Service.h` 里的 `PUSHER_SERVICE_*` 宏，重新生成
-`Generated/BuiltinServices.generated.h`，所以**新增服务不需要手工维护 import 列表和名单**。
+代码全部为 Swift（仅 `Sources/Hooks/*.xm` 是 Logos 钩子，因为
+`%hook` / `%orig` / `%init` 没有 Swift 等价物）。新增内置服务只需两步：写好
+类型，然后在 `Sources/Core/ServiceRegistry.swift` 的 `builtInServices` 里加一行。
+
+目录结构：
+
+```
+Sources/
+├── Core/                 推送流水线（与 UI 无关）
+│   ├── Services/         各推送服务（Bark / 飞书 / 企业微信 / …）
+│   └── Runtime/          Objective-C 运行时桥接（私有 API、方法 hook）
+├── Shared/               偏好存储与日志
+├── Hooks/                Logos 钩子 + 桥接头文件
+├── Preferences/          设置界面（含 Resources/ 下的 plist 与图片）
+└── Flipswitch/           控制中心开关
+```
 
 ## 文档
 
