@@ -70,6 +70,9 @@ public enum CustomService: PushService {
             PrefKey.method: "POST",
             PrefKey.bodyType: "json",
             PrefKey.authenticationMethod: 0,
+            // The payload's `date` field is formatted with this, and
+            // `Custom.plist` offers a field for it.
+            PrefKey.dateFormat: "MMM d, h:mm a",
             PrefKey.includeIcon: false,
             PrefKey.includeImage: true,
             PrefKey.imageMaxWidth: Pusher.defaultMaxWidth,

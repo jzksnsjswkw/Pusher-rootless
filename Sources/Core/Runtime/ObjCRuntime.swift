@@ -59,6 +59,17 @@ public enum Runtime {
         return unsafeBitCast(imp, to: Fn.self)(receiver, NSSelectorFromString(selector))
     }
 
+    /// `[receiver selector:arg]` where the argument and return value are scalars.
+    @discardableResult
+    public static func sendBool(_ receiver: AnyObject?, _ selector: String, _ arg: Bool) -> Bool {
+        guard let receiver,
+              let method = class_getInstanceMethod(object_getClass(receiver), NSSelectorFromString(selector))
+        else { return false }
+        typealias Fn = @convention(c) (AnyObject, Selector, Bool) -> Void
+        unsafeBitCast(method_getImplementation(method), to: Fn.self)(receiver, NSSelectorFromString(selector), arg)
+        return true
+    }
+
     /// `[receiver selector]` where the return value is an integer.
     public static func sendInt(_ receiver: AnyObject?, _ selector: String) -> Int {
         guard let receiver, let imp = implementation(of: receiver, selector) else { return 0 }

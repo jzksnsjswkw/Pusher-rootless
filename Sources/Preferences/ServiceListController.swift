@@ -106,9 +106,9 @@ public final class ServiceListController: PlainViewController {
     /// The picker lists the descriptors, not the configured instances, so adding
     /// a second Pushover account is the same gesture as adding the first.
     @objc private func addService() {
-        let picker = ServiceTypePickerController { [weak self] type in
+        let picker = ServiceTypePickerController { [weak self] type, name in
             guard let self else { return }
-            ServiceInstanceStore.add(type: type)
+            ServiceInstanceStore.add(type: type, name: name)
             self.reloadData()
 
             // Open the new instance immediately: a freshly added service exists
@@ -129,6 +129,11 @@ public final class ServiceListController: PlainViewController {
 
     // MARK: - Row actions
 
+    /// Renames one instance, refusing a name another instance already has.
+    ///
+    /// A rename is the same question as the name field when adding, so it goes
+    /// through the same check; otherwise the list could still end up with two
+    /// rows that read alike.
     private func rename(_ instance: ServiceInstance) {
         let alert = UIAlertController(
             title: "Rename Service".localized, message: nil, preferredStyle: .alert
@@ -142,12 +147,32 @@ public final class ServiceListController: PlainViewController {
             guard let self else { return }
             let name = alert.textFields?.first?.text?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard !name.isEmpty else { return }
+
+            guard ServiceInstanceStore.isNameAvailable(name, excluding: instance.id) else {
+                self.showNameTaken(name)
+                return
+            }
 
             ServiceInstanceStore.update(id: instance.id) { $0[PrefKey.instanceName] = name }
+            // The page's title view cached the old name.
             self.loadedControllers.removeValue(forKey: instance.id)
             self.reloadData()
         })
+        present(alert, animated: true)
+    }
+
+    /// Re-presents the rename prompt after a rejected name, so the user can
+    /// correct it without starting over.
+    private func showNameTaken(_ name: String) {
+        let alert = UIAlertController(
+            title: "Name Already Used".localized,
+            message: String(
+                format: "Another service is already named \"%@\". Choose a different name.".localized,
+                name
+            ),
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Ok".localized, style: .default))
         present(alert, animated: true)
     }
 
@@ -305,34 +330,88 @@ extension ServiceListController: UITableViewDataSource, UITableViewDelegate {
 
 /// The artwork for a service type.
 enum ServiceIcon {
+    /// The bundle resource name for a service type's artwork.
+    ///
+    /// A specifier's `icon` property takes the *name*, which the framework then
+    /// loads from the page's bundle — so the name is what the rows are given.
+    ///
+    /// The generic webhook has no artwork of its own (there is one shared image
+    /// for every user-defined service), and the framework does not fall back
+    /// when a named resource is missing, so its rows name the shared image.
+    static func resourceName(forType type: String) -> String {
+        guard ServiceRegistry.isBuiltIn(type) else { return "DefaultService" }
+        return "BuiltInService_\(type)"
+    }
+
     /// The icon for a service type, falling back to the shared default so a
     /// service without its own artwork still shows one.
     static func image(forType type: String) -> UIImage? {
-        let name = ServiceRegistry.isBuiltIn(type)
-            ? "BuiltInService_\(type)"
-            : "CustomService_\(type)"
-        return UIImage.pusher(named: name) ?? UIImage.pusher(named: "DefaultService")
+        UIImage.pusher(named: resourceName(forType: type))
+            ?? UIImage.pusher(named: "DefaultService")
     }
 }
 
 // MARK: - Type picker
 
-/// The "what do you want to add" list.
+/// The "what do you want to add" page: the instance's name, then the service
+/// type to create it as.
 ///
-/// Lists descriptors rather than instances, so it reads the same whether the
-/// user already has three Bark servers or none.
+/// The name is entered here rather than defaulted after the fact because it is
+/// the only thing distinguishing two instances of one service in the list: two
+/// rows reading "Pushover" would be indistinguishable, and a name chosen
+/// afterwards is easy to forget to change. It is therefore required, and a
+/// duplicate is refused.
+///
+/// The page is a `PSListController` so the name row is the framework's own
+/// editing cell — the same cell the service pages use. That is not just a
+/// shortcut for the look: an editable cell's text field is created while the
+/// framework lays the row out, so a cell constructed outside a real table (as a
+/// hand-built row would be) never gets one at all.
 @objc(NSPushServiceTypePickerController)
-public final class ServiceTypePickerController: UITableViewController {
-    private let onPick: (String) -> Void
+public final class ServiceTypePickerController: ListController {
+    private let onPick: (String, String) -> Void
     private let descriptors = ServiceRegistry.addableServices
+    /// Names already in use, case-folded for comparison.
+    private let takenNames: Set<String>
 
-    public init(onPick: @escaping (String) -> Void) {
+    private static let nameGroupIdentifier = "nameGroup"
+    private static let nameCellIdentifier = "nameCell"
+    /// The identifier assigned to a type row, prefixed so it cannot collide with
+    /// the name cell's.
+    private static func typeIdentifier(_ type: String) -> String { "type:\(type)" }
+    private static let typePropertyKey = "serviceType"
+    /// The row's image, passed to the cell directly.
+    private static let iconImagePropertyKey = "iconImage"
+    /// The cell class the framework renders the row with (`PSCellClassKey`).
+    private static let cellClassPropertyKey = "cellClass"
+
+    /// What the user has typed so far.
+    private var enteredName = ""
+    /// Why the current name cannot be used, shown under the field.
+    private var nameError: String?
+    private var builtSpecifiers: NSMutableArray?
+    /// Fields already given a change listener, so a recycled row is not wired up
+    /// twice.
+    private var observedFields: Set<ObjectIdentifier> = []
+
+    /// - Parameter onPick: called with the chosen service type and the name the
+    ///   user entered (already trimmed).
+    public init(onPick: @escaping (String, String) -> Void) {
         self.onPick = onPick
-        super.init(style: .insetGrouped)
+        self.takenNames = Set(ServiceInstanceStore.instances().map { Self.normalized($0.name) })
+        super.init(nibName: nil, bundle: nil)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    /// A name reduced to the form two names are compared in: trimmed, and
+    /// case-folded so "bark" cannot sit beside "Bark".
+    private static func normalized(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    // MARK: - Lifecycle
 
     public override func viewDidLoad() {
         super.viewDidLoad()
@@ -340,36 +419,260 @@ public final class ServiceTypePickerController: UITableViewController {
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .cancel, target: self, action: #selector(cancel)
         )
+        buildSpecifiers()
+        installSpecifiers(builtSpecifiers ?? NSMutableArray())
+    }
+
+    public override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Focus the required field so the cursor starts where the user has to
+        // act first. Deferred to here because the cell's field does not exist
+        // until the row has been laid out.
+        observeNameField()
+        nameField?.becomeFirstResponder()
+    }
+
+    public override func rebuildSpecifiers() -> NSMutableArray? {
+        buildSpecifiers()
+        return builtSpecifiers
     }
 
     @objc private func cancel() {
         dismiss(animated: true)
     }
 
-    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        descriptors.count
+    // MARK: - Specifiers
+
+    private func buildSpecifiers() {
+        var all: [PSSpecifier] = []
+
+        // Group specifiers are what the framework derives its sections from, so
+        // the layout is expressed here rather than by overriding the table's
+        // section/row counts (which the framework's own flat array would
+        // contradict).
+        let nameGroup = PSSpecifier.emptyGroup()
+        nameGroup?.identifier = Self.nameGroupIdentifier
+        nameGroup?.setProperty(nameError, forKey: "footerText")
+
+        let nameSpecifier = PSSpecifier.preferenceSpecifierNamed(
+            "Name".localized,
+            target: self,
+            set: #selector(setName(_:specifier:)),
+            get: #selector(readName(_:)),
+            detail: nil,
+            cell: .editTextCell,
+            edit: nil
+        )
+        nameSpecifier?.identifier = Self.nameCellIdentifier
+        nameSpecifier?.setProperty(true, forKey: "enabled")
+        nameSpecifier?.setProperty(true, forKey: "noAutoCorrect")
+
+        all.append(contentsOf: [nameGroup, nameSpecifier].compactMap { $0 })
+
+        let typesGroup = PSSpecifier.groupSpecifier(withName: "Service Type".localized)
+        if let typesGroup { all.append(typesGroup) }
+
+        for descriptor in descriptors {
+            let specifier = PSSpecifier.preferenceSpecifierNamed(
+                Localization.serviceDisplayName(descriptor.displayName),
+                target: nil, set: nil, get: nil,
+                detail: nil, cell: .linkCell, edit: nil
+            )
+            specifier?.identifier = Self.typeIdentifier(descriptor.name)
+            // The image travels on the specifier rather than as an `icon` name:
+            // that property is resolved through the framework's lazy icon
+            // loading, which a row without a bundle-backed icon set never
+            // triggers. Handing the cell the image directly is unconditional.
+            specifier?.setProperty(
+                ServiceIcon.image(forType: descriptor.name), forKey: Self.iconImagePropertyKey
+            )
+            // The row does not navigate, so it needs a detail controller to be
+            // treated as a live link, and a cell class that draws no chevron.
+            specifier?.detailControllerClass = ServiceTypeDetailPlaceholder.self
+            specifier?.setProperty(ServiceTypeCell.self, forKey: Self.cellClassPropertyKey)
+            specifier?.setProperty(descriptor.name, forKey: Self.typePropertyKey)
+            if let specifier { all.append(specifier) }
+        }
+
+        builtSpecifiers = NSMutableArray(array: all)
     }
 
+    /// The name row's text field, once the framework has laid the row out.
+    ///
+    /// `PSTableCell` keeps the field in its subviews and exposes no accessor, so
+    /// the first descendant that is a `UITextField` is the one.
+    private var nameField: UITextField? {
+        guard let specifier = specifier(forID: Self.nameCellIdentifier),
+              let indexPath = indexPath(for: specifier),
+              let cell = table?.cellForRow(at: indexPath)
+        else { return nil }
+        return Self.firstTextField(in: cell)
+    }
+
+    /// The name as it stands *right now*.
+    ///
+    /// The field's own text is authoritative rather than ``enteredName``: the
+    /// framework's editing cell calls its setter when editing ends, so between
+    /// keystrokes and that moment the setter's value is stale. Reading the field
+    /// is what makes a type row tapped straight after typing create the name the
+    /// user just entered.
+    private func currentName() -> String {
+        (nameField?.text ?? enteredName)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Watches the field so the duplicate warning appears as the user types,
+    /// rather than only when the framework calls the setter.
+    private func observeNameField() {
+        guard let field = nameField, !observedFields.contains(ObjectIdentifier(field)) else { return }
+        observedFields.insert(ObjectIdentifier(field))
+        field.addTarget(self, action: #selector(nameFieldChanged(_:)), for: .editingChanged)
+    }
+
+    @objc private func nameFieldChanged(_ field: UITextField) {
+        enteredName = field.text ?? ""
+        setError(duplicateError(for: currentName()))
+    }
+
+    private static func firstTextField(in view: UIView) -> UITextField? {
+        for subview in view.subviews {
+            if let field = subview as? UITextField { return field }
+            if let found = firstTextField(in: subview) { return found }
+        }
+        return nil
+    }
+
+    /// Re-attaches the name field's listener when its row is (re)displayed.
+    ///
+    /// A section reload — which a changing validation message triggers — builds a
+    /// new cell and a new field, which the one-off wiring in `viewDidAppear`
+    /// would not reach.
     public override func tableView(
         _ tableView: UITableView,
-        cellForRowAt indexPath: IndexPath
-    ) -> UITableViewCell {
-        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
-        let descriptor = descriptors[indexPath.row]
-
-        cell.textLabel?.text = Localization.serviceDisplayName(descriptor.displayName)
-        cell.imageView?.image = ServiceIcon.image(forType: descriptor.name)
-        cell.accessoryType = .none
-        return cell
+        willDisplay cell: UITableViewCell,
+        forRowAt indexPath: IndexPath
+    ) {
+        guard let specifier = specifier(at: indexPath),
+              specifier.identifier == Self.nameCellIdentifier
+        else { return }
+        observeNameField()
     }
+
+    // MARK: - Selection
 
     public override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        let descriptor = descriptors[indexPath.row]
-        // Dismiss first so the presenting page can push the new instance's
-        // settings without fighting the modal transition.
-        dismiss(animated: true) { [onPick] in
-            onPick(descriptor.name)
+
+        guard let specifier = specifier(at: indexPath),
+              let type = specifier.property(forKey: Self.typePropertyKey) as? String
+        else { return }
+
+        // The name is settled before the type is chosen, so a rejected tap
+        // returns the cursor to the field rather than leaving the user to work
+        // out why nothing happened.
+        let name = currentName()
+        guard let error = validationError(for: name) else {
+            // Dismiss first so the presenting page can push the new instance's
+            // settings without fighting the modal transition.
+            dismiss(animated: true) { [onPick] in
+                onPick(type, name)
+            }
+            return
+        }
+        setError(error)
+        nameField?.becomeFirstResponder()
+    }
+
+    // MARK: - Name value
+
+    /// The cell's getter.
+    ///
+    /// Returns the field's live text, untrimmed. Both parts matter: the
+    /// framework re-reads this whenever it refreshes the row (including when the
+    /// field regains focus), so returning a stored value would overwrite what the
+    /// user is typing with the last value the setter saw; and returning a trimmed
+    /// value would eat a trailing space mid-word.
+    @objc public func readName(_ specifier: PSSpecifier) -> Any? {
+        nameField?.text ?? enteredName
+    }
+
+    /// The cell's setter.
+    ///
+    /// The framework's editing cell calls this when editing ends, so it is not a
+    /// per-keystroke signal; ``observeNameField()`` covers the live case.
+    @objc public func setName(_ value: Any?, specifier: PSSpecifier) {
+        enteredName = (value as? String) ?? ""
+        setError(duplicateError(for: currentName()))
+    }
+
+    /// Updates the footer under the name field.
+    ///
+    /// A group specifier's `footerText` is read when the section is laid out, so
+    /// the section is reloaded for a newly shown or newly hidden message to take
+    /// effect.
+    private func setError(_ message: String?) {
+        guard nameError != message else { return }
+        nameError = message
+
+        guard let group = specifier(forID: Self.nameGroupIdentifier),
+              let indexPath = indexPath(for: group)
+        else { return }
+        group.setProperty(message, forKey: "footerText")
+        table?.reloadSections(IndexSet(integer: indexPath.section), with: .none)
+    }
+
+    // MARK: - Validation
+
+    /// Why a name cannot be used, or `nil` when it can.
+    private func validationError(for name: String) -> String? {
+        guard !name.isEmpty else { return "Enter a name for this service.".localized }
+        return duplicateError(for: name)
+    }
+
+    private func duplicateError(for name: String) -> String? {
+        guard takenNames.contains(Self.normalized(name)) else { return nil }
+        return String(
+            format: "Another service is already named \"%@\". Choose a different name.".localized,
+            name
+        )
+    }
+}
+
+// MARK: - Type row cell
+
+/// The cell a service type is listed with.
+///
+/// It is the framework's own `PSLinkCell` — so the row keeps the standard
+/// Settings metrics and icon placement — with two differences, both because this
+/// row does not navigate:
+///
+///  * the disclosure chevron is hidden, since there is no page to point at;
+///  * the icon is taken from the specifier as an image, because the framework's
+///    own `icon` handling resolves a *name* through lazy icon loading that a row
+///    without bundle-backed artwork never triggers.
+///
+/// The class reaches the framework through the specifier's `cellClass` property;
+/// a subclass of a cell is never picked up on its own, because the class is
+/// chosen from the specifier.
+@objc(NSPushServiceTypeCell)
+final class ServiceTypeCell: PSTableCell {
+    override func refreshCellContents(with specifier: PSSpecifier) {
+        super.refreshCellContents(with: specifier)
+
+        cellEnabled = true
+        // `forceHideDisclosureIndicator` is the framework's own switch for a
+        // tappable row that does not navigate. It is absent from the vendored
+        // header, so it goes through the runtime like this project's other
+        // unexposed members.
+        Runtime.sendBool(self, "setForceHideDisclosureIndicator:", true)
+
+        if let image = specifier.property(forKey: "iconImage") as? UIImage {
+            icon = image
         }
     }
 }
+
+/// Never instantiated. It exists so a type row has a `detailControllerClass`,
+/// which is what tells the framework the row is a live link rather than a
+/// disabled one.
+final class ServiceTypeDetailPlaceholder: PSViewController {}

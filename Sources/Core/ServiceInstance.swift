@@ -95,17 +95,21 @@ public enum ServiceInstanceStore {
         PrefsStore.setValue(instances, forKey: PrefKey.services, notify: notify)
     }
 
-    /// Appends a new instance of `type` and returns it.
+    /// Appends a new instance of `type` under `name` and returns it.
     ///
     /// The instance starts with the descriptor's defaults, so it is immediately
     /// usable (and immediately visible in the list) rather than a blank entry.
+    ///
+    /// The caller supplies the name: it is what tells two instances of one
+    /// service apart, so it is chosen before the instance exists (see
+    /// `ServiceTypePickerController`) rather than defaulted here.
     @discardableResult
-    public static func add(type: String, name: String? = nil) -> ServiceInstance {
+    public static func add(type: String, name: String) -> ServiceInstance {
         let descriptor = ServiceRegistry.service(named: type)
         let instance = ServiceInstance(
             id: ServiceInstance.makeID(),
             type: type,
-            name: name ?? uniqueName(for: descriptor),
+            name: name,
             isEnabled: true,
             config: Prefs(descriptor.defaultPrefs())
         )
@@ -115,15 +119,14 @@ public enum ServiceInstanceStore {
         return instance
     }
 
-    /// A display name that is not already taken, so two instances of one type
-    /// read as "Bark" and "Bark 2" instead of two identical rows.
-    public static func uniqueName(for descriptor: ServiceDescriptor) -> String {
-        let existing = Set(instances().map(\.name))
-        let base = descriptor.displayName
-        guard existing.contains(base) else { return base }
-        var index = 2
-        while existing.contains("\(base) \(index)") { index += 1 }
-        return "\(base) \(index)"
+    /// Whether `name` is free, compared the way the UI compares names: trimmed
+    /// and case-folded, ignoring the instance being renamed.
+    public static func isNameAvailable(_ name: String, excluding id: String? = nil) -> Bool {
+        let candidate = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !candidate.isEmpty else { return false }
+        return !instances().contains { instance in
+            instance.id != id && instance.name.lowercased() == candidate
+        }
     }
 
     /// Serializes one instance.

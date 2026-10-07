@@ -30,10 +30,14 @@ public final class ServiceSpecifierBuilders: NSObject {
         builders[service] = builder
     }
 
-    /// Registers every built-in service that has extra cells.
+    /// Registers every service that has extra cells.
     ///
-    /// A service without an entry (Feishu, for example) contributes nothing.
+    /// The webhook is registered too: it has no specifier plist of its own
+    /// beyond the endpoint fields, so its icon/image options live here with the
+    /// other services'. A service without an entry (Feishu, for example)
+    /// contributes nothing.
     private func registerAll() {
+        register(builder: Self.webhook, forService: CustomService.serviceName)
         register(builder: Self.pushover, forService: PushoverService.serviceName)
         register(builder: Self.pushbullet, forService: PushbulletService.serviceName)
         register(builder: Self.ifttt, forService: IFTTTService.serviceName)
@@ -45,6 +49,38 @@ public final class ServiceSpecifierBuilders: NSObject {
     /// The cells to append to `service`'s page.
     func builders(for service: String, appID: String?) -> [PSSpecifier] {
         builders[service]?(appID) ?? []
+    }
+
+    // MARK: - Custom webhook
+
+    /// The icon/image options for a user-defined service.
+    ///
+    /// A webhook's *endpoint* is described by `Custom.plist`; what belongs here
+    /// is the payload options, which are the same shape as every other
+    /// service's. The image sizing is service-wide (a per-app override inherits
+    /// it), and the decoded image is what makes the payload large enough for
+    /// those numbers to matter.
+    private static func webhook(appID: String?) -> [PSSpecifier] {
+        let service = CustomService.serviceName
+        var specifiers: [PSSpecifier] = [
+            toggle("Include Icon", service: service, appID: appID,
+                   key: PrefKey.includeIcon, defaultValue: false),
+            toggle("Include Image", service: service, appID: appID,
+                   key: PrefKey.includeImage, defaultValue: true),
+        ]
+
+        if appID == nil {
+            specifiers.append(contentsOf: [
+                decimalField("Maximum Image Width (pixels)", service: service,
+                             key: PrefKey.imageMaxWidth, defaultValue: Pusher.defaultMaxWidth),
+                decimalField("Maximum Image Height (pixels)", service: service,
+                             key: PrefKey.imageMaxHeight, defaultValue: Pusher.defaultMaxHeight),
+                decimalField("Image Shrink Factor Upon Retry", service: service,
+                             key: PrefKey.imageShrinkFactor,
+                             defaultValue: Pusher.defaultShrinkFactor),
+            ])
+        }
+        return specifiers
     }
 
     // MARK: - Pushover

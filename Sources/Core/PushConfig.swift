@@ -200,14 +200,18 @@ public enum ConfigLoader {
         raw[PrefKey.devices] = stored.enabledDictionaries(PrefKey.devices).map(\.raw)
         raw[PrefKey.sounds] = stored.enabledIdentifiers(PrefKey.sounds)
 
-        // The request URL is derived by the descriptor, so an instance that
-        // changes a credential also changes where it posts.
+        // A built-in service derives its endpoint from its settings, so an
+        // instance that changes a credential also changes where it posts. A
+        // webhook is the opposite: its URL *is* a setting the user typed, and
+        // its descriptor returns nothing — so the stored value is kept.
         let eventName = stored.string(PrefKey.eventName) ?? ""
         let dbName = (stored.string(PrefKey.dbName) ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let serverURL = stored.string(PrefKey.serverURL) ?? ""
         let serviceURL = descriptor.url(eventName, dbName, serverURL)
-        raw[PrefKey.url] = serviceURL
+        if !serviceURL.isEmpty {
+            raw[PrefKey.url] = serviceURL
+        }
 
         raw[PrefKey.customApps] = normalizedCustomApps(
             from: stored, descriptor: descriptor, isWebhook: instance.isCustom,
@@ -265,10 +269,13 @@ public enum ConfigLoader {
             override[PrefKey.devices] = appPrefs.enabledDictionaries(PrefKey.devices).map(\.raw)
             override[PrefKey.sounds] = appPrefs.enabledIdentifiers(PrefKey.sounds)
 
+            // Only a service that derives its endpoint gets a per-app URL; for a
+            // webhook there is nothing to derive and the instance-wide URL is
+            // already the app's.
             let appEventName = appPrefs.string(PrefKey.eventName) ?? eventName
             let appServerURL = appPrefs.string(PrefKey.serverURL) ?? serverURL
             let appURL = descriptor.url(appEventName, dbName, appServerURL)
-            if appURL != serviceURL {
+            if !appURL.isEmpty, appURL != serviceURL {
                 override[PrefKey.url] = appURL
             }
 

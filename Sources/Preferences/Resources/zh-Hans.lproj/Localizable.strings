@@ -170,7 +170,6 @@
 "Group:" = "Group：";
 "IsArchive:" = "IsArchive：";
 "TTL:" = "TTL：";
-"URL:" = "URL：";
 "Action:" = "Action：";
 "ID:" = "ID：";
 "Delete:" = "Delete：";
@@ -203,4 +202,12 @@ URL：点击推送时打开的链接
 Action：alert 打开应用时显示操作弹窗，none 点击无动作
 ID：相同 ID 会更新对应推送
 Delete：填 1 删除对应 ID 的推送（需同时填写 ID）";
-
+/* Service instance management */
+"Add Service" = "添加服务";
+"Service Type" = "服务类型";
+"Name" = "名称";
+"Enter a name for this service." = "请为这个服务输入名称。";
+"Another service is already named \"%@\". Choose a different name." = "已有另一个服务叫“%@”，请换一个名称。";
+"Rename Service" = "重命名服务";
+"Name Already Used" = "名称已被使用";
+"No services yet. Tap + to add one." = "还没有服务。点击右上角的 + 添加。";
