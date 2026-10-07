@@ -16,13 +16,15 @@ public protocol PushService {
     /// (e.g. `"Pushover"`).
     static var serviceName: String { get }
 
-    /// The service's request URL, built from the configured options.
+    /// The service's request URL, as far as it can be built from the service's
+    /// own options.
     ///
-    /// `eventName` substitutes `REPLACE_EVENT_NAME` (IFTTT), `dbName`
-    /// substitutes `REPLACE_DB_NAME` (Pusher Receiver), and `serverURL` selects
-    /// a custom endpoint (Bark). The returned string may still contain
-    /// `REPLACE_KEY`, which is substituted with the configured key at send
-    /// time. Defaults to the empty string for custom / unknown services.
+    /// This is used only to tell per-app overrides apart (an override whose URL
+    /// differs from the service-wide one carries its own). The *final* push URL
+    /// is assembled by the service's `request(context:config:)` from
+    /// ``ServiceConfig/raw``, because credentials that belong in the URL (Bark's
+    /// key, IFTTT's event name and key, Wechat's access token) are resolved
+    /// there. Defaults to the empty string for custom / unknown services.
     static func url(eventName: String, dbName: String, serverURL: String) -> String
 
     /// Builds the request synchronously.
@@ -79,15 +81,6 @@ public extension PushService {
         completion: @escaping (PushRequest?) -> Void
     ) {
         completion(request(context: context, config: config))
-    }
-
-    /// The configured URL with `REPLACE_KEY` substituted.
-    ///
-    /// Used by services whose URL follows the standard template pattern
-    /// (Bark, Feishu, IFTTT, Pushbullet, …).
-    static func replacedKeyURL(config: ServiceConfig) -> String {
-        config.raw.string(PrefKey.url, default: "")
-            .replacingOccurrences(of: replaceKeyToken, with: config.raw.string(PrefKey.key, default: ""))
     }
 
     /// The shared data dict used by IFTTT / Pusher Receiver / custom services:

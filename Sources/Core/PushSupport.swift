@@ -50,17 +50,18 @@ public struct NotificationSettings: Equatable {
 
 /// The device conditions the "when to push" / "what network" filter checks.
 ///
-/// These used to be read straight from `SBLockScreenManager` / `SBWiFiManager`
+/// These used to be read straight from `SBLockScreenManager`
 /// inside the filter; now the adapter snapshots them so the filter is a pure
 /// function of its inputs.
 public struct DeviceState {
     public var isLocked = false
-    /// `nil` when the device is not associated with a Wi-Fi network.
-    public var wifiName: String?
+    /// Whether the device currently has a non-cellular connection.
+    ///
+    /// Determined by ``NetworkReachability`` rather than by reading a
+    /// SpringBoard Wi-Fi property, which no longer exists on iOS 16.
+    public var isOnWiFi = false
 
     public init() {}
-
-    public var isOnWiFi: Bool { wifiName != nil }
 }
 
 /// One bulletin reduced to plain values: the pipeline's data model.

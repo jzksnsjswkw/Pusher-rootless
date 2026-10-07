@@ -43,6 +43,9 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
         // delegate is what lets it also show while Settings is frontmost.
         UNUserNotificationCenter.current().delegate = self
 
+        // Through the setter so the identity check in the getter works.
+        self.specifiers = buildSpecifiers()
+
         guard let icon else { return }
         let label = UILabel()
         label.text = Localization.serviceDisplayName(service)
@@ -69,28 +72,27 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
 
     // MARK: - Specifiers
 
-    public override var specifiers: NSMutableArray! {
-        get { buildSpecifiers() }
-        set { super.specifiers = newValue }
-    }
-
-    /// Builds the page's cells once; later reads return the same array so the
-    /// table's indices stay valid.
+    /// Builds the page's cells.
+    ///
+    /// Called from `viewDidLoad` and, through the `specifiers` getter, whenever
+    /// the framework has dropped the array (backgrounding the app does this).
+    /// Rebuilding here rather than once at load time is what keeps the page
+    /// showing *this* service's settings after a background round trip: the
+    /// getter re-derives everything from `service`, so a discarded array can
+    /// never be replaced by another page's cells.
     private func buildSpecifiers() -> NSMutableArray {
-        guard super.specifiers == nil else { return super.specifiers }
-
         var all: [PSSpecifier] = []
         if isCustomService {
             // A custom service page reuses the shared Custom.plist, so its value
             // cells have to be routed individually.
-            let loaded = loadSpecifiers(fromPlistName: "Custom", target: self) as? [PSSpecifier] ?? []
+            let loaded = loadSpecifiers(named: "Custom") as? [PSSpecifier] ?? []
             for specifier in loaded {
                 specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.service)
                 all.append(specifier)
             }
             SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .customService(service: service))
         } else {
-            let loaded = loadSpecifiers(fromPlistName: service, target: self) as? [PSSpecifier] ?? []
+            let loaded = loadSpecifiers(named: service) as? [PSSpecifier] ?? []
             all = loaded
             SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .builtIn(service: service))
         }
@@ -107,8 +109,12 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
         }
 
         all.append(contentsOf: testPushSection())
-        super.specifiers = NSMutableArray(array: all)
-        return super.specifiers
+        return NSMutableArray(array: all)
+    }
+
+    /// The cells, rebuilt whenever the framework has discarded the array.
+    public override func rebuildSpecifiers() -> NSMutableArray? {
+        buildSpecifiers()
     }
 
     /// Appends "(N total)" to the app-list and app-customization links.

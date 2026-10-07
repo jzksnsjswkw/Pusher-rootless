@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Every input is a plain value type or a config snapshot, so these are pure
 /// decisions. The ObjC version reached into `BBServer` / `BBSectionInfo` /
-/// `SBLockScreenManager` / `SBWiFiManager` from here; all of that now happens
+/// `SBLockScreenManager` from here; all of that now happens
 /// once, in ``BulletinAdapter``.
 ///
 /// Each method returns the reason to block, or `nil` to let the bulletin

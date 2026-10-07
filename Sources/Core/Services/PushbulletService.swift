@@ -3,10 +3,10 @@ import Foundation
 /// Pushbullet, authenticated with an account access token.
 public enum PushbulletService: PushService {
     public static let serviceName = "Pushbullet"
-    static let urlTemplate = "https://api.pushbullet.com/v2/pushes"
+    static let pushURL = "https://api.pushbullet.com/v2/pushes"
 
     public static func url(eventName: String, dbName: String, serverURL: String) -> String {
-        urlTemplate
+        pushURL
     }
 
     public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
@@ -21,7 +21,7 @@ public enum PushbulletService: PushService {
 
         return withLogBody(
             PushRequest(
-                urlString: replacedKeyURL(config: config),
+                urlString: pushURL,
                 headers: ["Access-Token": config.raw.string(PrefKey.token, default: "")],
                 infoDict: infoDict
             ),

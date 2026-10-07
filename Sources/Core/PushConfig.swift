@@ -177,7 +177,14 @@ public enum ConfigLoader {
             ? (prefs.dict(PrefKey.customServices)?.dict(name) ?? Prefs())
             : (prefs.dict(PrefKey.builtInServices)?.dict(name) ?? Prefs())
 
-        var servicePrefs: [String: Any] = [:]
+        // Start from everything the user stored, then overwrite the keys that
+        // need normalizing. Copying first matters for a custom service: its
+        // fields are user-defined (`includeIcon`, `includeImage`, `url`, any
+        // future option), so a white-listed copy would silently drop settings
+        // this type does not happen to name — a missing `includeIcon` is not a
+        // default, it is a lost preference.
+        var servicePrefs: [String: Any] = source.raw
+
         servicePrefs[PrefKey.appList] = source.stringArray(PrefKey.appList)
         servicePrefs[PrefKey.appListIsBlacklist] = source.bool(PrefKey.appListIsBlacklist, default: true)
         servicePrefs[PrefKey.whenToPush] = source.resolvedInt(
@@ -208,8 +215,9 @@ public enum ConfigLoader {
         let service = ServiceRegistry.service(named: name)
 
         if isCustom {
-            // Custom services are fully user-defined, so every field they read
-            // is defaulted here rather than at each call site.
+            // Custom services are fully user-defined; these are only the fields
+            // that need a concrete value rather than a default at each call
+            // site.
             servicePrefs[PrefKey.isCustomService] = true
             servicePrefs[PrefKey.url] = source.string(PrefKey.url) ?? ""
             servicePrefs[PrefKey.key] = source.string(PrefKey.key) ?? ""
@@ -241,10 +249,13 @@ public enum ConfigLoader {
                 from: source, service: service, isCustom: false,
                 serviceURL: serviceURL, eventName: eventName,
                 dbName: dbName, serverURL: serverURL
-            )        }
+            )
+        }
 
         // Service-specific keys (Bark's parameters, Wechat's credentials,
-        // IFTTT's toggles, …).
+        // IFTTT's toggles, …). For a custom service this is where the
+        // user-defined fields (`includeIcon`, `includeImage`, …) are read
+        // through; see `CustomService.extraPrefs`.
         if let extra = service.extraPrefs(source) {
             servicePrefs.merge(extra) { _, new in new }
         }
@@ -311,7 +322,21 @@ public enum ConfigLoader {
             if appPrefs[PrefKey.enabled] != nil, !appPrefs.bool(PrefKey.enabled, default: true) {
                 continue
             }
-            var override: [String: Any] = [:]
+
+            // The two service kinds store their overrides differently in the
+            // original, and the difference is load-bearing:
+            //
+            // - A custom service's override is user-defined in the same way the
+            //   service is, so it is copied wholesale and then normalized.
+            // - A built-in service's override holds exactly the fields that
+            //   service reads, rebuilt from the app's own values, so it is a
+            //   known set rather than a copy.
+            var override: [String: Any]
+            if isCustom {
+                override = appPrefs.raw
+            } else {
+                override = [:]
+            }
             override[PrefKey.devices] = appPrefs.enabledDictionaries(PrefKey.devices).map(\.raw)
             override[PrefKey.sounds] = appPrefs.enabledIdentifiers(PrefKey.sounds)
 

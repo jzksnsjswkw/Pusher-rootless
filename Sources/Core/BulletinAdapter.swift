@@ -1,32 +1,24 @@
 import Foundation
 import UIKit
 
-/// Interfaces onto SpringBoard objects resolved at runtime.
+/// SpringBoard objects are reached through ``Runtime`` message sends, not by
+/// casting to an `@objc` protocol.
 ///
-/// These are `@objc` protocols rather than imported classes: naming a
-/// SpringBoard class from Swift would create a link-time dependency on
-/// `SpringBoard.framework`, which is absent from Preferences.app. Casting a
-/// `Runtime`-resolved object to one of these protocols is safe — the cast only
-/// succeeds when the object really implements the selectors.
-@objc private protocol SBApplicationController {
-    func application(withBundleIdentifier id: String) -> SBApplication?
-}
-
-@objc private protocol SBApplication {
-    var displayName: String? { get }
-}
-
-@objc private protocol SBLockScreenManager {
-    var isUILocked: Bool { get }
-}
-
-@objc private protocol SBWiFiManager {
-    var currentNetworkName: String? { get }
-}
-
-@objc private protocol SBIconModel {
-    func expectedIconForDisplayIdentifier(_ identifier: String) -> AnyObject?
-}
+/// Casting a `Runtime`-resolved object to an ad-hoc `@objc` protocol does **not**
+/// work, and the reason is easy to miss: `as?` on a class instance tests
+/// `conforms(to:)`, which is the class's *declared* conformance list. The
+/// SpringBoard classes were never compiled against a protocol declared here, so
+/// they do not list it — every cast fails even though the object implements
+/// every selector. Measured on-device with an equivalent protocol/class pair:
+///
+/// ```
+/// cast(never declared conformance)     = FAILED
+/// cast(after class_addProtocol)        = OK
+/// runtime message send                 = OK
+/// ```
+///
+/// Calling through the runtime needs no conformance and is what this file does.
+/// Names are only used to resolve a class, never to declare one.
 
 /// `SBIconImageInfo` comes from the bridging header; see the note there for why
 /// it has to be a C struct.
@@ -151,6 +143,17 @@ public final class BulletinAdapter: NSObject {
         // runs later, on the background queue that builds the payload.
         context.iconImageProvider = { Self.iconImage(forBundleID: appID) }
 
+        // A test push skips this lookup, and must keep skipping it.
+        //
+        // `-[BBServer _sectionInfoForSectionID:effective:]` asserts that it is
+        // called on the main queue, and a test push arrives on the
+        // `CPDistributedMessagingCenter` reply thread instead — calling it there
+        // trips the libdispatch assertion and SpringBoard is killed with
+        // `SIGTRAP`. The look-up is also pointless for a test: the synthetic
+        // bulletin has no real app behind it, and the SNS/device filters that
+        // consume these settings are skipped for a test push anyway.
+        guard !context.isTest else { return context }
+
         guard let server = shared.server else {
             context.notificationSettingsUnavailableReason = "Server is nil, it shouldn't be"
             return context
@@ -186,14 +189,20 @@ public final class BulletinAdapter: NSObject {
     // MARK: - Device state
 
     /// Current device conditions, snapshotted so the filter stays pure.
+    ///
+    /// Wi-Fi is determined through SystemConfiguration rather than through
+    /// SpringBoard. The original implementation read
+    /// `SBWiFiManager.currentNetworkName`, but that class no longer exists on
+    /// iOS 16 — `NSClassFromString(@"SBWiFiManager")` returns nil, so the old
+    /// check could never report Wi-Fi and "Wi-Fi Only" silently never matched.
+    /// The registrar's own reachability answer is what the system itself uses:
+    /// reachable over a non-cellular interface *is* being on Wi-Fi.
     public static func currentDeviceState() -> DeviceState {
         var state = DeviceState()
-        if let manager = Runtime.sharedInstance("SBLockScreenManager") as? SBLockScreenManager {
-            state.isLocked = manager.isUILocked
+        if let manager = Runtime.sharedInstance("SBLockScreenManager") {
+            state.isLocked = Runtime.sendBool(manager, "isUILocked")
         }
-        if let manager = Runtime.sharedInstance("SBWiFiManager") as? SBWiFiManager {
-            state.wifiName = manager.currentNetworkName
-        }
+        state.isOnWiFi = NetworkReachability.isOnWiFi()
         return state
     }
 
@@ -202,9 +211,10 @@ public final class BulletinAdapter: NSObject {
     /// The app's display name, or `"Unknown App: <id>"` when SpringBoard does
     /// not know it.
     public static func appName(forBundleID appID: String) -> String {
-        if let controller = Runtime.sharedInstance("SBApplicationController") as? SBApplicationController,
-           let app = controller.application(withBundleIdentifier: appID),
-           let name = app.displayName, !name.isEmpty {
+        if let controller = Runtime.sharedInstance("SBApplicationController"),
+           let app = Runtime.send(controller, "applicationWithBundleIdentifier:", appID as NSString),
+           let name = Runtime.send(app, "displayName") as? String,
+           !name.isEmpty {
             return name
         }
         return "Unknown App: \(appID)"
@@ -241,8 +251,8 @@ public final class BulletinAdapter: NSObject {
         }
 
         guard let iconController = Runtime.sharedInstance("SBIconController"),
-              let model = Runtime.send(iconController, "model") as? SBIconModel,
-              let icon = model.expectedIconForDisplayIdentifier(bundleID)
+              let model = Runtime.send(iconController, "model"),
+              let icon = Runtime.send(model, "expectedIconForDisplayIdentifier:", bundleID as NSString)
         else { return nil }
 
         // iOS 13+ takes a struct; the earlier signature takes a variant int.

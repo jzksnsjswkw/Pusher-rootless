@@ -108,21 +108,23 @@ public enum SpecifierRouting {
 
 extension PSSpecifier {
     /// `PSSpecifier` declares `SEL setter;` as an `@public` ivar. Swift does not
-    /// import ObjC ivars, so it is written through the runtime.
+    /// import ObjC ivars, and a selector cannot travel through an `AnyObject`
+    /// parameter (ARC would retain it as an object), so the bits are stored
+    /// straight into the ivar's memory.
     func setSetter(_ selector: String) {
-        Runtime.setIvar(self, "setter", unsafeBitCast(NSSelectorFromString(selector), to: AnyObject.self))
+        Runtime.setSelectorIvar(self, "setter", NSSelectorFromString(selector))
     }
 
     /// See ``setSetter(_:)``.
     func setGetter(_ selector: String) {
-        Runtime.setIvar(self, "getter", unsafeBitCast(NSSelectorFromString(selector), to: AnyObject.self))
+        Runtime.setSelectorIvar(self, "getter", NSSelectorFromString(selector))
     }
 
     /// The currently installed setter, for tests and debugging.
-    var setterSelector: Selector? { Runtime.getIvar(self, "setter", as: Selector.self) }
+    var setterSelector: Selector? { Runtime.getSelectorIvar(self, "setter") }
 
     /// The currently installed getter.
-    var getterSelector: Selector? { Runtime.getIvar(self, "getter", as: Selector.self) }
+    var getterSelector: Selector? { Runtime.getSelectorIvar(self, "getter") }
 
     /// `propertyForKey:` with a `String` result already narrowed.
     func string(_ key: String) -> String? { property(forKey: key) as? String }

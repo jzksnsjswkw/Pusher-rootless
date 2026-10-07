@@ -20,8 +20,11 @@ open class ListController: PSListController, TintableController {
     }
 
     /// Recolors the page and reloads so the icons pick up the new color.
+    ///
+    /// Callers use this name; the actual tinting lives in the
+    /// ``TintableController/applyActiveTint()`` protocol extension.
     open func tintToPusherColor() {
-        (self as TintableController).tintToPusherColor()
+        (self as TintableController).applyActiveTint()
         table?.reloadData()
     }
 
@@ -46,6 +49,115 @@ open class ListController: PSListController, TintableController {
     }
 
     // MARK: - Specifier loading
+
+    /// Whether this page has already installed its cells.
+    ///
+    /// A flag rather than a check on `specifiers == nil`: the framework reads
+    /// that property during setup and may leave a non-nil *empty* array behind,
+    /// which would make a nil check skip loading forever and leave the page
+    /// blank.
+    private var hasLoadedSpecifiers = false
+
+    /// Rebuilds the page's cells when the framework has discarded them.
+    ///
+    /// The Preferences framework clears a list controller's specifier array on
+    /// some events (backgrounding the app among them), then asks the controller
+    /// for its cells again at `viewWillAppear`. A page that cannot answer has
+    /// nothing to show - the reported "all settings vanish after switching
+    /// away and back". The original implementation answered through an
+    /// overridden `specifiers` getter that reloaded the plist; this hook is the
+    /// same idea, expressed as an overridable method the getter calls.
+    ///
+    /// Return the fresh cells, or `nil` when the page builds its own (those
+    /// pages override this to return `nil` and rebuild themselves instead).
+    open func rebuildSpecifiers() -> NSMutableArray? {
+        guard let plistName = specifierPlistName else { return nil }
+        return loadSpecifiers(named: plistName)
+    }
+
+    /// The plist this page's cells come from, or `nil` when the page builds its
+    /// cells in code.
+    open var specifierPlistName: String? { nil }
+
+    /// The array this page last installed, compared by identity.
+    ///
+    /// Count is not a valid condition: while the app is backgrounded the
+    /// framework re-derives `_specifiers` from the plist on its own, producing a
+    /// *plausible-looking* array (same plist cells, no programmatically appended
+    /// ones) whose count is nonzero. Only object identity distinguishes "the
+    /// array I built" from "the array the framework substituted".
+    private weak var installedSpecifiers: NSMutableArray?
+
+    /// The page's cells, reloading them when the framework has substituted its
+    /// own plist-derived array for the one this page built.
+    ///
+    /// This is the property the framework reads, so it is where the array has
+    /// to be rebuilt - the equivalent of the original ObjC version, whose
+    /// `specifiers` getter re-derived everything from `_service`.
+    public override var specifiers: NSMutableArray! {
+        get {
+            let current = super.specifiers
+            if current !== installedSpecifiers, let rebuilt = rebuildSpecifiers() {
+                super.specifiers = rebuilt
+            }
+            return super.specifiers
+        }
+        set {
+            super.specifiers = newValue
+            installedSpecifiers = newValue
+        }
+    }
+
+    /// Loads a specifier plist from this bundle once, then installs the cells.
+    ///
+    /// Kept for pages whose cells only exist after side effects have run (a
+    /// service page appends its test-push section, for example); those pages
+    /// call this from `viewDidLoad`. The getter above covers the discarded-
+    /// array case for every page that declares a `specifierPlistName`.
+    func loadSpecifiersOnce(named plistName: String) {
+        guard !hasLoadedSpecifiers else { return }
+        hasLoadedSpecifiers = true
+        guard let loaded = loadSpecifiers(named: plistName) else { return }
+        installSpecifiers(loaded)
+    }
+
+    /// Loads several plists and installs them as one list.
+    func loadSpecifiersOnce(named plistNames: [String]) {
+        guard !hasLoadedSpecifiers else { return }
+        hasLoadedSpecifiers = true
+        let loaded = plistNames.compactMap { loadSpecifiers(named: $0) as? [PSSpecifier] }
+            .flatMap { $0 }
+        installSpecifiers(NSMutableArray(array: loaded))
+    }
+
+    /// Whether the cells have been installed, so a subclass can decide whether
+    /// to append its own.
+    var hasInstalledSpecifiers: Bool { hasLoadedSpecifiers }
+
+    /// Installs already-built cells (for a page that does not load a plist).
+    func installSpecifiers(_ specifiers: NSArray) {
+        hasLoadedSpecifiers = true
+        // Through the setter, which records the array's identity so the getter
+        // can tell it apart from the framework's own plist reload.
+        self.specifiers = NSMutableArray(array: specifiers as! [Any])
+    }
+
+    /// Loads a specifier plist from this bundle.
+    ///
+    /// The bundle is passed explicitly rather than relying on
+    /// `PSListController.bundle`: that property is assigned by the Preferences
+    /// framework during its own `viewDidLoad`, so a page that reads its plist
+    /// before then would resolve it to nil and come up empty. `Bundle(for:)`
+    /// returns the bundle this class was compiled into, which is the installed
+    /// `.bundle` directory.
+    open func loadSpecifiers(named plistName: String) -> NSMutableArray? {
+        let loaded = loadSpecifiers(
+            fromPlistName: plistName, target: self, bundle: Bundle(for: type(of: self))
+        )
+        guard let loaded else { return nil }
+        localize(loaded as! [Any])
+        return loaded
+    }
 
     open override func loadSpecifiers(fromPlistName plistName: String, target: PSListController?) -> NSMutableArray? {
         let specifiers = super.loadSpecifiers(fromPlistName: plistName, target: target)

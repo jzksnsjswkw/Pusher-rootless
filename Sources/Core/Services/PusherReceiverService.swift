@@ -3,24 +3,34 @@ import Foundation
 /// Pusher Receiver: the companion Firefox/Chrome extension's REST endpoint on
 /// restdb.io. Sends the shared data dict (including the attachment image when
 /// enabled), authenticated with an `x-apikey` header.
+///
+/// The push URL is `https://{dbName}.restdb.io/rest/notifications`; the database
+/// name comes from the service configuration.
 public enum PusherReceiverService: PushService {
     public static let serviceName = "Pusher Receiver"
-    static let urlTemplate = "https://REPLACE_DB_NAME.restdb.io/rest/notifications"
+    static let urlBase = "https://"
+    static let urlTail = ".restdb.io/rest/notifications"
 
+    /// The URL template, with the database-name segment still missing.
     public static func url(eventName: String, dbName: String, serverURL: String) -> String {
-        urlTemplate.replacingOccurrences(of: "REPLACE_DB_NAME", with: dbName)
+        urlBase + dbName + urlTail
     }
 
     public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
         let infoDict = baseInfoDict(context: context, config: config)
         return withLogBody(
             PushRequest(
-                urlString: replacedKeyURL(config: config),
+                urlString: pushURL(config: config),
                 headers: ["x-apikey": config.raw.string(PrefKey.key, default: "")],
                 infoDict: infoDict
             ),
             infoDict
         )
+    }
+
+    private static func pushURL(config: ServiceConfig) -> String {
+        let dbName = config.raw.string(PrefKey.dbName, default: "")
+        return urlBase + dbName + urlTail
     }
 
     public static func extraPrefs(_ servicePrefs: Prefs) -> [String: Any]? {

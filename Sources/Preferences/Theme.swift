@@ -42,13 +42,18 @@ public final class Theme: NSObject {
 /// Implemented as a protocol rather than a superclass: the colored pages are
 /// `PSListController` and `PSViewController` subclasses, which cannot both
 /// inherit from a common Swift base.
+///
+/// The requirement is deliberately *not* named `tintToPusherColor()`: that name
+/// belongs to `ListController`, which calls this method. Sharing one name would
+/// make `self as TintableController` dispatch straight back into the calling
+/// implementation and recurse until the stack overflowed.
 public protocol TintableController: UIViewController {
     /// Recolors the navigation bar and the controls inside this controller.
-    func tintToPusherColor()
+    func applyActiveTint()
 }
 
 public extension TintableController {
-    func tintToPusherColor() {
+    func applyActiveTint() {
         let color = Theme.activeTintColor
 
         // On iPhone the list controller is wrapped in an extra navigation

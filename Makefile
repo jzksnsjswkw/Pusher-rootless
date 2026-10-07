@@ -34,7 +34,7 @@ Pusher_FILES = $(shell find Sources/Core Sources/Shared -name '*.swift') \
                Sources/Hooks/TestPush.xm
 Pusher_SWIFT_BRIDGING_HEADER = Sources/Hooks/Pusher-Bridging-Header.h
 Pusher_CFLAGS = -fobjc-arc
-Pusher_FRAMEWORKS = UIKit Foundation
+Pusher_FRAMEWORKS = UIKit Foundation SystemConfiguration
 Pusher_PRIVATE_FRAMEWORKS = AppSupport BulletinBoard
 
 include $(THEOS_MAKE_PATH)/tweak.mk

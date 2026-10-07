@@ -2,10 +2,9 @@ import Foundation
 
 /// A user-defined webhook.
 ///
-/// Custom services are configured entirely from the UI: a URL template, an
-/// optional key with a choice of how to send it (query, header or body), an
-/// HTTP method and a body encoding. Any service name that is not a built-in one
-/// resolves here.
+/// Custom services are configured entirely from the UI: a URL, an optional key
+/// with a choice of how to send it (query, header or body), an HTTP method and a
+/// body encoding. Any service name that is not a built-in one resolves here.
 public enum CustomService: PushService {
     /// Custom services are keyed by their user-chosen name in prefs, so there
     /// is no single registry name.
@@ -17,7 +16,7 @@ public enum CustomService: PushService {
 
     /// How the configured key is transmitted.
     private enum AuthenticationMethod: Int {
-        /// Substituted into the URL template (`REPLACE_KEY`).
+        /// The key is already part of the URL the user entered.
         case url = 0
         /// Sent as an HTTP header named by `paramName` (default `Access-Token`).
         case header = 1
@@ -44,7 +43,7 @@ public enum CustomService: PushService {
         }
 
         let request = PushRequest(
-            urlString: replacedKeyURL(config: config),
+            urlString: config.raw.string(PrefKey.url, default: ""),
             headers: headers,
             infoDict: infoDict,
             method: config.raw.string(PrefKey.method, default: "POST")

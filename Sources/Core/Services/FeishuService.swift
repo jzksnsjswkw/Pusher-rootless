@@ -2,14 +2,14 @@ import Foundation
 
 /// Feishu (Lark) group bot webhook.
 ///
-/// Feishu's payload is a single text message, so the bulletin's parts are
-/// joined into one block rather than using the shared data dict.
+/// The push URL is `https://open.feishu.cn/open-apis/bot/v2/hook/{key}`; the
+/// key is the webhook token from the bot's configuration page.
 public enum FeishuService: PushService {
     public static let serviceName = "Feishu"
-    static let urlTemplate = "https://open.feishu.cn/open-apis/bot/v2/hook/REPLACE_KEY"
+    static let urlBase = "https://open.feishu.cn/open-apis/bot/v2/hook/"
 
     public static func url(eventName: String, dbName: String, serverURL: String) -> String {
-        urlTemplate
+        urlBase
     }
 
     public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
@@ -23,8 +23,9 @@ public enum FeishuService: PushService {
             "msg_type": "text",
             "content": ["text": parts.joined(separator: "\r\n")],
         ]
+        let urlString = urlBase + config.raw.string(PrefKey.key, default: "")
         return withLogBody(
-            PushRequest(urlString: replacedKeyURL(config: config), infoDict: infoDict),
+            PushRequest(urlString: urlString, infoDict: infoDict),
             infoDict
         )
     }

@@ -11,6 +11,11 @@
 
 // The Preferences framework's specifier/controller classes.
 #import <Preferences/PSListController.h>
+
+// NOTE: the vendored `PSViewController.h` declares `initForContentSize:` on the
+// base class, but on-device only `PSListController` implements it. That is
+// handled in Swift, by `PlainViewController.init(forContentSize:)`; see the
+// comment there.
 #import <Preferences/PSViewController.h>
 #import <Preferences/PSSpecifier.h>
 #import <Preferences/PSTableCell.h>

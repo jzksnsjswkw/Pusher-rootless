@@ -19,18 +19,14 @@ public final class SNSListController: ListController {
     private var isServiceMode = false
     private var synchronizeButton: PSSpecifier?
 
-    public override var specifiers: NSMutableArray! {
-        get {
-            if super.specifiers == nil {
-                super.specifiers = loadSpecifiers(fromPlistName: "SNS", target: self)
-            }
-            return super.specifiers
-        }
-        set { super.specifiers = newValue }
-    }
+    public override var specifierPlistName: String? { "SNS" }
 
     public override func viewDidLoad() {
         super.viewDidLoad()
+
+        // Installed here, not lazily: the framework reads the `_specifiers` ivar
+        // directly rather than calling the `specifiers` getter.
+        loadSpecifiersOnce(named: "SNS")
 
         // The "service" property is a string for a service page and absent for
         // the global page, which is what distinguishes the two.
@@ -164,16 +160,24 @@ public final class SNSListController: ListController {
 /// The global settings page: the app list, plus the default device conditions.
 @objc(NSPGlobalSettingsListController)
 public final class GlobalSettingsListController: ListController {
-    public override var specifiers: NSMutableArray! {
-        get { buildSpecifiers() }
-        set { super.specifiers = newValue }
+    public override func viewDidLoad() {
+        super.viewDidLoad()
+        buildSpecifiers()
     }
 
-    private func buildSpecifiers() -> NSMutableArray {
-        guard super.specifiers == nil else { return super.specifiers }
+    /// The page's cells are two plists combined; see `rebuildSpecifiers()`.
+    private var builtSpecifiers: NSMutableArray?
 
-        let appList = (loadSpecifiers(fromPlistName: "GlobalAppList", target: self) as? [PSSpecifier]) ?? []
-        let conditions = (loadSpecifiers(fromPlistName: "GlobalAndServices", target: self) as? [PSSpecifier]) ?? []
+    /// Rebuilds both plists into one array when the framework discards them.
+    public override func rebuildSpecifiers() -> NSMutableArray? {
+        builtSpecifiers
+    }
+
+    private func buildSpecifiers() {
+        guard !hasInstalledSpecifiers else { return }
+
+        let appList = (loadSpecifiers(named: "GlobalAppList") as? [PSSpecifier]) ?? []
+        let conditions = (loadSpecifiers(named: "GlobalAndServices") as? [PSSpecifier]) ?? []
 
         // The app-list cells are stored nested under `Global[appList]`, while
         // the condition cells (`WhenToPush` / `WhatNetwork`) *are* the global
@@ -193,7 +197,7 @@ public final class GlobalSettingsListController: ListController {
             break
         }
 
-        super.specifiers = NSMutableArray(array: all)
-        return super.specifiers
+        builtSpecifiers = NSMutableArray(array: all)
+        installSpecifiers(builtSpecifiers!)
     }
 }

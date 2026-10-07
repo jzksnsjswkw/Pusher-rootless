@@ -8,7 +8,7 @@ import UIKit
 /// one place that writes `enabled` and the section ordering. Both are only
 /// persisted when editing ends, so a half-finished drag is never saved.
 @objc(NSPServiceListController)
-public final class ServiceListController: ListController {
+public final class ServiceListController: PlainViewController, UITableViewDataSource, UITableViewDelegate {
     private enum Section: Int, CaseIterable {
         case enabled
         case disabled
@@ -363,19 +363,19 @@ public final class ServiceListController: ListController {
 // MARK: - Table data source
 
 extension ServiceListController {
-    public override func numberOfSections(in tableView: UITableView) -> Int {
+    public func numberOfSections(in tableView: UITableView) -> Int {
         Section.allCases.count
     }
 
-    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         sectionItems[Section(rawValue: section) ?? .enabled]?.count ?? 0
     }
 
-    public override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+    public func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
         (Section(rawValue: section) ?? .enabled).title.localized
     }
 
-    public override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: Self.cellIdentifier, for: indexPath)
         guard let service = service(at: indexPath) else { return cell }
 
@@ -385,9 +385,9 @@ extension ServiceListController {
         return cell
     }
 
-    public override func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool { true }
+    public func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool { true }
 
-    public override func tableView(
+    public func tableView(
         _ tableView: UITableView,
         moveRowAt sourceIndexPath: IndexPath,
         to destinationIndexPath: IndexPath
@@ -403,7 +403,7 @@ extension ServiceListController {
         sectionItems[to]?.insert(service, at: destinationIndexPath.row)
     }
 
-    public override func tableView(
+    public func tableView(
         _ tableView: UITableView,
         editingStyleForRowAt indexPath: IndexPath
     ) -> UITableViewCell.EditingStyle {
@@ -411,7 +411,7 @@ extension ServiceListController {
         return isCustom(service) ? .delete : .none
     }
 
-    public override func tableView(
+    public func tableView(
         _ tableView: UITableView,
         commit editingStyle: UITableViewCell.EditingStyle,
         forRowAt indexPath: IndexPath
@@ -428,7 +428,7 @@ extension ServiceListController {
     ///
     /// Without this a row would land wherever it was dropped, and the list would
     /// re-sort out from under it the next time it reloaded.
-    public override func tableView(
+    public func tableView(
         _ tableView: UITableView,
         targetIndexPathForMoveFromRowAt sourceIndexPath: IndexPath,
         toProposedIndexPath proposedDestinationIndexPath: IndexPath
@@ -460,7 +460,7 @@ extension ServiceListController {
 // MARK: - Table delegate
 
 extension ServiceListController {
-    public override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         guard let service = service(at: indexPath) else { return }
 
@@ -484,7 +484,7 @@ extension ServiceListController {
         push(controller)
     }
 
-    public override func tableView(_ tableView: UITableView, shouldIndentWhileEditingRowAt indexPath: IndexPath) -> Bool {
+    public func tableView(_ tableView: UITableView, shouldIndentWhileEditingRowAt indexPath: IndexPath) -> Bool {
         false
     }
 }

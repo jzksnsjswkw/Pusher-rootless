@@ -224,9 +224,5 @@ public enum WhatNetwork: Int, CaseIterable {
 /// Segment cells use `-1` to mean "not configured".
 public let segmentCellDefault = -1
 
-/// Placeholder that a service's URL template may contain; substituted with the
-/// configured key at send time.
-public let replaceKeyToken = "REPLACE_KEY"
-
 /// Header name used by the form-encoded body type.
 public let formContentType = "application/x-www-form-urlencoded; charset=utf-8"

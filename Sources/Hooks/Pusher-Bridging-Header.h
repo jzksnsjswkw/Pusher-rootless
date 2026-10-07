@@ -12,7 +12,7 @@
 //     would then refuse to resolve. SpringBoard is therefore reached through
 //     `Runtime` (NSClassFromString + IMP thunks) only.
 //
-// `FBSSystemService`/`SBLockScreenManager`/`SBIconController`/`SBWiFiManager`
+// `FBSSystemService`/`SBLockScreenManager`/`SBIconController`
 // and friends are consequently declared as `@objc` protocols in Swift
 // (see BulletinAdapter.swift) and cast onto runtime-resolved objects.
 

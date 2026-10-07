@@ -109,13 +109,42 @@ public enum Runtime {
         return unsafeBitCast(raw, to: T.self)
     }
 
-    /// Writes an ObjC ivar. The value must be an object (a `Selector`, for
-    /// instance, is a pointer and bridges to `AnyObject`).
+    /// Writes an ObjC ivar whose declared type is an object.
+    ///
+    /// The value must be a real object. A `Selector` is *not* one — it is an
+    /// opaque pointer — and passing one here would make the caller's ARC retain
+    /// it as if it were an object and crash. Use ``setSelectorIvar`` for those.
     @discardableResult
     public static func setIvar(_ object: AnyObject, _ name: String, _ value: AnyObject?) -> Bool {
         guard let ivar = class_getInstanceVariable(object_getClass(object), name) else { return false }
         object_setIvar(object, ivar, value)
         return true
+    }
+
+    /// Writes a `SEL` ivar.
+    ///
+    /// A `Selector` is a pointer to a method name, not an object, so it cannot be
+    /// passed through an `AnyObject` parameter: Swift bridges that parameter as
+    /// `id` and ARC retains it. Storing the bits directly into the instance's
+    /// storage avoids the retain entirely. `object_setIvar` is unusable here for
+    /// the same reason.
+    @discardableResult
+    public static func setSelectorIvar(_ object: AnyObject, _ name: String, _ selector: Selector) -> Bool {
+        guard let ivar = class_getInstanceVariable(object_getClass(object), name) else { return false }
+        let slot = Unmanaged.passUnretained(object).toOpaque()
+            .advanced(by: ivar_getOffset(ivar))
+            .assumingMemoryBound(to: Selector?.self)
+        slot.pointee = selector
+        return true
+    }
+
+    /// Reads a `SEL` ivar. See ``setSelectorIvar(_:_:_:)``.
+    public static func getSelectorIvar(_ object: AnyObject, _ name: String) -> Selector? {
+        guard let ivar = class_getInstanceVariable(object_getClass(object), name) else { return nil }
+        let slot = Unmanaged.passUnretained(object).toOpaque()
+            .advanced(by: ivar_getOffset(ivar))
+            .assumingMemoryBound(to: Selector?.self)
+        return slot.pointee
     }
 
     /// Reads an ivar of a scalar (non-object) type.

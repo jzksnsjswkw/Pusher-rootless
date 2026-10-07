@@ -60,6 +60,7 @@ open class DeviceSoundListController: ListController {
         // it, which the framework may set after `viewDidLoad`.
         readSpecifierContext()
         loadItems()
+        reloadEntries()
     }
 
     open override func viewWillAppear(_ animated: Bool) {
@@ -74,7 +75,7 @@ open class DeviceSoundListController: ListController {
         }
 
         loadItems()
-        reloadSpecifiers()
+        reloadEntries()
         Task { await refresh() }
     }
 
@@ -137,7 +138,7 @@ open class DeviceSoundListController: ListController {
         do {
             try await updateItems()
             saveItems()
-            reloadSpecifiers()
+            reloadEntries()
         } catch {
             guard let controller = navigationController else { return }
             let alert = UIAlertController(
@@ -190,16 +191,27 @@ open class DeviceSoundListController: ListController {
 
     // MARK: - Specifiers
 
-    /// The list's cells, rebuilt from `items` every time the list changes.
-    open override var specifiers: NSMutableArray! {
-        get {
-            super.specifiers = specifiersForItems()
-            return super.specifiers
-        }
-        set { super.specifiers = newValue }
+    /// Rebuilds the list's cells from `items`.
+    ///
+    /// Rebuilds the cells from `items` and installs them.
+    ///
+    /// Called from `viewDidLoad` and again whenever the list changes; the
+    /// framework reads the `_specifiers` ivar directly rather than going through
+    /// a getter.
+    func reloadEntries() {
+        guard let specifiers = specifiersForItems() else { return }
+        installSpecifiers(specifiers)
     }
 
-    private func specifiersForItems() -> NSMutableArray {
+    /// The cells, rebuilt whenever the framework has discarded the array.
+    ///
+    /// `items` outlives a background round trip, so deriving the array from it
+    /// reproduces exactly what was on screen.
+    public override func rebuildSpecifiers() -> NSMutableArray? {
+        specifiersForItems()
+    }
+
+    private func specifiersForItems() -> NSMutableArray? {
         let specifiers = NSMutableArray()
 
         if !items.isEmpty {
@@ -248,7 +260,7 @@ open class DeviceSoundListController: ListController {
             }
         }
         // The other switches changed too, so the cells have to be rebuilt.
-        if onlyAllowOne { reloadSpecifiers() }
+        if onlyAllowOne { reloadEntries() }
         saveItems()
     }
 

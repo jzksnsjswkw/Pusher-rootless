@@ -1,16 +1,20 @@
 import Foundation
 
 /// Bark (`https://api.day.app`), including self-hosted servers.
+///
+/// The push URL is `{server}/{key}`; the server defaults to `api.day.app` and
+/// can be overridden per service or per app.
 public enum BarkService: PushService {
     public static let serviceName = "Bark"
-    static let defaultURL = "https://api.day.app/REPLACE_KEY"
+    static let defaultServer = "https://api.day.app"
 
+    /// The URL up to and including the trailing slash; `request(context:config:)`
+    /// appends the configured key as the last path segment.
     public static func url(eventName: String, dbName: String, serverURL: String) -> String {
-        guard !serverURL.isEmpty else { return defaultURL }
+        let base = serverURL.isEmpty ? defaultServer : serverURL
         // A user-entered server URL may or may not end in a slash; normalise so
         // the key segment is always appended cleanly.
-        let base = serverURL.hasSuffix("/") ? String(serverURL.dropLast()) : serverURL
-        return base + "/REPLACE_KEY"
+        return (base.hasSuffix("/") ? String(base.dropLast()) : base) + "/"
     }
 
     /// Bark's `image` parameter is a user-entered image URL, not Base64 image
@@ -50,8 +54,11 @@ public enum BarkService: PushService {
             infoDict.removeValue(forKey: "delete")
         }
 
+        // The configured URL is `{server}/`; the key is the last path segment.
+        let urlString = config.raw.string(PrefKey.url, default: "")
+            + config.raw.string(PrefKey.key, default: "")
         return withLogBody(
-            PushRequest(urlString: replacedKeyURL(config: config), infoDict: infoDict),
+            PushRequest(urlString: urlString, infoDict: infoDict),
             infoDict
         )
     }

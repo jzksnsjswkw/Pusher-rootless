@@ -3,10 +3,10 @@ import Foundation
 /// Pushover, including the device and sound lists the UI manages.
 public enum PushoverService: PushService {
     public static let serviceName = "Pushover"
-    static let urlTemplate = "https://api.pushover.net/1/messages.json"
+    static let pushURL = "https://api.pushover.net/1/messages.json"
 
     public static func url(eventName: String, dbName: String, serverURL: String) -> String {
-        urlTemplate
+        pushURL
     }
 
     public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
@@ -27,7 +27,7 @@ public enum PushoverService: PushService {
         // The credentials travel in the body, not a header; the sender still
         // posts this as JSON, matching the original implementation.
         return withLogBody(
-            PushRequest(urlString: replacedKeyURL(config: config), infoDict: infoDict),
+            PushRequest(urlString: pushURL, infoDict: infoDict),
             infoDict
         )
     }

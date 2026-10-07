@@ -12,7 +12,7 @@ import notify
 /// Per-service pages show one service's events; the global page merges all of
 /// them (or just the global pre-fan-out log, via the "Global Only" switch).
 @objc(NSPLogController)
-public final class LogController: ListController {
+public final class LogController: PlainViewController, UITableViewDataSource, UITableViewDelegate {
     private enum FixedRow {
         /// "Logger Enabled" appears only on a service page.
         static let logEnabled = 0
@@ -66,7 +66,7 @@ public final class LogController: ListController {
             ? root?.view.bounds ?? view.bounds
             : view.bounds
         logTable = UITableView(frame: frame, style: .grouped)
-        table.register(UITableViewCell.self, forCellReuseIdentifier: Self.cellIdentifier)
+        logTable.register(UITableViewCell.self, forCellReuseIdentifier: Self.cellIdentifier)
         logTable.delegate = self
         logTable.dataSource = self
         view.addSubview(logTable)
@@ -235,19 +235,19 @@ public final class LogController: ListController {
 
     // MARK: - Table data source
 
-    public override func numberOfSections(in tableView: UITableView) -> Int { sections.count }
+    public func numberOfSections(in tableView: UITableView) -> Int { sections.count }
 
-    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         rows[sections[section]]?.count ?? 0
     }
 
-    public override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+    public func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
         let title = sections[section]
         guard section < firstLogSection else { return title }
         return title.localized
     }
 
-    public override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: Self.cellIdentifier, for: indexPath)
         cell.accessoryType = .none
         cell.accessoryView = nil
@@ -396,7 +396,7 @@ public final class LogController: ListController {
 
     // MARK: - Table delegate
 
-    public override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         guard indexPath.section == 0, indexPath.row == clearLogRow else {
             if indexPath.section == 1, indexPath.row == FixedRow.appFilter {
@@ -407,17 +407,17 @@ public final class LogController: ListController {
         clearLogs()
     }
 
-    public override func tableView(_ tableView: UITableView, shouldHighlightRowAt indexPath: IndexPath) -> Bool {
+    public func tableView(_ tableView: UITableView, shouldHighlightRowAt indexPath: IndexPath) -> Bool {
         (indexPath.section == 0 && indexPath.row == clearLogRow)
             || (indexPath.section == 1 && indexPath.row == FixedRow.appFilter)
     }
 
     /// Only the app filter row can be swiped away, which clears the filter.
-    public override func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
+    public func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
         indexPath.section == 1 && indexPath.row == FixedRow.appFilter
     }
 
-    public override func tableView(
+    public func tableView(
         _ tableView: UITableView,
         commit editingStyle: UITableViewCell.EditingStyle,
         forRowAt indexPath: IndexPath
@@ -429,11 +429,11 @@ public final class LogController: ListController {
     }
 
     /// Long-press to copy one log line.
-    public override func tableView(_ tableView: UITableView, shouldShowMenuForRowAt indexPath: IndexPath) -> Bool {
+    public func tableView(_ tableView: UITableView, shouldShowMenuForRowAt indexPath: IndexPath) -> Bool {
         indexPath.section >= firstLogSection
     }
 
-    public override func tableView(
+    public func tableView(
         _ tableView: UITableView,
         canPerformAction action: Selector,
         forRowAt indexPath: IndexPath,
@@ -442,7 +442,7 @@ public final class LogController: ListController {
         indexPath.section >= firstLogSection && action == #selector(copy(_:))
     }
 
-    public override func tableView(
+    public func tableView(
         _ tableView: UITableView,
         performAction action: Selector,
         forRowAt indexPath: IndexPath,
@@ -455,7 +455,7 @@ public final class LogController: ListController {
     }
 
     /// The expand/collapse button on a truncated row.
-    public override func tableView(_ tableView: UITableView, accessoryButtonTappedForRowWith indexPath: IndexPath) {
+    public func tableView(_ tableView: UITableView, accessoryButtonTappedForRowWith indexPath: IndexPath) {
         guard indexPath.section >= firstLogSection else { return }
         // Only rows that are expanded or actually truncated can be toggled.
         guard expandedRows.contains(indexPath) || truncatedRows.contains(indexPath) else { return }

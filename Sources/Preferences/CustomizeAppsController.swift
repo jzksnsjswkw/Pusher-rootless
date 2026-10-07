@@ -10,7 +10,7 @@ import UIKit
 /// A new override starts as a *copy* of the service's current values, so an
 /// override that is not customized further behaves exactly like the service.
 @objc(NSPCustomizeAppsController)
-public final class CustomizeAppsController: ListController {
+public final class CustomizeAppsController: PlainViewController, UITableViewDataSource, UITableViewDelegate {
     private enum Section: Int, CaseIterable {
         case addApps
         case apps
@@ -186,9 +186,9 @@ public final class CustomizeAppsController: ListController {
 // MARK: - Table
 
 extension CustomizeAppsController {
-    public override func numberOfSections(in tableView: UITableView) -> Int { Section.allCases.count }
+    public func numberOfSections(in tableView: UITableView) -> Int { Section.allCases.count }
 
-    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch Section(rawValue: section) {
         case .addApps: return 1
         case .apps: return appIDs.count
@@ -196,7 +196,7 @@ extension CustomizeAppsController {
         }
     }
 
-    public override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+    public func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
         switch Section(rawValue: section) {
         case .addApps: return nil
         case .apps: return appIDs.isEmpty ? "No Apps".localized : "Apps".localized
@@ -204,7 +204,7 @@ extension CustomizeAppsController {
         }
     }
 
-    public override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: Self.cellIdentifier, for: indexPath)
         cell.accessoryType = .disclosureIndicator
         cell.imageView?.image = nil
@@ -222,7 +222,7 @@ extension CustomizeAppsController {
         return cell
     }
 
-    public override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
 
         guard indexPath.section == Section.apps.rawValue else {
@@ -244,14 +244,14 @@ extension CustomizeAppsController {
         push(controller)
     }
 
-    public override func tableView(
+    public func tableView(
         _ tableView: UITableView,
         editingStyleForRowAt indexPath: IndexPath
     ) -> UITableViewCell.EditingStyle {
         indexPath.section > 0 ? .delete : .none
     }
 
-    public override func tableView(
+    public func tableView(
         _ tableView: UITableView,
         commit editingStyle: UITableViewCell.EditingStyle,
         forRowAt indexPath: IndexPath
@@ -260,7 +260,7 @@ extension CustomizeAppsController {
         deleteApp(at: indexPath)
     }
 
-    public override func tableView(
+    public func tableView(
         _ tableView: UITableView,
         trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
     ) -> UISwipeActionsConfiguration? {
@@ -279,7 +279,7 @@ extension CustomizeAppsController {
         return configuration
     }
 
-    public override func tableView(
+    public func tableView(
         _ tableView: UITableView,
         shouldIndentWhileEditingRowAt indexPath: IndexPath
     ) -> Bool {
@@ -313,15 +313,19 @@ public final class CustomAppController: ListController {
     public override func viewDidLoad() {
         super.viewDidLoad()
         navigationItem.title = appTitle
+
+        // Installed here as well as through the getter: the framework reads the
+        // `_specifiers` ivar directly during setup, and the getter covers the
+        // case where it discards the array later (backgrounding the app).
+        installSpecifiers(buildSpecifiers())
     }
 
-    public override var specifiers: NSMutableArray! {
-        get {
-            guard super.specifiers == nil else { return super.specifiers }
-
-        var all: [PSSpecifier] = [
-            PSSpecifier.groupSpecifier(withName: "Customize".localized)
-        ]
+    /// Builds the page's cells from this app's override.
+    private func buildSpecifiers() -> NSMutableArray {
+        var all: [PSSpecifier] = []
+        if let group = PSSpecifier.groupSpecifier(withName: "Customize".localized) {
+            all = [group]
+        }
 
         // The per-app cells come from the same builders the service page uses,
         // with the app ID attached so every value lands in this app's override.
@@ -337,10 +341,12 @@ public final class CustomAppController: ListController {
         }
         all.append(contentsOf: cells)
 
-            super.specifiers = NSMutableArray(array: all)
-            return super.specifiers
-        }
-        set { super.specifiers = newValue }
+        return NSMutableArray(array: all)
+    }
+
+    /// The cells, rebuilt whenever the framework has discarded the array.
+    public override func rebuildSpecifiers() -> NSMutableArray? {
+        buildSpecifiers()
     }
 }
 

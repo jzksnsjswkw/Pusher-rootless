@@ -12,6 +12,8 @@ public final class RootListController: ListController {
     private var headerContainer: UIView?
     private var isShowingHeader = false
 
+    public override var specifierPlistName: String? { "Root" }
+
     public override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -31,17 +33,14 @@ public final class RootListController: ListController {
             headerContainer = container
             updateHeader()
         }
-    }
 
-    /// The page's cells, loaded from `Root.plist` on first access.
-    public override var specifiers: NSMutableArray! {
-        get {
-            if super.specifiers == nil {
-                super.specifiers = loadSpecifiers(fromPlistName: "Root", target: self)
-            }
-            return super.specifiers
-        }
-        set { super.specifiers = newValue }
+        // The cells are installed here rather than lazily, because the
+        // Preferences framework does not call the `specifiers` getter to obtain
+        // them - it reads the `_specifiers` ivar directly. A page that only
+        // filled in the ivar from its getter would render nothing but its
+        // table header.
+        loadSpecifiersOnce(named: "Root")
+        updateHeader()
     }
 
     // MARK: - Banner

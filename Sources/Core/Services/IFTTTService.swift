@@ -2,23 +2,26 @@ import Foundation
 
 /// IFTTT Maker Webhooks.
 ///
-/// The webhook accepts three values; what goes in them depends on "Curate Data":
-/// a curated single notification (value3 carries the icon, or the date when
-/// there is no icon), or the whole shared data dict JSON-serialized into
-/// value1.
+/// The push URL is `https://maker.ifttt.com/trigger/{eventName}/with/key/{key}`;
+/// both segments come from the service configuration. What goes into the
+/// request's three values depends on "Curate Data": a curated single
+/// notification (value3 carries the icon, or the date when there is no icon), or
+/// the whole shared data dict JSON-serialized into value1.
 public enum IFTTTService: PushService {
     public static let serviceName = "IFTTT"
-    static let urlTemplate = "https://maker.ifttt.com/trigger/REPLACE_EVENT_NAME/with/key/REPLACE_KEY"
+    static let urlBase = "https://maker.ifttt.com/trigger/"
 
+    /// The URL template, with both variable segments still in place. Used for
+    /// per-app override comparison; the key is substituted at send time.
     public static func url(eventName: String, dbName: String, serverURL: String) -> String {
-        urlTemplate.replacingOccurrences(of: "REPLACE_EVENT_NAME", with: eventName)
+        urlBase + eventName + "/with/key/"
     }
 
     public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
         let data = baseInfoDict(context: context, config: config)
         let curated = config.raw.bool(PrefKey.curateData)
 
-        let request = PushRequest(urlString: replacedKeyURL(config: config))
+        let request = PushRequest(urlString: Self.pushURL(config: config))
         if curated {
             let dateString = dateString(context.date, config: config)
             let icon = data["icon"] as? String
@@ -39,6 +42,12 @@ public enum IFTTTService: PushService {
             request.logInfoDict = ["value1": jsonString(logInfoDict(data)) ?? ""]
         }
         return request
+    }
+
+    /// `.../trigger/{eventName}/with/key/{key}`.
+    private static func pushURL(config: ServiceConfig) -> String {
+        let eventName = config.raw.string(PrefKey.eventName, default: "")
+        return urlBase + eventName + "/with/key/" + config.raw.string(PrefKey.key, default: "")
     }
 
     private static func jsonString(_ object: [String: Any]) -> String? {

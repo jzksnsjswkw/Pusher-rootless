@@ -9,12 +9,11 @@ import Foundation
 /// than one per notification.
 public enum WechatService: PushService {
     public static let serviceName = "Wechat"
-    static let urlTemplate = "https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=REPLACE_DYNAMIC_KEY"
+    static let pushURLBase = "https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token="
     static let tokenURL = "https://qyapi.weixin.qq.com/cgi-bin/gettoken"
-    static let dynamicKeyToken = "REPLACE_DYNAMIC_KEY"
 
     public static func url(eventName: String, dbName: String, serverURL: String) -> String {
-        urlTemplate
+        pushURLBase
     }
 
     // MARK: - Request building
@@ -79,7 +78,7 @@ public enum WechatService: PushService {
         let encodedToken = token.addingPercentEncoding(
             withAllowedCharacters: .urlQueryAllowed
         ) ?? token
-        let url = urlTemplate.replacingOccurrences(of: dynamicKeyToken, with: encodedToken)
+        let url = pushURLBase + encodedToken
 
         let request = PushRequest(urlString: url, infoDict: infoDict)
         request.logInfoDict = logInfoDict(infoDict)
