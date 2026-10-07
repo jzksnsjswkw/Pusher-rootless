@@ -84,8 +84,9 @@ public final class CustomizeAppsController: PlainViewController, UITableViewData
     /// Keeps the link's "(N total)" count in step with the override list.
     private func updateSpecifierTitle() {
         guard let specifier else { return }
-        let label = specifier.name?.components(separatedBy: " (").first ?? "App Customization"
-        specifier.name = String(format: "%@ (%d total)".localized, label, customApps.count)
+        let label = AppListTitle.baseName(of: specifier.name)
+        specifier.name = AppListTitle.titled(label.isEmpty ? "App Customization".localized : label,
+                                             count: customApps.count)
 
         // The list page's reload, reached through the non-retaining reference it
         // stashed on the specifier (a strong one would retain the page).

@@ -77,17 +77,18 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
 
     /// Recomputes the "(N total)" suffixes on the installed cells.
     ///
-    /// The base name is recovered by stripping the suffix this method added
-    /// earlier, so repeated appearances do not grow the title.
+    /// Each title is rebuilt from its name with the suffix stripped, so
+    /// repeated appearances neither compound the suffix nor leave a stale count.
+    /// (This page owns the counts: the app list strips them while it is open,
+    /// because a live count in its own bar cannot survive AltList's title
+    /// handling.)
     private func refreshTitleCounts() {
         for case let specifier as PSSpecifier in (super.specifiers ?? []) {
-            guard specifier.cellType == .linkCell,
-                  let name = specifier.name,
-                  name.hasPrefix("App List".localized)
-                      || name.hasPrefix("App Customization".localized)
-                      || name.contains(" (")
-            else { continue }
-            specifier.name = name.components(separatedBy: " (").first
+            guard specifier.cellType == .linkCell, specifier.name != nil else { continue }
+            let base = AppListTitle.baseName(of: specifier.name)
+            guard base == "App List".localized || base == "App Customization".localized else {
+                continue
+            }
             updateTitleCounts(specifier)
             // The title change is only visible after the row is redrawn.
             reloadSpecifier(specifier, animated: false)
@@ -204,8 +205,9 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
     private func updateTitleCounts(_ specifier: PSSpecifier) {
         guard specifier.cellType == .linkCell, let name = specifier.name else { return }
 
-        let isAppList = name == "App List".localized
-        let isCustomization = name == "App Customization".localized
+        let base = AppListTitle.baseName(of: name)
+        let isAppList = base == "App List".localized
+        let isCustomization = base == "App Customization".localized
         guard isAppList || isCustomization else { return }
 
         let count: Int
@@ -217,7 +219,7 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
             count = PrefsStore.service(named: service, isCustom: isCustomService)
                 .dict(PrefKey.customApps)?.keys.count ?? 0
         }
-        specifier.name = String(format: "%@ (%d total)".localized, specifier.name, count)
+        AppListTitle.apply(specifier, base: base, count: count)
 
         // A non-retaining back-reference: a strong one would form
         // controller -> specifiers -> controller and the page would never be

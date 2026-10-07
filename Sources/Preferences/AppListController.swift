@@ -22,6 +22,33 @@ public final class AppListController: ATLApplicationListMultiSelectionController
     public override func viewDidLoad() {
         super.viewDidLoad()
         readSpecifierContext()
+        captureLinkBaseName()
+    }
+
+    public override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        applyPlainTitle()
+    }
+
+    /// Remembers the link's title without its count suffix, so the suffix can be
+    /// restored from a clean base later.
+    private func captureLinkBaseName() {
+        guard let name = specifier?.name else { return }
+        let base = AppListTitle.baseName(of: name)
+        if !base.isEmpty { linkBaseName = base }
+    }
+
+    /// Shows only the plain name in the bar and on the link cell.
+    ///
+    /// AltList sets the bar title from the specifier once and re-derives it on
+    /// its own passes, so a live count here cannot survive — the original had the
+    /// same limitation. Dropping the count while this page is open is what keeps
+    /// a *stale* number from being displayed; the page that pushed this one
+    /// recomputes the real count in its own `viewWillAppear`.
+    private func applyPlainTitle() {
+        captureLinkBaseName()
+        navigationItem.title = linkBaseName
+        specifier?.name = linkBaseName
     }
 
     /// `_selectedApplications` is AltList's own `@protected` ivar holding the
@@ -45,8 +72,15 @@ public final class AppListController: ATLApplicationListMultiSelectionController
     }
 
     /// Called by AltList to seed the switch states.
+    ///
+    /// Also captures the specifier this page was pushed from: AltList's
+    /// multi-selection controller only has it while the list is being built, and
+    /// the toggle handler needs it later to reach the pushing page's link cell.
     public override func loadPreferences() {
+        super.loadPreferences()
         readSpecifierContext()
+        specifierForApplicationList = specifier
+
         let selected = NSMutableSet()
         selected.addObjects(from: currentSelection())
         selection = selected
@@ -55,9 +89,9 @@ public final class AppListController: ATLApplicationListMultiSelectionController
     /// One app's switch was toggled.
     ///
     /// Written through immediately rather than only on dismissal, so a crash or
-    /// a swipe-back cannot lose the selection.
+    /// a swipe-back cannot lose the selection — and the count on the page that
+    /// pushed this one follows as it changes.
     public override func setApplicationEnabled(_ enabled: NSNumber, specifier: PSSpecifier) {
-        Diag.note("SAE self=\(ObjectIdentifier(self).hashValue) enabled=\(enabled) spec=\(specifier != nil)")
         guard let appID = specifier.property(forKey: "applicationIdentifier") as? String else { return }
         if enabled.boolValue != defaultSwitchValue {
             selection.add(appID)
@@ -66,6 +100,14 @@ public final class AppListController: ATLApplicationListMultiSelectionController
         }
         write(selection.allObjects.compactMap { $0 as? String })
     }
+
+    /// The specifier this page was pushed from, captured in `loadPreferences`;
+    /// see the comment there.
+    private var specifierForApplicationList: PSSpecifier?
+
+    /// The link cell's title without the "(N total)" suffix, captured once so
+    /// every later retitle starts from the same clean base.
+    private var linkBaseName: String = "App List".localized
 
     // MARK: - Storage
 

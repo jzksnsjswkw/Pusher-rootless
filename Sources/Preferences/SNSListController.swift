@@ -187,8 +187,8 @@ public final class GlobalSettingsListController: ListController {
         let all = appList + conditions
         for specifier in all
         where specifier.cellType == .linkCell && specifier.name == "Global App List".localized {
-            specifier.name = String(
-                format: "%@ (%d total)".localized, specifier.name, AppListStorage.global().count
+            specifier.name = AppListTitle.titled(
+                AppListTitle.baseName(of: specifier.name), count: AppListStorage.global().count
             )
             // A non-retaining back-reference: a strong one would retain the page.
             specifier.setProperty(
