@@ -63,20 +63,18 @@ public enum BarkService: PushService {
         )
     }
 
-    public static func extraPrefs(_ servicePrefs: Prefs) -> [String: Any]? {
-        var prefs: [String: Any] = [
-            PrefKey.serverURL: servicePrefs.string(PrefKey.serverURL, default: "https://api.day.app"),
-        ]
+    public static func defaultPrefs() -> [String: Any] {
+        var prefs: [String: Any] = [PrefKey.serverURL: defaultServer]
         for (prefKey, _) in parameters {
-            prefs[prefKey] = servicePrefs.string(prefKey) ?? ""
+            prefs[prefKey] = ""
         }
         return prefs
     }
 
-    public static func extraCustomAppPrefs(_ appPrefs: Prefs) -> [String: Any]? {
+    public static func defaultCustomAppPrefs() -> [String: Any] {
         var prefs: [String: Any] = [:]
         for (prefKey, _) in parameters {
-            prefs[prefKey] = appPrefs.string(prefKey) ?? ""
+            prefs[prefKey] = ""
         }
         return prefs
     }

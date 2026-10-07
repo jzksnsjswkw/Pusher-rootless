@@ -164,19 +164,20 @@ public enum WechatService: PushService {
         }
     }
 
-    public static func extraPrefs(_ servicePrefs: Prefs) -> [String: Any]? {
+    public static func defaultPrefs() -> [String: Any] {
         [
-            PrefKey.corpid: servicePrefs.string(PrefKey.corpid, default: ""),
-            PrefKey.corpsecret: servicePrefs.string(PrefKey.corpsecret, default: ""),
-            PrefKey.agentID: servicePrefs.int(PrefKey.agentID),
-            PrefKey.touser: servicePrefs.string(PrefKey.touser, default: ""),
+            PrefKey.corpid: "",
+            PrefKey.corpsecret: "",
+            PrefKey.agentID: 0,
+            PrefKey.touser: "",
         ]
     }
 
-    public static func extraCustomAppPrefs(_ appPrefs: Prefs) -> [String: Any]? {
-        // Only the recipient differs per app; the credentials stay service-wide.
-        [PrefKey.touser: appPrefs.string(PrefKey.touser, default: "")]
+    public static func defaultCustomAppPrefs() -> [String: Any] {
+        // Only the recipient differs per app; the credentials are service-wide.
+        [PrefKey.touser: ""]
     }
+
 }
 
 /// The WeChat access-token cache.

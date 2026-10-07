@@ -74,34 +74,29 @@ public enum Pusher {
 
 /// Preference-key names, mirroring the on-disk plist layout.
 ///
-/// Values are deliberately stored as strings rather than an enum: prefs are
-/// read from a hand-editable plist, so every lookup stays a plain string key.
+/// Values are deliberately stored as strings rather than an enum: prefs are read
+/// from a hand-editable plist, so every lookup stays a plain string key.
 public enum PrefKey {
     // Top-level containers.
-    public static let builtInServices = "BuiltInServices"
-    public static let customServices = "CustomServices"
+    //
+    // `Services` is the ordered array of service *instances* and is the single
+    // source of truth for what the pipeline sends to. `Global` holds the
+    // settings that are not per-instance.
+    public static let services = "Services"
     public static let global = "Global"
 
-    // Legacy flat-key prefixes, used by the migration layer only.
-    public static let globalBlacklistPrefix = "GlobalBL-"
-    public static let snsPrefix = "SNS-"
-    public static let legacyCustomAppsPrefix = "CustomService_"
-    public static let legacyCustomAppsSuffix = "_CustomApps"
-    public static let legacyCustomBlacklistPrefix = "CustomServiceBL_"
+    // Identity of one entry in `Services`. `id` is stable and opaque while
+    // `type` names the descriptor that builds the request; they are separate so
+    // an instance can be renamed without losing its log or its storage.
+    public static let instanceID = "id"
+    public static let instanceType = "type"
+    public static let instanceName = "name"
 
     // Global (non-service) settings.
     public static let enabled = "Enabled"
     public static let whenToPush = "WhenToPush"
     public static let whatNetwork = "WhatNetwork"
-    public static let legacyGlobalAppListIsBlacklist = "GlobalAppListIsBlacklist"
 
-    // SNS filter mode. Two spellings exist for each: the original verbose key
-    // (still what the UI plists and older builds write) and the short one the
-    // normalized service prefs use. Reads check both; writes use the short one.
-    public static let snsIsAnd = "snsIsAnd"
-    public static let snsRequireANWithOR = "snsRequireANWithOR"
-    public static let snsIsAndAlt = "SufficientNotificationSettingsIsAnd"
-    public static let snsRequireANWithORAlt = "SNSORRequireAllowNotifications"
 
     // Generic per-service field names, shared by every built-in service.
     public static let serviceEnabled = "enabled"
@@ -128,7 +123,14 @@ public enum PrefKey {
     public static let appList = "appList"
     public static let appListIsBlacklist = "appListIsBlacklist"
     public static let customApps = "customApps"
-    public static let isCustomService = "isCustomService"
+    /// The `SNS-<condition>` prefix for one instance's condition toggles.
+    public static let snsPrefix = "SNS-"
+
+    // SNS filter mode: how an instance's conditions combine.
+    /// Whether every selected condition must hold (AND) rather than any (OR).
+    public static let snsIsAnd = "snsIsAnd"
+    /// When combining with OR, whether "Allow Notifications" is still required.
+    public static let snsRequireANWithOR = "snsRequireANWithOR"
     /// The resolved SNS condition keys for one service (normalized at load
     /// time, not a raw plist key).
     public static let sns = "sns"
@@ -138,35 +140,6 @@ public enum PrefKey {
     public static let paramName = "paramName"
     public static let method = "method"
     public static let bodyType = "bodyType"
-
-    // Legacy per-service key basenames, migrated into the nested object.
-    public static let legacyEnabled = "Enabled"
-    public static let legacyToken = "Token"
-    public static let legacyUser = "User"
-    public static let legacyKey = "Key"
-    public static let legacyEventName = "EventName"
-    public static let legacyDateFormat = "DateFormat"
-    public static let legacyServerURL = "ServerURL"
-    public static let legacyDBName = "DBName"
-    public static let legacyAppListIsBlacklist = "AppListIsBlacklist"
-    public static let legacyWhenToPush = "WhenToPush"
-    public static let legacyWhatNetwork = "WhatNetwork"
-    public static let legacySNSIsAnd = "SufficientNotificationSettingsIsAnd"
-    public static let legacySNSRequireANWithOR = "SNSORRequireAllowNotifications"
-    public static let legacyDevices = "Devices"
-    public static let legacySounds = "Sounds"
-    public static let legacyCustomApps = "CustomApps"
-    public static let legacyIncludeIcon = "IncludeIcon"
-    public static let legacyCurateData = "CurateData"
-    public static let legacyIncludeImage = "IncludeImage"
-    public static let legacyImageMaxWidth = "ImageMaxWidth"
-    public static let legacyImageMaxHeight = "ImageMaxHeight"
-    public static let legacyImageShrinkFactor = "ImageShrinkFactor"
-    public static let legacyCorpid = "Corpid"
-    public static let legacyCorpsecret = "Corpsecret"
-    public static let legacyAgentID = "AgentID"
-    public static let legacyTouser = "Touser"
-    public static let legacyBlacklistPrefix = "BL-"
 
     /// Log key suffix for one service (`<service>Log`).
     public static func logKey(forService service: String) -> String { "\(service)Log" }

@@ -22,7 +22,7 @@
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
-			<string>SufficientNotificationSettingsIsAnd</string>
+			<string>snsIsAnd</string>
 			<key>validTitles</key>
 			<array>
 				<string>AND</string>
@@ -51,7 +51,7 @@
 			<key>defaults</key>
 			<string>com.noahsaso.pusher</string>
 			<key>key</key>
-			<string>SNSORRequireAllowNotifications</string>
+			<string>snsRequireANWithOR</string>
 			<key>label</key>
 			<string>Require Allow Notifications with OR</string>
 		</dict>

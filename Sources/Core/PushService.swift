@@ -48,11 +48,21 @@ public protocol PushService {
 
     // MARK: Options with defaults
 
-    /// Service-specific normalized prefs keys (beyond the shared template).
-    static func extraPrefs(_ servicePrefs: Prefs) -> [String: Any]?
+    /// The service's own settings, with every field defaulted.
+    ///
+    /// This is the *only* description of what an instance of this service
+    /// stores: it both seeds a newly added instance and normalizes a stored one,
+    /// so a value that is missing or of the wrong type resolves to the same
+    /// default in both cases. Keys the service does not list here are carried
+    /// through untouched (the shared template adds them), which keeps
+    /// user-defined extras — a custom webhook's headers, say — from being lost.
+    static func defaultPrefs() -> [String: Any]
 
-    /// Service-specific keys for one custom-app override.
-    static func extraCustomAppPrefs(_ appPrefs: Prefs) -> [String: Any]?
+    /// The service's own keys that an app override may change, defaulted.
+    ///
+    /// An override starts as a copy of these, so an app that is not customized
+    /// further behaves exactly like the service.
+    static func defaultCustomAppPrefs() -> [String: Any]
 
     /// Whether the app icon belongs in the shared data dict.
     static func shouldIncludeIcon(config: ServiceConfig) -> Bool
@@ -69,8 +79,12 @@ public protocol PushService {
 // MARK: - Defaults
 
 public extension PushService {
-    static func extraPrefs(_ servicePrefs: Prefs) -> [String: Any]? { nil }
-    static func extraCustomAppPrefs(_ appPrefs: Prefs) -> [String: Any]? { nil }
+    /// A service that stores nothing of its own.
+    static func defaultPrefs() -> [String: Any] { [:] }
+
+    /// A service whose overrides change nothing of their own.
+    static func defaultCustomAppPrefs() -> [String: Any] { [:] }
+
     static func shouldIncludeIcon(config: ServiceConfig) -> Bool { false }
     static func shouldIncludeImage(config: ServiceConfig) -> Bool { false }
     static var logImageDataProperties: [String] { Pusher.logImageDataProperties }

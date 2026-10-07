@@ -1,22 +1,20 @@
 import UIKit
 
-/// The app list: which apps a service (or the global default) applies to.
+/// The app list: which apps a service instance (or the global default) applies
+/// to.
 ///
 /// The list itself comes from AltList, which enumerates every installed app with
 /// search and alphabetic indexing. This controller only decides which set of app
 /// IDs the selection reads and writes, and AltList's own `loadPreferences` /
-/// `savePreferences` hooks are the extension points for that — so the three
-/// storage locations (global, built-in service, custom service) share one
-/// implementation.
+/// `savePreferences` hooks are the extension points for that — so the two storage
+/// locations (global, one instance) share one implementation.
 @objc(NSPAppListController)
 public final class AppListController: ATLApplicationListMultiSelectionController {
-    /// The service whose list is edited, or `nil` for the global list.
-    private var service: String?
-    private var isCustomService = false
+    /// The instance whose list is edited, or `nil` for the global list.
+    private var instanceID: String?
 
     private func readSpecifierContext() {
-        service = specifier?.string(SpecifierRouting.PropertyKey.service)
-        isCustomService = specifier?.bool(SpecifierRouting.PropertyKey.isCustomService) ?? false
+        instanceID = specifier?.string(SpecifierRouting.PropertyKey.instanceID)
     }
 
     public override func viewDidLoad() {
@@ -112,21 +110,15 @@ public final class AppListController: ATLApplicationListMultiSelectionController
     // MARK: - Storage
 
     private func currentSelection() -> [String] {
-        guard let service else { return AppListStorage.global() }
-        return isCustomService
-            ? AppListStorage.custom(service: service)
-            : AppListStorage.builtIn(service: service)
+        guard let instanceID else { return AppListStorage.global() }
+        return AppListStorage.forInstance(instanceID)
     }
 
     private func write(_ appIDs: [String]) {
-        guard let service else {
+        guard let instanceID else {
             AppListStorage.setGlobal(appIDs)
             return
         }
-        if isCustomService {
-            AppListStorage.setCustom(appIDs, service: service)
-        } else {
-            AppListStorage.setBuiltIn(appIDs, service: service)
-        }
+        AppListStorage.setForInstance(appIDs, id: instanceID)
     }
 }

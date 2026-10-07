@@ -16,8 +16,9 @@ public final class CustomizeAppsController: PlainViewController, UITableViewData
         case apps
     }
 
-    private var service: String = ""
-    private var isCustomService = false
+    private var instanceID: String = ""
+    /// The descriptor name, which decides the override template.
+    private var serviceType: String = ""
     /// The per-app override objects, keyed by bundle ID.
     private var customApps: [String: [String: Any]] = [:]
     /// The service's own values, which new overrides are seeded from.
@@ -29,8 +30,8 @@ public final class CustomizeAppsController: PlainViewController, UITableViewData
     public override func viewDidLoad() {
         super.viewDidLoad()
 
-        service = specifier?.string(SpecifierRouting.PropertyKey.service) ?? ""
-        isCustomService = specifier?.bool(SpecifierRouting.PropertyKey.isCustomService) ?? false
+        instanceID = specifier?.string(SpecifierRouting.PropertyKey.instanceID) ?? ""
+        serviceType = specifier?.string(SpecifierRouting.PropertyKey.serviceType) ?? ""
 
         let frame = UIDevice.current.userInterfaceIdiom == .pad
             ? root?.view.bounds ?? view.bounds
@@ -65,7 +66,7 @@ public final class CustomizeAppsController: PlainViewController, UITableViewData
     // MARK: - Data
 
     private func reloadFromPrefs() {
-        serviceDefaults = PrefsStore.service(named: service, isCustom: isCustomService)
+        serviceDefaults = PrefsStore.instance(instanceID)
         customApps = serviceDefaults.dict(PrefKey.customApps)?.raw.compactMapValues {
             $0 as? [String: Any]
         } ?? [:]
@@ -98,7 +99,7 @@ public final class CustomizeAppsController: PlainViewController, UITableViewData
 
     /// Persists the override map back onto the service.
     private func save() {
-        PrefsStore.updateService(named: service, isCustom: isCustomService) { object in
+        PrefsStore.updateInstance(instanceID) { object in
             object[PrefKey.customApps] = customApps
         }
     }
@@ -109,8 +110,13 @@ public final class CustomizeAppsController: PlainViewController, UITableViewData
     /// does not pin values the service ignores.
     private func makeDefaultOverride() -> [String: Any] {
         var override: [String: Any] = [PrefKey.enabled: true]
+        // The descriptor owns the template, so a new override starts from the
+        // same defaults as the service it belongs to.
+        for (key, value) in ServiceRegistry.service(named: serviceType).newOverridePrefs() {
+            override[key] = value
+        }
 
-        switch service {
+        switch serviceType {
         case PushoverService.serviceName:
             override[PrefKey.devices] = serviceDefaults.array(PrefKey.devices)
             override[PrefKey.sounds] = serviceDefaults.array(PrefKey.sounds)
@@ -130,7 +136,7 @@ public final class CustomizeAppsController: PlainViewController, UITableViewData
         case WechatService.serviceName:
             override[PrefKey.touser] = serviceDefaults.string(PrefKey.touser, default: "")
         default:
-            guard isCustomService else { break }
+            guard !ServiceRegistry.isBuiltIn(serviceType) else { break }
             override[PrefKey.includeIcon] = serviceDefaults.bool(PrefKey.includeIcon)
             override[PrefKey.includeImage] = serviceDefaults.bool(PrefKey.includeImage)
             override[PrefKey.imageMaxWidth] = serviceDefaults[PrefKey.imageMaxWidth] ?? Pusher.defaultMaxWidth
@@ -237,8 +243,8 @@ extension CustomizeAppsController {
             controller = cached
         } else {
             controller = CustomAppController(
-                service: service, appID: appID, appTitle: appDisplayName(appID),
-                isCustomService: isCustomService
+                instanceID: instanceID, serviceType: serviceType,
+                appID: appID, appTitle: appDisplayName(appID)
             )
             loadedControllers[appID] = controller
         }
@@ -297,12 +303,14 @@ extension CustomizeAppsController {
 /// offer.
 @objc(NSPCustomAppController)
 public final class CustomAppController: ListController {
-    private let service: String
+    private let instanceID: String
+    private let serviceType: String
     private let appID: String
     private let appTitle: String
 
-    @objc public init(service: String, appID: String, appTitle: String, isCustomService: Bool) {
-        self.service = service
+    @objc public init(instanceID: String, serviceType: String, appID: String, appTitle: String) {
+        self.instanceID = instanceID
+        self.serviceType = serviceType
         self.appID = appID
         self.appTitle = appTitle
         super.init(nibName: nil, bundle: nil)
@@ -330,9 +338,10 @@ public final class CustomAppController: ListController {
 
         // The per-app cells come from the same builders the service page uses,
         // with the app ID attached so every value lands in this app's override.
-        let cells = ServiceSpecifierBuilders.shared.builders(for: service, appID: appID)
+        let cells = ServiceSpecifierBuilders.shared.builders(for: serviceType, appID: appID)
         for specifier in cells {
-            specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.service)
+            specifier.setProperty(instanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
+            specifier.setProperty(serviceType, forKey: SpecifierRouting.PropertyKey.serviceType)
             specifier.setProperty(appID, forKey: SpecifierRouting.PropertyKey.customAppID)
             // A detail picker (Pushover's devices) reads the app from its own
             // key, spelled differently from the value cells'.
@@ -341,6 +350,10 @@ public final class CustomAppController: ListController {
             }
         }
         all.append(contentsOf: cells)
+
+        // The override cells address one app's object inside the instance.
+        SpecifierRouting.route(cells, to: PreferencesStorage.self,
+                               scope: .customApp(id: instanceID, appID: appID))
 
         return NSMutableArray(array: all)
     }

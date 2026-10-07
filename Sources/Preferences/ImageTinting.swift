@@ -101,11 +101,4 @@ public extension UIImage {
     static func pusher(named name: String) -> UIImage? {
         UIImage(named: name, in: .pusher, compatibleWith: nil)
     }
-
-    /// A service's icon: `<kind>Service_<name>`, falling back to a shared
-    /// default so a service without its own artwork still shows an icon.
-    static func serviceIcon(named name: String, isCustom: Bool) -> UIImage? {
-        let prefix = isCustom ? "CustomService_" : "BuiltInService_"
-        return pusher(named: prefix + name) ?? pusher(named: "DefaultService")
-    }
 }

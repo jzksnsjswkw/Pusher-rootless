@@ -1,41 +1,33 @@
 import UIKit
+import Preferences
 
-/// The service list: every built-in service plus the user's custom ones, split
-/// into Enabled and Disabled sections.
+/// The service list: every configured push destination, in the order the
+/// pipeline tries them.
 ///
-/// The list owns the two things that decide whether a push is delivered at all —
-/// which services are turned on, and the order they are tried in — so it is the
-/// one place that writes `enabled` and the section ordering. Both are only
+/// The list is a plain array of instances rather than two fixed sections, because
+/// a service type is no longer something you "turn on" — it is something you add.
+/// Two Pushover accounts and three Bark servers are ordinary rows here, each with
+/// its own settings, app list and log.
+///
+/// The list owns the two things that decide whether a push is delivered: whether
+/// an instance is on, and the order instances are tried in. Both are only
 /// persisted when editing ends, so a half-finished drag is never saved.
 @objc(NSPServiceListController)
-public final class ServiceListController: PlainViewController, UITableViewDataSource, UITableViewDelegate {
-    private enum Section: Int, CaseIterable {
-        case enabled
-        case disabled
+public final class ServiceListController: PlainViewController {
+    private static let cellIdentifier = "ServiceCell"
 
-        var title: String {
-            switch self {
-            case .enabled: return "Enabled"
-            case .disabled: return "Disabled"
-            }
-        }
-    }
-
-    /// Built-in services, in registry order.
-    private let builtInServices = ServiceRegistry.builtInServiceNames
-    /// The raw `CustomServices` object, kept in sync with the UI while editing.
-    private var customServices: [String: [String: Any]] = [:]
-    /// Service names shown in each section.
-    private var sectionItems: [Section: [String]] = [:]
-    private var serviceImages: [String: UIImage] = [:]
+    /// Every instance, in order.
+    private var instances: [ServiceInstance] = []
+    /// Icons, keyed by instance type (not by instance — two instances of one
+    /// service share their artwork).
+    private var icons: [String: UIImage] = [:]
     private var loadedControllers: [String: ServiceController] = [:]
 
     private var servicesTable: UITableView!
     private var addButton: UIBarButtonItem!
-    /// The row a drag is currently hovering over, used to keep reordering within
-    /// a section's alphabetical order.
-    private var lastTargetService: String?
-    private var lastTargetIndexPath: IndexPath?
+    /// Set while the list is reordered, so the visual order is kept without
+    /// re-sorting underneath the drag.
+    private var isReordering = false
 
     // MARK: - Lifecycle
 
@@ -45,7 +37,7 @@ public final class ServiceListController: PlainViewController, UITableViewDataSo
         let frame = UIDevice.current.userInterfaceIdiom == .pad
             ? root?.view.bounds ?? view.bounds
             : view.bounds
-        servicesTable = UITableView(frame: frame, style: .grouped)
+        servicesTable = UITableView(frame: frame, style: .insetGrouped)
         servicesTable.register(UITableViewCell.self, forCellReuseIdentifier: Self.cellIdentifier)
         servicesTable.dataSource = self
         servicesTable.delegate = self
@@ -53,14 +45,12 @@ public final class ServiceListController: PlainViewController, UITableViewDataSo
         view.addSubview(servicesTable)
 
         addButton = UIBarButtonItem(
-            title: "Add".localized, style: .plain, target: self, action: #selector(addService)
+            barButtonSystemItem: .add, target: self, action: #selector(addService)
         )
-
         navigationItem.title = "Services".localized
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             title: "Edit".localized, style: .plain, target: self, action: #selector(toggleEditing(_:))
         )
-        navigationItem.leftBarButtonItem = nil
     }
 
     public override func viewWillAppear(_ animated: Bool) {
@@ -75,71 +65,26 @@ public final class ServiceListController: PlainViewController, UITableViewDataSo
         showTutorialIfNeeded()
     }
 
-    private static let cellIdentifier = "ServiceCell"
-
     // MARK: - Data
 
-    /// Rebuilds the section lists from prefs and reloads the servicesTable.
+    /// Re-reads the instances and reloads the table.
     private func reloadData() {
-        let prefs = PrefsStore.prefs()
-        customServices = prefs.dict(PrefKey.customServices)?.raw.compactMapValues {
-            $0 as? [String: Any]
-        } ?? [:]
-
-        var items: [Section: [String]] = [.enabled: [], .disabled: []]
-        let builtIn = prefs.dict(PrefKey.builtInServices) ?? Prefs()
-
-        for service in builtInServices {
-            let isEnabled = builtIn.dict(service)?.bool(PrefKey.serviceEnabled) ?? false
-            items[isEnabled ? .enabled : .disabled, default: []].append(service)
-            serviceImages[service] = UIImage.serviceIcon(named: service, isCustom: false)
+        instances = ServiceInstanceStore.instances()
+        for instance in instances where icons[instance.type] == nil {
+            icons[instance.type] = ServiceIcon.image(forType: instance.type)
         }
-
-        for service in customServices.keys {
-            let isEnabled = Prefs(customServices[service] ?? [:]).bool(PrefKey.legacyEnabled)
-            items[isEnabled ? .enabled : .disabled, default: []].append(service)
-            serviceImages[service] = UIImage.serviceIcon(named: service, isCustom: true)
-        }
-
-        for section in Section.allCases {
-            items[section]?.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-        }
-        sectionItems = items
         servicesTable.reloadData()
     }
 
-    private func service(at indexPath: IndexPath) -> String? {
-        let items = sectionItems[Section(rawValue: indexPath.section) ?? .enabled] ?? []
-        guard indexPath.row < items.count else { return nil }
-        return items[indexPath.row]
+    /// The instance shown at one row.
+    private func instance(at indexPath: IndexPath) -> ServiceInstance? {
+        guard indexPath.row < instances.count else { return nil }
+        return instances[indexPath.row]
     }
 
-    private func isCustom(_ service: String) -> Bool {
-        customServices[service] != nil
-    }
-
-    /// Persists which services are enabled, in the order the sections show.
-    private func saveEnabledState() {
-        let enabled = Set(sectionItems[.enabled] ?? [])
-
-        var builtIn = PrefsStore.builtInServices().raw
-        for service in builtInServices {
-            var object = (builtIn[service] as? [String: Any]) ?? [:]
-            object[PrefKey.serviceEnabled] = enabled.contains(service)
-            builtIn[service] = object
-        }
-        PrefsStore.setValue(builtIn, forKey: PrefKey.builtInServices, notify: false)
-
-        // A custom service's own object carries its enabled flag, so the flag is
-        // written into the object rather than beside it.
-        for service in customServices.keys {
-            customServices[service]?[PrefKey.legacyEnabled] = enabled.contains(service)
-        }
-        saveCustomServices()
-    }
-
-    private func saveCustomServices() {
-        PrefsStore.setValue(customServices, forKey: PrefKey.customServices)
+    /// Persists the current order and enabled flags.
+    private func save() {
+        ServiceInstanceStore.reorder(instances)
     }
 
     // MARK: - Editing
@@ -149,266 +94,175 @@ public final class ServiceListController: PlainViewController, UITableViewDataSo
         sender.title = servicesTable.isEditing ? "Done".localized : "Edit".localized
         navigationItem.leftBarButtonItem = servicesTable.isEditing ? addButton : nil
 
-        if !servicesTable.isEditing {
-            saveEnabledState()
-        }
+        // Leaving edit mode is the persist point, so a drag in progress is
+        // never written.
+        if !servicesTable.isEditing { save() }
     }
 
-    // MARK: - Adding, renaming, deleting
+    // MARK: - Adding
 
+    /// Offers every kind of service to add.
+    ///
+    /// The picker lists the descriptors, not the configured instances, so adding
+    /// a second Pushover account is the same gesture as adding the first.
     @objc private func addService() {
-        promptForServiceName(
-            title: "Add Custom Service".localized, initialValue: nil,
-            confirmTitle: "Add".localized
-        ) { [weak self] name in
-            self?.addCustomService(named: name)
+        let picker = ServiceTypePickerController { [weak self] type in
+            guard let self else { return }
+            ServiceInstanceStore.add(type: type)
+            self.reloadData()
+
+            // Open the new instance immediately: a freshly added service exists
+            // only to be configured, and making the user find its row (possibly
+            // below the fold) would be busywork.
+            if let added = self.instances.last,
+               let index = self.instances.firstIndex(where: { $0.id == added.id }) {
+                self.servicesTable.scrollToRow(
+                    at: IndexPath(row: index, section: 0), at: .middle, animated: false
+                )
+                self.open(added)
+            }
         }
+        let navigation = UINavigationController(rootViewController: picker)
+        navigation.navigationBar.tintColor = Theme.activeTintColor
+        present(navigation, animated: true)
     }
 
-    private func addCustomService(named name: String) {
-        customServices[name] = [PrefKey.legacyEnabled: false]
-        sectionItems[.disabled, default: []].append(name)
-        sectionItems[.disabled]?.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-        serviceImages[name] = UIImage.serviceIcon(named: name, isCustom: true)
-        servicesTable.reloadSections(IndexSet(integer: Section.disabled.rawValue), with: .automatic)
-        saveCustomServices()
-    }
+    // MARK: - Row actions
 
-    private func renameService(_ service: String) {
-        promptForServiceName(
-            title: String(format: "Rename %@".localized, service),
-            initialValue: service,
-            confirmTitle: "Rename".localized
-        ) { [weak self] newName in
-            self?.performRename(from: service, to: newName)
-        }
-    }
-
-    private func performRename(from oldName: String, to newName: String) {
-        serviceImages[newName] = serviceImages.removeValue(forKey: oldName)
-        customServices[newName] = customServices.removeValue(forKey: oldName)
-        saveCustomServices()
-
-        // Drop the cached page for the old name so the renamed service reloads
-        // with fresh data instead of reusing a stale controller.
-        loadedControllers.removeValue(forKey: oldName)
-
-        // Legacy flat keys for the old name are renamed too; current installs
-        // store everything nested, but a pre-migration install may not.
-        migrateLegacyCustomServiceKeys(from: oldName, to: newName)
-
-        let section: Section = Prefs(customServices[newName] ?? [:]).bool(PrefKey.legacyEnabled)
-            ? .enabled : .disabled
-        sectionItems[section]?.removeAll { $0 == oldName }
-        sectionItems[section, default: []].append(newName)
-        sectionItems[section]?.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-
-        servicesTable.reloadSections(IndexSet(integersIn: 0..<Section.allCases.count), with: .fade)
-    }
-
-    /// Renames the flat `CustomService_<name>_CustomApps` and
-    /// `CustomServiceBL_<name>-*` keys, left over from an older build.
-    private func migrateLegacyCustomServiceKeys(from oldName: String, to newName: String) {
-        var prefs = PrefsStore.snapshot()
-        var keysToRemove: [String] = []
-
-        let oldCustomApps = PrefKey.legacyCustomAppsPrefix + oldName + PrefKey.legacyCustomAppsSuffix
-        let newCustomApps = PrefKey.legacyCustomAppsPrefix + newName + PrefKey.legacyCustomAppsSuffix
-        if let value = prefs[oldCustomApps] {
-            prefs[newCustomApps] = value
-            prefs.removeValue(forKey: oldCustomApps)
-            keysToRemove.append(oldCustomApps)
-        }
-
-        let oldPrefix = PrefKey.legacyCustomBlacklistPrefix + oldName + "-"
-        let newPrefix = PrefKey.legacyCustomBlacklistPrefix + newName + "-"
-        for key in prefs.keys where key.hasPrefix(oldPrefix) {
-            prefs[key.replacingOccurrences(of: oldPrefix, with: newPrefix)] = prefs[key]
-            prefs.removeValue(forKey: key)
-            keysToRemove.append(key)
-        }
-
-        guard !keysToRemove.isEmpty else { return }
-        PrefsStore.apply(prefs, removing: keysToRemove)
-    }
-
-    private func deleteService(_ service: String) {
-        customServices.removeValue(forKey: service)
-        loadedControllers.removeValue(forKey: service)
-        serviceImages.removeValue(forKey: service)
-        saveCustomServices()
-
-        // Remove the flat legacy keys too, so recreating a service with the same
-        // name does not resurrect its old app list or per-app overrides.
-        var prefs = PrefsStore.snapshot()
-        var keysToRemove: [String] = []
-        let prefix = PrefKey.legacyCustomBlacklistPrefix + service + "-"
-        for key in prefs.keys where key.hasPrefix(prefix) {
-            prefs.removeValue(forKey: key)
-            keysToRemove.append(key)
-        }
-        let customAppsKey = PrefKey.legacyCustomAppsPrefix + service + PrefKey.legacyCustomAppsSuffix
-        if prefs[customAppsKey] != nil {
-            prefs.removeValue(forKey: customAppsKey)
-            keysToRemove.append(customAppsKey)
-        }
-        if !keysToRemove.isEmpty {
-            PrefsStore.apply(prefs, removing: keysToRemove)
-        }
-    }
-
-    /// Asks for a service name, rejecting one that is already taken.
-    private func promptForServiceName(
-        title: String,
-        initialValue: String?,
-        confirmTitle: String,
-        completion: @escaping (String) -> Void
-    ) {
-        let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
+    private func rename(_ instance: ServiceInstance) {
+        let alert = UIAlertController(
+            title: "Rename Service".localized, message: nil, preferredStyle: .alert
+        )
         alert.addTextField { field in
-            field.placeholder = "Service Name".localized
-            field.text = initialValue
+            field.placeholder = "Name".localized
+            field.text = instance.name
         }
         alert.addAction(UIAlertAction(title: "Cancel".localized, style: .cancel))
-
-        // The check runs when the alert's handler fires, not before, so the
-        // retry re-prompts with the same title.
-        alert.addAction(UIAlertAction(title: confirmTitle, style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "Rename".localized, style: .default) { [weak self] _ in
             guard let self else { return }
             let name = alert.textFields?.first?.text?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard !name.isEmpty, name != initialValue else { return }
+            guard !name.isEmpty else { return }
 
-            guard self.customServices[name] == nil, !self.builtInServices.contains(name) else {
-                let exists = UIAlertController(
-                    title: title,
-                    message: "A service with that name already exists.".localized,
-                    preferredStyle: .alert
-                )
-                exists.addAction(UIAlertAction(title: "Ok".localized, style: .default) { _ in
-                    self.promptForServiceName(
-                        title: title, initialValue: initialValue,
-                        confirmTitle: confirmTitle, completion: completion
-                    )
-                })
-                self.present(exists, animated: true)
-                return
-            }
-            completion(name)
+            ServiceInstanceStore.update(id: instance.id) { $0[PrefKey.instanceName] = name }
+            self.loadedControllers.removeValue(forKey: instance.id)
+            self.reloadData()
         })
         present(alert, animated: true)
     }
 
+    private func delete(_ instance: ServiceInstance) {
+        // The instance's log goes with it: an id is never reused, so keeping the
+        // log would leave an orphan nothing can display.
+        ServiceInstanceStore.remove(id: instance.id)
+        loadedControllers.removeValue(forKey: instance.id)
+        reloadData()
+    }
+
+    /// Toggles one instance on or off.
+    @objc private func toggleEnabled(_ sender: UISwitch) {
+        guard sender.tag < instances.count else { return }
+        let instance = instances[sender.tag]
+        ServiceInstanceStore.update(id: instance.id) {
+            $0[PrefKey.serviceEnabled] = sender.isOn
+        }
+        instances[sender.tag].isEnabled = sender.isOn
+    }
+
+    /// Opens one instance's settings.
+    private func open(_ instance: ServiceInstance) {
+        let controller: ServiceController
+        if let cached = loadedControllers[instance.id] {
+            controller = cached
+        } else {
+            controller = ServiceController(instance: instance)
+            loadedControllers[instance.id] = controller
+        }
+        push(controller)
+    }
+
     // MARK: - First-run tutorial
 
-    /// Explains the Enabled/Disabled drag interaction the first time the list is
-    /// opened; the explained control is not discoverable on its own.
+    /// Explains the Edit/drag interaction, which is not discoverable on its own.
     private func showTutorialIfNeeded() {
         let key = "ServiceListTutorialShown"
         guard !PrefsStore.prefs().bool(key) else { return }
         PrefsStore.setValue(true, forKey: key, notify: false)
 
-        guard let window = keyWindow else { return }
-        let overlay = UIView(frame: window.bounds)
-        overlay.alpha = 0
-        overlay.backgroundColor = UIColor(white: 0, alpha: 0.9)
-
-        let label = UILabel()
-        label.font = .systemFont(ofSize: UIFont.systemFontSize * 1.5, weight: .thin)
-        label.textColor = .white
-        label.text = "After setting up your services, remember to enable them by using the "
-            .localized + "'Edit' button in the top right of this page and dragging your services "
-            .localized + "to the 'Enabled' section at the top.\n\nTap anywhere to continue.".localized
-        label.numberOfLines = 0
-        label.textAlignment = .center
-        label.translatesAutoresizingMaskIntoConstraints = false
-        overlay.addSubview(label)
-
-        NSLayoutConstraint.activate([
-            label.widthAnchor.constraint(equalToConstant: 270),
-            label.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
-        ])
-
-        window.addSubview(overlay)
-        UIView.animate(withDuration: 0.3) { overlay.alpha = 1 }
-
-        // The dismiss gesture is armed after a beat: an immediate one would let
-        // the tap that opened the page also close the tutorial.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            overlay.addGestureRecognizer(
-                UITapGestureRecognizer(target: self, action: #selector(self.dismissTutorial(_:)))
-            )
-        }
-    }
-
-    @objc private func dismissTutorial(_ gesture: UITapGestureRecognizer) {
-        guard let overlay = gesture.view else { return }
-        UIView.animate(withDuration: 0.3, animations: { overlay.alpha = 0 }) { _ in
-            overlay.removeFromSuperview()
-        }
-    }
-
-    /// The frontmost window, which is where the tutorial overlay has to be added
-    /// so it covers the whole Settings screen.
-    private var keyWindow: UIWindow? {
-        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes
-        where scene.activationState == .foregroundActive {
-            if let window = scene.windows.first(where: \.isKeyWindow) { return window }
-        }
-        return nil
+        let message = "Add the services you want with the + button, then use 'Edit' to "
+            .localized + "drag them into the order you want them tried in. A notification is "
+            .localized + "sent to every enabled service."
+        TutorialOverlay.present(message, from: self, in: view.window)
     }
 }
 
-// MARK: - Table data source
+// MARK: - Table
 
-extension ServiceListController {
-    public func numberOfSections(in tableView: UITableView) -> Int {
-        Section.allCases.count
-    }
-
+extension ServiceListController: UITableViewDataSource, UITableViewDelegate {
     public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        sectionItems[Section(rawValue: section) ?? .enabled]?.count ?? 0
+        instances.count
     }
 
-    public func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        (Section(rawValue: section) ?? .enabled).title.localized
+    public func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+        instances.isEmpty ? "No services yet. Tap + to add one.".localized : nil
     }
 
     public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: Self.cellIdentifier, for: indexPath)
-        guard let service = service(at: indexPath) else { return cell }
+        guard let instance = instance(at: indexPath) else { return cell }
 
-        cell.textLabel?.text = Localization.serviceDisplayName(service)
+        cell.textLabel?.text = Localization.instanceDisplayName(instance)
+        cell.detailTextLabel?.text = nil
+        cell.imageView?.image = icons[instance.type]
         cell.accessoryType = .disclosureIndicator
-        cell.imageView?.image = serviceImages[service]
+
+        // The switch is the row's own accessory, so it is rebuilt each time
+        // rather than reused from a recycled cell.
+        let toggle = UISwitch()
+        toggle.isOn = instance.isEnabled
+        toggle.tag = indexPath.row
+        toggle.addTarget(self, action: #selector(toggleEnabled(_:)), for: .valueChanged)
+        cell.accessoryView = toggle
+
         return cell
     }
 
-    public func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool { true }
+    public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        guard let instance = instance(at: indexPath) else { return }
+
+        // While editing, tapping the row renames it (the delete control and the
+        // drag handle are the other editing affordances).
+        if tableView.isEditing {
+            rename(instance)
+            return
+        }
+        open(instance)
+    }
+
+    public func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
+        true
+    }
 
     public func tableView(
         _ tableView: UITableView,
         moveRowAt sourceIndexPath: IndexPath,
         to destinationIndexPath: IndexPath
     ) {
-        lastTargetService = nil
-        lastTargetIndexPath = nil
-        guard let service = service(at: sourceIndexPath),
-              let from = Section(rawValue: sourceIndexPath.section),
-              let to = Section(rawValue: destinationIndexPath.section)
-        else { return }
-
-        sectionItems[from]?.remove(at: sourceIndexPath.row)
-        sectionItems[to]?.insert(service, at: destinationIndexPath.row)
+        guard sourceIndexPath.row < instances.count else { return }
+        let moved = instances.remove(at: sourceIndexPath.row)
+        let destination = min(destinationIndexPath.row, instances.count)
+        instances.insert(moved, at: destination)
+        // The order is only written when editing ends; the rows are renumbered
+        // here so their switches keep pointing at the right instance.
+        tableView.reloadData()
     }
 
     public func tableView(
         _ tableView: UITableView,
         editingStyleForRowAt indexPath: IndexPath
     ) -> UITableViewCell.EditingStyle {
-        guard let service = service(at: indexPath) else { return .none }
-        return isCustom(service) ? .delete : .none
+        .delete
     }
 
     public func tableView(
@@ -416,75 +270,106 @@ extension ServiceListController {
         commit editingStyle: UITableViewCell.EditingStyle,
         forRowAt indexPath: IndexPath
     ) {
-        guard editingStyle == .delete, let service = service(at: indexPath),
-              let section = Section(rawValue: indexPath.section) else { return }
-
-        deleteService(service)
-        sectionItems[section]?.remove(at: indexPath.row)
+        guard editingStyle == .delete, let instance = instance(at: indexPath) else { return }
+        delete(instance)
         tableView.deleteRows(at: [indexPath], with: .left)
     }
 
-    /// Keeps a dragged row alphabetical within its target section.
-    ///
-    /// Without this a row would land wherever it was dropped, and the list would
-    /// re-sort out from under it the next time it reloaded.
     public func tableView(
         _ tableView: UITableView,
-        targetIndexPathForMoveFromRowAt sourceIndexPath: IndexPath,
-        toProposedIndexPath proposedDestinationIndexPath: IndexPath
-    ) -> IndexPath {
-        // A drop back onto the row's own section is not a move.
-        guard sourceIndexPath.section != proposedDestinationIndexPath.section else {
-            return sourceIndexPath
-        }
-        guard let service = service(at: sourceIndexPath), let section = Section(rawValue: proposedDestinationIndexPath.section)
-        else { return proposedDestinationIndexPath }
+        trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
+    ) -> UISwipeActionsConfiguration? {
+        guard !tableView.isEditing, let instance = instance(at: indexPath) else { return nil }
 
-        // During a drag the servicesTable asks repeatedly for the same row; the previous
-        // answer is reused so the row does not jitter between two positions.
-        if lastTargetService == service, let lastTargetIndexPath {
-            return lastTargetIndexPath
+        let delete = UIContextualAction(style: .destructive, title: "Delete".localized) {
+            [weak self] _, _, completion in
+            self?.delete(instance)
+            completion(true)
         }
-        lastTargetService = service
+        let configuration = UISwipeActionsConfiguration(actions: [delete])
+        // A full swipe would delete without confirmation; the list is easy to
+        // swipe by accident while scrolling.
+        configuration.performsFirstActionWithFullSwipe = false
+        return configuration
+    }
 
-        let sorted = ((sectionItems[section] ?? []) + [service])
-            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-        let indexPath = IndexPath(
-            row: sorted.firstIndex(of: service) ?? 0, section: proposedDestinationIndexPath.section
-        )
-        lastTargetIndexPath = indexPath
-        return indexPath
+    public func tableView(
+        _ tableView: UITableView,
+        shouldIndentWhileEditingRowAt indexPath: IndexPath
+    ) -> Bool {
+        false
     }
 }
 
-// MARK: - Table delegate
+// MARK: - Service icons
 
-extension ServiceListController {
-    public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-        guard let service = service(at: indexPath) else { return }
+/// The artwork for a service type.
+enum ServiceIcon {
+    /// The icon for a service type, falling back to the shared default so a
+    /// service without its own artwork still shows one.
+    static func image(forType type: String) -> UIImage? {
+        let name = ServiceRegistry.isBuiltIn(type)
+            ? "BuiltInService_\(type)"
+            : "CustomService_\(type)"
+        return UIImage.pusher(named: name) ?? UIImage.pusher(named: "DefaultService")
+    }
+}
 
-        // While editing, tapping a custom service renames it.
-        if tableView.isEditing {
-            if isCustom(service) { renameService(service) }
-            return
-        }
+// MARK: - Type picker
 
-        let controller: ServiceController
-        if let cached = loadedControllers[service] {
-            controller = cached
-        } else {
-            controller = ServiceController(
-                service: service,
-                image: serviceImages[service] ?? UIImage.serviceIcon(named: service, isCustom: isCustom(service)),
-                isCustom: isCustom(service)
-            )
-            loadedControllers[service] = controller
-        }
-        push(controller)
+/// The "what do you want to add" list.
+///
+/// Lists descriptors rather than instances, so it reads the same whether the
+/// user already has three Bark servers or none.
+@objc(NSPushServiceTypePickerController)
+public final class ServiceTypePickerController: UITableViewController {
+    private let onPick: (String) -> Void
+    private let descriptors = ServiceRegistry.addableServices
+
+    public init(onPick: @escaping (String) -> Void) {
+        self.onPick = onPick
+        super.init(style: .insetGrouped)
     }
 
-    public func tableView(_ tableView: UITableView, shouldIndentWhileEditingRowAt indexPath: IndexPath) -> Bool {
-        false
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    public override func viewDidLoad() {
+        super.viewDidLoad()
+        navigationItem.title = "Add Service".localized
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .cancel, target: self, action: #selector(cancel)
+        )
+    }
+
+    @objc private func cancel() {
+        dismiss(animated: true)
+    }
+
+    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        descriptors.count
+    }
+
+    public override func tableView(
+        _ tableView: UITableView,
+        cellForRowAt indexPath: IndexPath
+    ) -> UITableViewCell {
+        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        let descriptor = descriptors[indexPath.row]
+
+        cell.textLabel?.text = Localization.serviceDisplayName(descriptor.displayName)
+        cell.imageView?.image = ServiceIcon.image(forType: descriptor.name)
+        cell.accessoryType = .none
+        return cell
+    }
+
+    public override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        let descriptor = descriptors[indexPath.row]
+        // Dismiss first so the presenting page can push the new instance's
+        // settings without fighting the modal transition.
+        dismiss(animated: true) { [onPick] in
+            onPick(descriptor.name)
+        }
     }
 }

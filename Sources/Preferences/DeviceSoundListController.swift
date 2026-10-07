@@ -14,7 +14,7 @@ open class DeviceSoundListController: ListController {
     /// The `{ name, id, enabled }` entries currently shown.
     var items: [[String: Any]] = []
 
-    private var service: String?
+    var instanceID: String?
     private var customAppID: String?
     private var isCustomApp = false
     private var updateButton: UIBarButtonItem?
@@ -30,7 +30,7 @@ open class DeviceSoundListController: ListController {
 
     /// Whether selecting an entry deselects all the others.
     open var onlyAllowOne: Bool {
-        isSoundMode || service == PushbulletService.serviceName
+        isSoundMode || serviceType == PushbulletService.serviceName
     }
 
     /// Explanatory text shown above the list.
@@ -41,6 +41,13 @@ open class DeviceSoundListController: ListController {
 
     /// The storage key for this list.
     var storageKey: String { isSoundMode ? PrefKey.sounds : PrefKey.devices }
+
+    /// The instance's service *type*, which selects the provider API to refresh
+    /// from. The instance id identifies where the list is stored; the type
+    /// identifies how to fetch it.
+    var serviceType: String? {
+        specifier?.string(SpecifierRouting.PropertyKey.serviceType)
+    }
 
     // MARK: - Lifecycle
 
@@ -80,7 +87,7 @@ open class DeviceSoundListController: ListController {
     }
 
     private func readSpecifierContext() {
-        service = specifier?.string(SpecifierRouting.PropertyKey.service) ?? service
+        instanceID = specifier?.string(SpecifierRouting.PropertyKey.instanceID) ?? instanceID
         isCustomApp = specifier?.bool(SpecifierRouting.PropertyKey.isCustomApp) ?? false
         if isCustomApp {
             customAppID = specifier?.string("customAppIDKey")
@@ -95,11 +102,11 @@ open class DeviceSoundListController: ListController {
     /// Devices and sounds share this shape (`{ name, id, enabled }`); the
     /// normalized service config is what reduces sounds to their IDs.
     func loadItems() {
-        guard let service else { return }
+        guard let instanceID else { return }
         let stored = isCustomApp
-            ? PrefsStore.customAppPrefs(service: service, appID: customAppID ?? "", isCustom: false)
+            ? PrefsStore.customAppPrefs(service: instanceID, appID: customAppID ?? "")
                 .dictionaries(storageKey)
-            : PrefsStore.service(named: service, isCustom: false).dictionaries(storageKey)
+            : PrefsStore.instance(instanceID).dictionaries(storageKey)
 
         items = stored.compactMap { entry in
             guard let id = entry.string("id") else { return nil }
@@ -113,19 +120,17 @@ open class DeviceSoundListController: ListController {
     /// Writes the whole list back, preserving the entries the payload builders
     /// ignore so opening this page never drops a device or sound.
     func saveItems() {
-        guard let service else { return }
+        guard let instanceID else { return }
         let write: (inout [String: Any]) -> Void = { object in
             object[self.storageKey] = self.items
         }
 
         if isCustomApp, let customAppID {
-            var appPrefs = PrefsStore.customAppPrefs(
-                service: service, appID: customAppID, isCustom: false
-            ).raw
+            var appPrefs = PrefsStore.customAppPrefs(service: instanceID, appID: customAppID).raw
             write(&appPrefs)
-            PrefsStore.setCustomAppPrefs(appPrefs, service: service, appID: customAppID, isCustom: false)
+            PrefsStore.setCustomAppPrefs(appPrefs, service: instanceID, appID: customAppID)
         } else {
-            PrefsStore.updateService(named: service, isCustom: false, write)
+            PrefsStore.updateInstance(instanceID, write)
         }
     }
 
@@ -278,11 +283,11 @@ open class DeviceSoundListController: ListController {
 @objc(NSPDeviceListController)
 public final class DeviceListController: DeviceSoundListController {
     public override var onlyAllowOne: Bool {
-        serviceName == PushbulletService.serviceName
+        serviceType == PushbulletService.serviceName
     }
 
     public override var footerText: String? {
-        switch serviceName {
+        switch serviceType {
         case PushoverService.serviceName:
             return "Selecting none will forward push notifications to all devices.".localized
         case PushbulletService.serviceName:
@@ -294,7 +299,7 @@ public final class DeviceListController: DeviceSoundListController {
     }
 
     public override func updateItems() async throws {
-        switch serviceName {
+        switch serviceType {
         case PushoverService.serviceName:
             try await updatePushoverDevices()
         case PushbulletService.serviceName:
@@ -304,15 +309,11 @@ public final class DeviceListController: DeviceSoundListController {
         }
     }
 
-    private var serviceName: String? {
-        specifier?.string(SpecifierRouting.PropertyKey.service)
-    }
-
     /// Pushover has no device-list endpoint, so the credentials are validated
     /// and the stored devices kept as-is.
     private func updatePushoverDevices() async throws {
-        guard let service = serviceName else { return }
-        let credentials = PrefsStore.service(named: service, isCustom: false)
+        guard let instanceID else { return }
+        let credentials = PrefsStore.instance(instanceID)
         let body = [
             "token": credentials.string(PrefKey.token, default: ""),
             "user": credentials.string(PrefKey.user, default: ""),
@@ -354,9 +355,8 @@ public final class SoundListController: DeviceSoundListController {
     public override var onlyAllowOne: Bool { true }
 
     public override func updateItems() async throws {
-        guard let service = serviceName else { return }
-        let token = PrefsStore.service(named: service, isCustom: false)
-            .string(PrefKey.token, default: "")
+        guard let instanceID, let service = serviceType else { return }
+        let token = PrefsStore.instance(instanceID).string(PrefKey.token, default: "")
 
         switch service {
         case PushoverService.serviceName:
@@ -376,10 +376,6 @@ public final class SoundListController: DeviceSoundListController {
         default:
             break
         }
-    }
-
-    private var serviceName: String? {
-        specifier?.string(SpecifierRouting.PropertyKey.service)
     }
 
     /// Pushbullet has no sound list, so the list is left as it is.

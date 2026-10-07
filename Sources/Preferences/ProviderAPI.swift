@@ -91,9 +91,15 @@ enum PushbulletAPI {
         return json
     }
 
+    /// The access token of the instance being refreshed.
+    ///
+    /// Pushbullet's API is not per-instance, but the token is: the caller sets
+    /// this before making a request, so the client stays a plain transport.
+    static var instanceID: String?
+
     private static func currentToken() -> String? {
-        let token = PrefsStore.service(named: PushbulletService.serviceName, isCustom: false)
-            .string(PrefKey.token, default: "")
+        guard let instanceID else { return nil }
+        let token = PrefsStore.instance(instanceID).string(PrefKey.token, default: "")
         return token.isEmpty ? nil : token
     }
 }

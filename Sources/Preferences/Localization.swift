@@ -14,13 +14,28 @@ public enum Localization {
         bundle.localizedString(forKey: key, value: key, table: nil)
     }
 
-    /// A human-readable display name for a service.
+    /// A human-readable display name for a service type.
     ///
-    /// Internal service keys (e.g. `"Feishu"`) stay English in prefs and the log
-    /// so they remain stable identifiers; the UI shows the localized name, and a
-    /// custom service name passes through unchanged.
+    /// Registry names (e.g. `"Feishu"`) stay English in prefs and the log so
+    /// they remain stable identifiers; the UI shows the localized name. An
+    /// instance's own name is already user-facing and is shown as-is — see
+    /// ``instanceDisplayName(_:)``.
     public static func serviceDisplayName(_ service: String?) -> String {
         string(service ?? "")
+    }
+
+    /// A human-readable name for one instance.
+    ///
+    /// An instance whose name is the descriptor's default is localized, so the
+    /// built-in services read naturally in every language; a name the user
+    /// edited (or that was auto-numbered to "Bark 2") is their own text and
+    /// passes through unchanged.
+    public static func instanceDisplayName(_ instance: ServiceInstance) -> String {
+        let descriptor = instance.descriptor
+        if instance.name == descriptor.displayName {
+            return string(descriptor.displayName)
+        }
+        return instance.name
     }
 }
 

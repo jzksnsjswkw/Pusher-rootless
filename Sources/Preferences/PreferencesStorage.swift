@@ -6,65 +6,28 @@ import UIKit
 /// the class is the `target` those specifiers point at, so the Preferences
 /// framework invokes these directly through `performSelector`.
 ///
-/// Every accessor edits the *nested* storage for its page:
-/// `BuiltInServices[service][key]`, `CustomServices[service][key]`,
-/// `CustomServices[service][customApps][appID][key]` or `Global[key]`.
-/// `appListIsBlacklist` defaults to `true`, so a `true` value is removed rather
-/// than stored — reads then fall back to the default and prefs stay clean.
+/// Every accessor edits the storage of one *instance* inside the `Services`
+/// array: `Services[i][key]`, or `Services[i][customApps][appID][key]` for a
+/// per-app override. `appListIsBlacklist` defaults to `true`, so a `true` value
+/// is removed rather than stored — reads then fall back to the default and prefs
+/// stay clean.
 @objc(NSPPreferencesStorage)
 public final class PreferencesStorage: NSObject {
 
-    // MARK: - Built-in services
+    // MARK: - One instance
 
-    @objc(setValue:forBuiltInServiceSpecifier:)
-    public static func setValue(_ value: Any?, forBuiltInServiceSpecifier specifier: PSSpecifier) {
-        guard let service = specifier.string(SpecifierRouting.PropertyKey.service) else { return }
-
-        if specifier.bool(SpecifierRouting.PropertyKey.isCustomApp) {
-            setCustomAppValue(value, specifier: specifier, isCustomService: false)
-            return
-        }
-
-        let key = specifier.string(SpecifierRouting.PropertyKey.key)
-            ?? specifier.string(SpecifierRouting.PropertyKey.customServiceKey)
-        guard let key else { return }
-
-        PrefsStore.updateService(named: service, isCustom: false) { object in
-            if let value, !isDefaultBool(key: key, value: value) {
-                object[key] = value
-            } else {
-                object.removeValue(forKey: key)
-            }
-        }
-    }
-
-    @objc(readValueForBuiltInServiceSpecifier:)
-    public static func readValue(forBuiltInServiceSpecifier specifier: PSSpecifier) -> Any? {
-        guard let service = specifier.string(SpecifierRouting.PropertyKey.service) else { return nil }
+    @objc(setValue:forInstanceSpecifier:)
+    public static func setValue(_ value: Any?, forInstanceSpecifier specifier: PSSpecifier) {
+        guard let id = specifier.string(SpecifierRouting.PropertyKey.instanceID) else { return }
 
         if specifier.bool(SpecifierRouting.PropertyKey.isCustomApp) {
-            return customAppValue(specifier: specifier, isCustomService: false)
-        }
-
-        let key = specifier.string(SpecifierRouting.PropertyKey.key)
-            ?? specifier.string(SpecifierRouting.PropertyKey.customServiceKey)
-        guard let key else { return nil }
-        return storedValue(service: service, isCustom: false, key: key, specifier: specifier)
-    }
-
-    // MARK: - Custom services
-
-    @objc(setValue:forCustomSpecifier:)
-    public static func setValue(_ value: Any?, forCustomSpecifier specifier: PSSpecifier) {
-        guard let service = specifier.string(SpecifierRouting.PropertyKey.service) else { return }
-
-        if specifier.bool(SpecifierRouting.PropertyKey.isCustomApp) {
-            setCustomAppValue(value, specifier: specifier, isCustomService: true)
+            setCustomAppValue(value, specifier: specifier, id: id)
             return
         }
 
         guard let key = specifier.string(SpecifierRouting.PropertyKey.key) else { return }
-        PrefsStore.updateService(named: service, isCustom: true) { object in
+
+        PrefsStore.updateInstance(id) { object in
             if let value, !isDefaultBool(key: key, value: value) {
                 object[key] = value
             } else {
@@ -73,16 +36,19 @@ public final class PreferencesStorage: NSObject {
         }
     }
 
-    @objc(readValueForCustomSpecifier:)
-    public static func readValue(forCustomSpecifier specifier: PSSpecifier) -> Any? {
-        guard let service = specifier.string(SpecifierRouting.PropertyKey.service) else { return nil }
+    @objc(readValueForInstanceSpecifier:)
+    public static func readValue(forInstanceSpecifier specifier: PSSpecifier) -> Any? {
+        guard let id = specifier.string(SpecifierRouting.PropertyKey.instanceID) else { return nil }
 
         if specifier.bool(SpecifierRouting.PropertyKey.isCustomApp) {
-            return customAppValue(specifier: specifier, isCustomService: true)
+            return customAppValue(specifier: specifier, id: id)
         }
 
         guard let key = specifier.string(SpecifierRouting.PropertyKey.key) else { return nil }
-        return storedValue(service: service, isCustom: true, key: key, specifier: specifier)
+
+        let stored = PrefsStore.instance(id)
+        if let value = stored[key] { return value }
+        return specifier.storedDefault
     }
 
     // MARK: - Global settings
@@ -108,67 +74,36 @@ public final class PreferencesStorage: NSObject {
 
     // MARK: - Per-app overrides
 
-    private static func setCustomAppValue(
-        _ value: Any?,
-        specifier: PSSpecifier,
-        isCustomService: Bool
-    ) {
-        guard let service = specifier.string(SpecifierRouting.PropertyKey.service),
-              let appID = specifier.string(SpecifierRouting.PropertyKey.customAppID),
+    private static func setCustomAppValue(_ value: Any?, specifier: PSSpecifier, id: String) {
+        guard let appID = specifier.string(SpecifierRouting.PropertyKey.customAppID),
               let key = specifier.string(SpecifierRouting.PropertyKey.key)
                 ?? specifier.string(SpecifierRouting.PropertyKey.customAppsPrefsKey)
         else { return }
 
-        var appPrefs = PrefsStore.customAppPrefs(
-            service: service, appID: appID, isCustom: isCustomService
-        ).raw
+        var appPrefs = PrefsStore.customAppPrefs(service: id, appID: appID).raw
         if let value {
             appPrefs[key] = value
         } else {
             appPrefs.removeValue(forKey: key)
         }
-        PrefsStore.setCustomAppPrefs(
-            appPrefs, service: service, appID: appID, isCustom: isCustomService
-        )
+        PrefsStore.setCustomAppPrefs(appPrefs, service: id, appID: appID)
     }
 
-    private static func customAppValue(specifier: PSSpecifier, isCustomService: Bool) -> Any? {
-        guard let service = specifier.string(SpecifierRouting.PropertyKey.service),
-              let appID = specifier.string(SpecifierRouting.PropertyKey.customAppID),
+    private static func customAppValue(specifier: PSSpecifier, id: String) -> Any? {
+        guard let appID = specifier.string(SpecifierRouting.PropertyKey.customAppID),
               let key = specifier.string(SpecifierRouting.PropertyKey.key)
                 ?? specifier.string(SpecifierRouting.PropertyKey.customAppsPrefsKey)
         else { return nil }
 
-        let appPrefs = PrefsStore.customAppPrefs(
-            service: service, appID: appID, isCustom: isCustomService
-        )
+        let appPrefs = PrefsStore.customAppPrefs(service: id, appID: appID)
         if let value = appPrefs[key] { return value }
-        // Fall back to the service-wide value so an override page opens showing
+        // Fall back to the instance-wide value so an override page opens showing
         // what the app currently inherits.
-        let servicePrefs = PrefsStore.service(named: service, isCustom: isCustomService)
-        return servicePrefs[key] ?? specifier.storedDefault
+        let instancePrefs = PrefsStore.instance(id)
+        return instancePrefs[key] ?? specifier.storedDefault
     }
 
     // MARK: - Helpers
-
-    /// Reads one stored key, falling back to the cell's `globalKey` and then to
-    /// its declared default.
-    private static func storedValue(
-        service: String,
-        isCustom: Bool,
-        key: String,
-        specifier: PSSpecifier
-    ) -> Any? {
-        let servicePrefs = PrefsStore.service(named: service, isCustom: isCustom)
-        if let value = servicePrefs[key] { return value }
-        // Cells whose value predates the nested layout (or lives at the top
-        // level by design) name a fallback key.
-        if let globalKey = specifier.string(SpecifierRouting.PropertyKey.globalKey),
-           let value = PrefsStore.value(forKey: globalKey) {
-            return value
-        }
-        return specifier.storedDefault
-    }
 
     /// `appListIsBlacklist` defaults to `true`, so storing `true` is a no-op and
     /// the entry is dropped instead (reads fall back to the default).
@@ -182,9 +117,8 @@ public final class PreferencesStorage: NSObject {
 
 /// The app-list accessors the app selection controllers use.
 ///
-/// The lists live in three different places depending on which page is open
-/// (global, a built-in service, or a custom service), which is why they are not
-/// a single accessor pair.
+/// A list belongs either to the global settings or to one instance, which is why
+/// this is a pair of accessors rather than a single one.
 public enum AppListStorage {
     public static func global() -> [String] {
         PrefsStore.global().stringArray(PrefKey.appList)
@@ -194,19 +128,11 @@ public enum AppListStorage {
         PrefsStore.updateGlobal { $0[PrefKey.appList] = appList }
     }
 
-    public static func builtIn(service: String) -> [String] {
-        PrefsStore.service(named: service, isCustom: false).stringArray(PrefKey.appList)
+    public static func forInstance(_ id: String) -> [String] {
+        PrefsStore.instance(id).stringArray(PrefKey.appList)
     }
 
-    public static func setBuiltIn(_ appList: [String], service: String) {
-        PrefsStore.updateService(named: service, isCustom: false) { $0[PrefKey.appList] = appList }
-    }
-
-    public static func custom(service: String) -> [String] {
-        PrefsStore.service(named: service, isCustom: true).stringArray(PrefKey.appList)
-    }
-
-    public static func setCustom(_ appList: [String], service: String) {
-        PrefsStore.updateService(named: service, isCustom: true) { $0[PrefKey.appList] = appList }
+    public static func setForInstance(_ appList: [String], id: String) {
+        PrefsStore.updateInstance(id) { $0[PrefKey.appList] = appList }
     }
 }

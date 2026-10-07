@@ -13,8 +13,7 @@ import UIKit
 /// service's overrides so it follows the global values again.
 @objc(NSPSNSListController)
 public final class SNSListController: ListController {
-    private var service: String?
-    private var isCustomService = false
+    private var instanceID: String?
     /// Whether this page edits a service (as opposed to the global defaults).
     private var isServiceMode = false
     private var synchronizeButton: PSSpecifier?
@@ -30,21 +29,19 @@ public final class SNSListController: ListController {
 
         // The "service" property is a string for a service page and absent for
         // the global page, which is what distinguishes the two.
-        service = specifier?.string(SpecifierRouting.PropertyKey.service)
-        isServiceMode = service != nil
-        guard let service, isServiceMode else { return }
+        instanceID = specifier?.string(SpecifierRouting.PropertyKey.instanceID)
+        isServiceMode = instanceID != nil
+        guard let instanceID, isServiceMode else { return }
 
-        isCustomService = specifier?.bool(SpecifierRouting.PropertyKey.isCustomService) ?? false
         let specifiers = (super.specifiers as? [PSSpecifier]) ?? []
 
         // A service page falls back to the global value for any condition it
         // has not overridden. Whether *every* condition currently falls back is
         // what the synchronize button reports.
         var isSynchronized = true
-        let servicePrefs = PrefsStore.service(named: service, isCustom: isCustomService)
+        let servicePrefs = PrefsStore.instance(instanceID)
         for specifier in specifiers {
-            specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.service)
-            specifier.setProperty(isCustomService, forKey: SpecifierRouting.PropertyKey.isCustomService)
+            specifier.setProperty(instanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
             specifier.setProperty(true, forKey: SpecifierRouting.PropertyKey.isCustomApp)
 
             if isSynchronized, let key = specifier.string(SpecifierRouting.PropertyKey.key) {
@@ -54,11 +51,6 @@ public final class SNSListController: ListController {
                 if servicePrefs[key] != nil || servicePrefs[specifier.identifier] != nil {
                     isSynchronized = false
                 }
-            }
-
-            // The global fallback lookup uses the plist's own key name.
-            if let key = specifier.string(SpecifierRouting.PropertyKey.key) {
-                specifier.setProperty(key, forKey: SpecifierRouting.PropertyKey.globalKey)
             }
         }
 
@@ -113,7 +105,7 @@ public final class SNSListController: ListController {
 
             // The AND/OR flag also drives two other conditions, so changing it
             // updates them here rather than relying on the user to do it.
-            if specifier.identifier?.contains("SufficientNotificationSettingsIsAnd") == true {
+            if specifier.identifier?.contains(PrefKey.snsIsAnd) == true {
                 // "Allow Notifications" is mirrored onto the AND flag.
                 if let allow = self.specifier(forID: "Allow Notifications".localized) {
                     allow.performSetter(withValue: value)
@@ -140,18 +132,12 @@ public final class SNSListController: ListController {
             reloadSpecifier(synchronizeButton, animated: true)
         }
 
-        if isCustomService {
-            PreferencesStorage.setValue(value, forCustomSpecifier: specifier)
-        } else {
-            PreferencesStorage.setValue(value, forBuiltInServiceSpecifier: specifier)
-        }
+        PreferencesStorage.setValue(value, forInstanceSpecifier: specifier)
     }
 
     @objc public func readValue(_ specifier: PSSpecifier) -> Any? {
         guard isServiceMode else { return super.readPreferenceValue(specifier) }
-        return isCustomService
-            ? PreferencesStorage.readValue(forCustomSpecifier: specifier)
-            : PreferencesStorage.readValue(forBuiltInServiceSpecifier: specifier)
+        return PreferencesStorage.readValue(forInstanceSpecifier: specifier)
     }
 }
 

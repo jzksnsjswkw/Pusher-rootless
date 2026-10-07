@@ -194,8 +194,6 @@
 			<string>app_list</string>
 			<key>detail</key>
 			<string>NSPCustomizeAppsController</string>
-			<key>isCustomService</key>
-			<true/>
 			<key>defaultIncludeIconKey</key>
 			<string>includeIcon</string>
 			<key>defaultIncludeImageKey</key>

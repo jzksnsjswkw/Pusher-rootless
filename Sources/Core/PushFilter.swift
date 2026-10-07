@@ -35,10 +35,10 @@ public enum PushFilter {
             return reason
         }
 
-        // Every service that is about to be fanned out to must have a config.
+        // Every instance that is about to be fanned out to must have a config.
         // (An empty enabled list is not an error here: the engine logs it and
         // stops without treating the bulletin as filtered.)
-        for service in config.enabledServiceNames where config.service(service) == nil {
+        for instance in config.enabledInstances where config.config(forID: instance.id) == nil {
             return "Service prefs are nil, they shouldn't be"
         }
 

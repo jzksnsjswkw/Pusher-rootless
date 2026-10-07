@@ -53,6 +53,10 @@ open class PlainViewController: PSViewController, TintableController {
         tintToPusherColor()
     }
 
+    // Navigation note: `PSViewController`'s `rootController` property and
+    // `pushController:` method are imported by Swift as `root` and `push(_:)`,
+    // which is what the pages call — no wrapper is needed.
+
     /// Recolors the page. The table is reloaded too, so the icons in its cells
     /// pick up the new color.
     open func tintToPusherColor() {

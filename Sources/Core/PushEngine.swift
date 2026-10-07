@@ -122,13 +122,17 @@ public final class PushEngine: NSObject {
             return
         }
 
-        guard !config.enabledServiceNames.isEmpty else {
+        // SEAM: the "received a notification" hook runs here — after the
+        // global gates have passed and before any per-instance filter, so a
+        // script sees every notification the pipeline would otherwise forward.
+
+        guard !config.enabledInstances.isEmpty else {
             PusherLog.debug("No services enabled!")
             return
         }
 
-        for service in config.enabledServiceNames {
-            send(to: service, context: context, config: config)
+        for instance in config.enabledInstances {
+            send(to: instance, context: context, config: config)
         }
     }
 
@@ -159,12 +163,23 @@ public final class PushEngine: NSObject {
 
     // MARK: - Per-service pipeline
 
-    /// Applies the app-list / SNS / device-condition filters and then builds and
-    /// sends the request for one service.
-    public func send(to service: String, context: BulletinContext, config: ConfigSnapshot? = nil) {
+    /// Applies the filters and then builds and sends the request for one
+    /// instance.
+    public func send(to id: String, context: BulletinContext, config: ConfigSnapshot? = nil) {
         let snapshot = config ?? currentConfig()
-        guard let serviceConfig = snapshot.service(service) else { return }
-        let serviceType = ServiceRegistry.service(named: service)
+        guard let instance = snapshot.instance(id: id) else { return }
+        send(to: instance, context: context, config: snapshot)
+    }
+
+    /// Applies the app-list / SNS / device-condition filters and then builds and
+    /// sends the request for one instance.
+    private func send(to instance: ServiceInstance, context: BulletinContext, config: ConfigSnapshot) {
+        let id = instance.id
+        guard let serviceConfig = config.config(forID: id) else { return }
+        let serviceType = instance.descriptor
+        // The log is keyed by instance id, so two instances of one service keep
+        // separate logs.
+        let service = id
 
         // A test push is explicitly requested by the user, so the per-app
         // filters (which exist to suppress *unwanted* pushes) do not apply.
@@ -213,9 +228,12 @@ public final class PushEngine: NSObject {
             }
             PusherLog.debug("[S:\(service),A:\(context.appID)] Device Conditions ok")
 
-            // Per-app overrides replace the service-wide prefs for this app.
+            // Per-app overrides replace the instance-wide prefs for this app.
             effectiveConfig = serviceConfig.effective(forAppID: context.appID)
         }
+
+        // SEAM: the "passed the filters" hook runs here — every gate above has
+        // already said yes, and nothing has been sent yet.
 
         // Build and send on a background queue: the filter decision above ran on
         // the main thread where the SpringBoard objects live, but building the

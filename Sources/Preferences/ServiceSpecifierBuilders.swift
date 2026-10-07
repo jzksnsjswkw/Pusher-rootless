@@ -190,7 +190,7 @@ public final class ServiceSpecifierBuilders: NSObject {
             title.localized, target: nil, set: nil, get: nil,
             detail: detail, cell: .linkCell, edit: nil
         )!
-        specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.service)
+        specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.serviceType)
         specifier.setProperty(appID != nil, forKey: SpecifierRouting.PropertyKey.isCustomApp)
         for (key, value) in properties {
             specifier.setProperty(value, forKey: key)
@@ -212,8 +212,8 @@ public final class ServiceSpecifierBuilders: NSObject {
     ) -> PSSpecifier {
         let specifier = PSSpecifier.preferenceSpecifierNamed(
             title.localized, target: PreferencesStorage.self,
-            set: #selector(PreferencesStorage.setValue(_:forBuiltInServiceSpecifier:)),
-            get: #selector(PreferencesStorage.readValue(forBuiltInServiceSpecifier:)),
+            set: #selector(PreferencesStorage.setValue(_:forInstanceSpecifier:)),
+            get: #selector(PreferencesStorage.readValue(forInstanceSpecifier:)),
             detail: nil, cell: .editTextCell, edit: nil
         )!
         configure(specifier, service: service, appID: appID, key: key)
@@ -232,8 +232,8 @@ public final class ServiceSpecifierBuilders: NSObject {
     ) -> PSSpecifier {
         let specifier = PSSpecifier.preferenceSpecifierNamed(
             title.localized, target: PreferencesStorage.self,
-            set: #selector(PreferencesStorage.setValue(_:forBuiltInServiceSpecifier:)),
-            get: #selector(PreferencesStorage.readValue(forBuiltInServiceSpecifier:)),
+            set: #selector(PreferencesStorage.setValue(_:forInstanceSpecifier:)),
+            get: #selector(PreferencesStorage.readValue(forInstanceSpecifier:)),
             detail: nil, cell: .editTextCell, edit: nil
         )!
         configure(specifier, service: service, appID: nil, key: key)
@@ -252,8 +252,8 @@ public final class ServiceSpecifierBuilders: NSObject {
     ) -> PSSpecifier {
         let specifier = PSSpecifier.preferenceSpecifierNamed(
             title.localized, target: PreferencesStorage.self,
-            set: #selector(PreferencesStorage.setValue(_:forBuiltInServiceSpecifier:)),
-            get: #selector(PreferencesStorage.readValue(forBuiltInServiceSpecifier:)),
+            set: #selector(PreferencesStorage.setValue(_:forInstanceSpecifier:)),
+            get: #selector(PreferencesStorage.readValue(forInstanceSpecifier:)),
             detail: nil, cell: .switchCell, edit: nil
         )!
         configure(specifier, service: service, appID: appID, key: key)
@@ -269,7 +269,7 @@ public final class ServiceSpecifierBuilders: NSObject {
         appID: String?,
         key: String
     ) {
-        specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.service)
+        specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.serviceType)
         specifier.setProperty(appID != nil, forKey: SpecifierRouting.PropertyKey.isCustomApp)
         specifier.setProperty(key, forKey: SpecifierRouting.PropertyKey.key)
         // Per-app cells look the key up through this property as well; both are

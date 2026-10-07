@@ -33,7 +33,7 @@ public final class TestPush: NSObject {
     ///   failed send rather than an error.
     @objc(sendTestPushToService:)
     @discardableResult
-    public static func send(toService service: String) -> Bool {
+    public static func send(toInstanceID service: String) -> Bool {
         guard !service.isEmpty, BulletinAdapter.shared.server != nil else { return false }
 
         let bulletin = BBBulletin()

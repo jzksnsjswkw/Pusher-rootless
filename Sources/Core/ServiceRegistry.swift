@@ -12,7 +12,16 @@ import Foundation
 /// time sidesteps both problems: what is stored is an ordinary value, and the
 /// call sites read exactly as the protocol does.
 public struct ServiceDescriptor {
+    /// Registry key, unique across built-in services.
     public let name: String
+
+    /// The label the "add service" list shows, and the default name for a new
+    /// instance of this type.
+    public let displayName: String
+
+    /// Whether the user picks this type from the add list. Built-in services do;
+    /// the generic webhook is reached through its own "Custom" entry.
+    public let isAddable: Bool
 
     let url: (_ eventName: String, _ dbName: String, _ serverURL: String) -> String
     let buildRequest: (BulletinContext, ServiceConfig) -> PushRequest?
@@ -21,26 +30,42 @@ public struct ServiceDescriptor {
         _ config: ServiceConfig,
         _ completion: @escaping (PushRequest?) -> Void
     ) -> Void
-    let extraPrefs: (Prefs) -> [String: Any]?
-    let extraCustomAppPrefs: (Prefs) -> [String: Any]?
+    let defaultPrefs: () -> [String: Any]
+    let defaultCustomAppPrefs: () -> [String: Any]
     let shouldIncludeIcon: (ServiceConfig) -> Bool
     let shouldIncludeImage: (ServiceConfig) -> Bool
     let logImageDataProperties: [String]
 
     /// Binds a concrete service type to the closures above.
-    public init<S: PushService>(_ type: S.Type) {
+    ///
+    /// - Parameter displayName: the label shown in the add list. Defaults to the
+    ///   registry name, which is already the user-facing spelling for most
+    ///   services (`"Bark"`, `"Pushover"`, …).
+    public init<S: PushService>(
+        _ type: S.Type,
+        displayName: String? = nil,
+        isAddable: Bool = true
+    ) {
         name = S.serviceName
+        self.displayName = displayName ?? (S.serviceName.isEmpty ? "Custom" : S.serviceName)
+        self.isAddable = isAddable
         url = { S.url(eventName: $0, dbName: $1, serverURL: $2) }
         buildRequest = { S.request(context: $0, config: $1) }
         buildRequestAsync = { context, config, completion in
             S.request(context: context, config: config, completion: completion)
         }
-        extraPrefs = { S.extraPrefs($0) }
-        extraCustomAppPrefs = { S.extraCustomAppPrefs($0) }
+        defaultPrefs = { S.defaultPrefs() }
+        defaultCustomAppPrefs = { S.defaultCustomAppPrefs() }
         shouldIncludeIcon = { S.shouldIncludeIcon(config: $0) }
         shouldIncludeImage = { S.shouldIncludeImage(config: $0) }
         logImageDataProperties = S.logImageDataProperties
     }
+
+    /// The settings a new instance of this type starts with.
+    public func newInstancePrefs() -> [String: Any] { defaultPrefs() }
+
+    /// The settings a new per-app override of this type starts with.
+    public func newOverridePrefs() -> [String: Any] { defaultCustomAppPrefs() }
 }
 
 /// The set of available built-in services.
@@ -54,8 +79,9 @@ public struct ServiceDescriptor {
 /// Adding a service is two steps: write the type, and add it to
 /// ``builtInServices``.
 public enum ServiceRegistry {
-    /// Every built-in service, in the order the UI lists them.
-    public static let builtInServices: [ServiceDescriptor] = [
+    /// Every service the UI can create an instance of, in the order the add list
+    /// shows them. The generic webhook is last because it is the fallback.
+    public static let addableServices: [ServiceDescriptor] = [
         .init(BarkService.self),
         .init(FeishuService.self),
         .init(IFTTTService.self),
@@ -63,33 +89,34 @@ public enum ServiceRegistry {
         .init(PusherReceiverService.self),
         .init(PushoverService.self),
         .init(WechatService.self),
+        .init(CustomService.self, displayName: "Custom Webhook"),
     ]
 
-    /// Registry keys of the built-in services.
-    public static var builtInServiceNames: [String] {
-        builtInServices.map(\.name)
-    }
+    /// The generic webhook descriptor.
+    public static let customService = ServiceDescriptor(CustomService.self,
+                                                        displayName: "Custom Webhook")
 
-    /// The fallback used for any name that is not a built-in service: an
-    /// arbitrary user-defined webhook.
-    public static let customService = ServiceDescriptor(CustomService.self)
+    /// The registry name the webhook descriptor is stored under.
+    public static var customServiceName: String { CustomService.serviceName }
 
-    /// The service registered under `name`, or ``customService`` when the name
-    /// is not a built-in one.
+    /// The descriptor registered under `name`.
     ///
-    /// Custom services are keyed by their user-chosen name in prefs, so an
-    /// unknown name means "custom", never "missing".
+    /// An unknown name resolves to the webhook descriptor rather than to `nil`:
+    /// an instance whose type is not in this build (a service removed from a
+    /// later version, say) still has to be sendable, and the webhook's builder
+    /// works off whatever that instance's config happens to contain.
     public static func service(named name: String) -> ServiceDescriptor {
-        builtInServices.first { $0.name == name } ?? customService
+        addableServices.first { $0.name == name } ?? customService
     }
 
-    /// The descriptor for `name` only when it is a built-in service.
-    public static func builtInService(named name: String) -> ServiceDescriptor? {
-        builtInServices.first { $0.name == name }
+    /// The descriptor for `name` only when it is a known service.
+    public static func knownService(named name: String) -> ServiceDescriptor? {
+        addableServices.first { $0.name == name }
     }
 
-    /// Whether `name` is a built-in service.
+    /// Whether `name` is a built-in (non-webhook) service.
     public static func isBuiltIn(_ name: String) -> Bool {
-        builtInService(named: name) != nil
+        guard let descriptor = knownService(named: name) else { return false }
+        return descriptor.name != customServiceName
     }
 }

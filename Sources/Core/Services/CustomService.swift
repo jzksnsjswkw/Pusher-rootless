@@ -6,9 +6,9 @@ import Foundation
 /// with a choice of how to send it (query, header or body), an HTTP method and a
 /// body encoding. Any service name that is not a built-in one resolves here.
 public enum CustomService: PushService {
-    /// Custom services are keyed by their user-chosen name in prefs, so there
-    /// is no single registry name.
-    public static let serviceName = ""
+    /// The registry name this descriptor is reached by. Instances carry their
+    /// own user-chosen names; this identifies the *kind*.
+    public static let serviceName = "Custom"
 
     public static func url(eventName: String, dbName: String, serverURL: String) -> String {
         ""
@@ -58,5 +58,33 @@ public enum CustomService: PushService {
 
     public static func shouldIncludeImage(config: ServiceConfig) -> Bool {
         config.raw.bool(PrefKey.includeImage)
+    }
+
+    /// Everything a new webhook needs, so a freshly added instance can be
+    /// configured rather than arriving blank.
+    public static func defaultPrefs() -> [String: Any] {
+        [
+            PrefKey.url: "",
+            PrefKey.key: "",
+            PrefKey.paramName: "",
+            PrefKey.method: "POST",
+            PrefKey.bodyType: "json",
+            PrefKey.authenticationMethod: 0,
+            PrefKey.includeIcon: false,
+            PrefKey.includeImage: true,
+            PrefKey.imageMaxWidth: Pusher.defaultMaxWidth,
+            PrefKey.imageMaxHeight: Pusher.defaultMaxHeight,
+            PrefKey.imageShrinkFactor: Pusher.defaultShrinkFactor,
+        ]
+    }
+
+    public static func defaultCustomAppPrefs() -> [String: Any] {
+        [
+            PrefKey.includeIcon: false,
+            PrefKey.includeImage: true,
+            PrefKey.imageMaxWidth: Pusher.defaultMaxWidth,
+            PrefKey.imageMaxHeight: Pusher.defaultMaxHeight,
+            PrefKey.imageShrinkFactor: Pusher.defaultShrinkFactor,
+        ]
     }
 }

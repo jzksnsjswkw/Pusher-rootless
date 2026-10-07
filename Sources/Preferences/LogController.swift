@@ -57,7 +57,7 @@ public final class LogController: PlainViewController, UITableViewDataSource, UI
     public override func viewDidLoad() {
         super.viewDidLoad()
 
-        service = specifier?.string(SpecifierRouting.PropertyKey.service) ?? ""
+        service = specifier?.string(SpecifierRouting.PropertyKey.instanceID) ?? ""
         isGlobal = service.isEmpty
         logKey = PrefKey.logKey(forService: service)
         logEnabledKey = PrefKey.logEnabledKey(forService: service)

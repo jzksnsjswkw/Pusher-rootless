@@ -5,8 +5,9 @@ import UIKit
 /// The Preferences framework loads specifier plists and, for a cell with a
 /// `defaults` domain, writes the value straight to that domain under the cell's
 /// `key`. That is exactly what this project cannot do: the real storage is the
-/// *nested* `BuiltInServices[service][key]` / `CustomServices[service][key]` /
-/// `Global[key]` layout, not the flat top-level keys the plists name.
+/// instance's own object inside the `Services` array (`Services[i][key]`, or
+/// `Services[i][customApps][appID][key]` for an override), not the flat
+/// top-level keys the plists name.
 ///
 /// The framework's extension point for that is the `@public` `SEL setter` and
 /// `SEL getter` slots on `PSSpecifier`, which the ObjC version assigned
@@ -20,10 +21,8 @@ public enum SpecifierRouting {
 
     /// Selector names of the routing targets in ``PreferencesStorage``.
     enum Selector {
-        static let setBuiltIn = "setValue:forBuiltInServiceSpecifier:"
-        static let getBuiltIn = "readValueForBuiltInServiceSpecifier:"
-        static let setCustom = "setValue:forCustomSpecifier:"
-        static let getCustom = "readValueForCustomSpecifier:"
+        static let setInstance = "setValue:forInstanceSpecifier:"
+        static let getInstance = "readValueForInstanceSpecifier:"
         static let setGlobal = "setValue:forGlobalSpecifier:"
         static let getGlobal = "readValueForGlobalSpecifier:"
     }
@@ -41,28 +40,21 @@ public enum SpecifierRouting {
         }
     }
 
-    /// Routes one cell. Cells already carrying a `service` property are skipped
-    /// by the callers that set it themselves.
+    /// Routes one cell.
     static func route(_ specifier: PSSpecifier, to target: AnyObject, scope: StorageScope) {
         specifier.target = target
         switch scope {
-        case .builtIn(let service):
-            specifier.setProperty(service, forKey: PropertyKey.service)
+        case .instance(let id):
+            specifier.setProperty(id, forKey: PropertyKey.instanceID)
             specifier.setProperty(false, forKey: PropertyKey.isCustomApp)
-            specifier.setSetter(Selector.setBuiltIn)
-            specifier.setGetter(Selector.getBuiltIn)
-        case .customService(let service):
-            specifier.setProperty(service, forKey: PropertyKey.service)
-            specifier.setProperty(false, forKey: PropertyKey.isCustomApp)
-            specifier.setSetter(Selector.setCustom)
-            specifier.setGetter(Selector.getCustom)
-        case .customApp(let service, let appID, let isCustomService):
-            specifier.setProperty(service, forKey: PropertyKey.service)
+            specifier.setSetter(Selector.setInstance)
+            specifier.setGetter(Selector.getInstance)
+        case .customApp(let id, let appID):
+            specifier.setProperty(id, forKey: PropertyKey.instanceID)
             specifier.setProperty(true, forKey: PropertyKey.isCustomApp)
             specifier.setProperty(appID, forKey: PropertyKey.customAppID)
-            specifier.setSetter(Selector.setCustom)
-            specifier.setGetter(Selector.getCustom)
-            _ = isCustomService
+            specifier.setSetter(Selector.setInstance)
+            specifier.setGetter(Selector.getInstance)
         case .global:
             specifier.setSetter(Selector.setGlobal)
             specifier.setGetter(Selector.getGlobal)
@@ -71,31 +63,34 @@ public enum SpecifierRouting {
 
     /// Which store a page's cells read and write.
     enum StorageScope {
-        case builtIn(service: String)
-        case customService(service: String)
-        case customApp(service: String, appID: String, isCustomService: Bool)
+        /// One instance's own settings.
+        case instance(id: String)
+        /// One app's overrides inside one instance.
+        case customApp(id: String, appID: String)
+        /// The settings that are not per-instance.
         case global
     }
 
     /// Keys the UI stashes on a specifier to remember what it edits.
     enum PropertyKey {
-        /// The service this cell belongs to.
-        static let service = "service"
+        /// The service *instance* this cell edits.
+        static let instanceID = "instanceID"
         /// Whether the cell edits a per-app override rather than a service.
         static let isCustomApp = "isCustomApp"
-        /// Whether the page belongs to a custom (user-defined) service.
-        static let isCustomService = "isCustomService"
+        /// The registry name of the descriptor that builds this instance's
+        /// requests (`"Pushover"`, `"Bark"`, …). A page needs it to load the
+        /// right specifier plist, which is the one thing about an instance that
+        /// depends on its *type* rather than its own settings.
+        static let serviceType = "serviceType"
+        /// Whether the instance is a user-defined webhook. A link cell carries
+        /// it so the page it pushes can seed a new override the same way.
+        static let isWebhook = "isWebhook"
         /// The bundle ID of the app an override belongs to.
         static let customAppID = "customAppID"
         /// The per-app override key to read/write.
         static let customAppsPrefsKey = "customAppsPrefsKey"
-        /// The plist key to remap onto (`customServiceKey` in the plists).
+        /// The settings key this cell reads and writes.
         static let key = "key"
-        /// The plist's name for the key to remap onto.
-        static let customServiceKey = "customServiceKey"
-        /// A top-level fallback key, for cells whose value may live outside the
-        /// service object.
-        static let globalKey = "globalKey"
         /// The value shown when nothing is stored.
         static let defaultValue = "default"
         /// A non-retaining back-reference to the list controller, for cells that

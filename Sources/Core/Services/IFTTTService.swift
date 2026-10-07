@@ -55,17 +55,17 @@ public enum IFTTTService: PushService {
         return String(data: data, encoding: .utf8)
     }
 
-    public static func extraPrefs(_ servicePrefs: Prefs) -> [String: Any]? {
+    public static func defaultPrefs() -> [String: Any] {
         [
-            PrefKey.includeIcon: servicePrefs[PrefKey.includeIcon] ?? false,
-            PrefKey.curateData: servicePrefs[PrefKey.curateData] ?? true,
+            PrefKey.includeIcon: false,
+            PrefKey.curateData: true,
         ]
     }
 
-    public static func extraCustomAppPrefs(_ appPrefs: Prefs) -> [String: Any]? {
+    public static func defaultCustomAppPrefs() -> [String: Any] {
         [
-            PrefKey.includeIcon: appPrefs[PrefKey.includeIcon] ?? false,
-            PrefKey.curateData: appPrefs[PrefKey.curateData] ?? true,
+            PrefKey.includeIcon: false,
+            PrefKey.curateData: true,
         ]
     }
 

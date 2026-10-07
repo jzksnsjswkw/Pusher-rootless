@@ -33,27 +33,23 @@ public enum PusherReceiverService: PushService {
         return urlBase + dbName + urlTail
     }
 
-    public static func extraPrefs(_ servicePrefs: Prefs) -> [String: Any]? {
+    public static func defaultPrefs() -> [String: Any] {
         [
-            PrefKey.includeIcon: servicePrefs[PrefKey.includeIcon] ?? true,
-            PrefKey.includeImage: servicePrefs[PrefKey.includeImage] ?? true,
-            PrefKey.imageMaxWidth: servicePrefs[PrefKey.imageMaxWidth] ?? Pusher.defaultMaxWidth,
-            PrefKey.imageMaxHeight: servicePrefs[PrefKey.imageMaxHeight] ?? Pusher.defaultMaxHeight,
-            PrefKey.imageShrinkFactor: servicePrefs[PrefKey.imageShrinkFactor]
-                ?? Pusher.defaultShrinkFactor,
+            PrefKey.includeIcon: true,
+            PrefKey.includeImage: true,
+            PrefKey.imageMaxWidth: Pusher.defaultMaxWidth,
+            PrefKey.imageMaxHeight: Pusher.defaultMaxHeight,
+            PrefKey.imageShrinkFactor: Pusher.defaultShrinkFactor,
         ]
     }
 
-    public static func extraCustomAppPrefs(_ appPrefs: Prefs) -> [String: Any]? {
+    public static func defaultCustomAppPrefs() -> [String: Any] {
         [
-            PrefKey.includeIcon: appPrefs[PrefKey.includeIcon] ?? true,
-            PrefKey.includeImage: appPrefs[PrefKey.includeImage] ?? true,
-            PrefKey.imageMaxWidth: appPrefs[PrefKey.imageMaxWidth] ?? Pusher.defaultMaxWidth,
-            PrefKey.imageMaxHeight: appPrefs[PrefKey.imageMaxHeight] ?? Pusher.defaultMaxHeight,
-            PrefKey.imageShrinkFactor: appPrefs[PrefKey.imageShrinkFactor]
-                ?? Pusher.defaultShrinkFactor,
+            PrefKey.includeIcon: true,
+            PrefKey.includeImage: true,
         ]
     }
+
 
     public static func shouldIncludeIcon(config: ServiceConfig) -> Bool {
         config.raw.bool(PrefKey.includeIcon)

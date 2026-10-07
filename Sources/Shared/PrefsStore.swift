@@ -82,58 +82,55 @@ public enum PrefsStore {
 
     // MARK: - Nested containers
 
-    public static func builtInServices() -> Prefs { Prefs.from(value(forKey: PrefKey.builtInServices)) }
-    public static func customServices() -> Prefs { Prefs.from(value(forKey: PrefKey.customServices)) }
     public static func global() -> Prefs { Prefs.from(value(forKey: PrefKey.global)) }
 
-    // MARK: - One service
+    // MARK: - One service instance
 
-    /// One service's nested object, or an empty `Prefs` when it has none.
-    public static func service(named name: String, isCustom: Bool) -> Prefs {
-        guard !name.isEmpty else { return Prefs() }
-        let container = isCustom ? customServices() : builtInServices()
-        return container.dict(name) ?? Prefs()
+    /// The stored objects of every configured instance, in order.
+    ///
+    /// Instances live in one array, so these accessors work on the array rather
+    /// than on nested containers — and they do it without depending on the Core
+    /// layer's instance model, which the Flipswitch bundle does not compile.
+    public static func instances() -> [[String: Any]] {
+        prefs().dictionaries(PrefKey.services).map(\.raw)
     }
 
-    /// Persist one service's nested object. A `nil` object removes the service
-    /// from its container.
-    public static func setService(_ object: [String: Any]?, named name: String, isCustom: Bool, notify: Bool = true) {
-        guard !name.isEmpty else { return }
-        var container = (isCustom ? customServices() : builtInServices()).raw
-        if let object {
-            container[name] = object
-        } else {
-            container.removeValue(forKey: name)
-        }
-        setValue(container, forKey: isCustom ? PrefKey.customServices : PrefKey.builtInServices, notify: notify)
+    /// One instance's stored object, or an empty `Prefs` when it is gone.
+    public static func instance(_ id: String) -> Prefs {
+        guard !id.isEmpty else { return Prefs() }
+        return instances()
+            .first { Prefs($0).nonEmptyString(PrefKey.instanceID) == id }
+            .map(Prefs.init) ?? Prefs()
     }
 
-    /// Merge fields into one service's nested object, leaving other services
-    /// untouched.
-    public static func updateService(named name: String, isCustom: Bool, _ mutate: (inout [String: Any]) -> Void) {
-        var object = service(named: name, isCustom: isCustom).raw
-        mutate(&object)
-        setService(object, named: name, isCustom: isCustom)
+    /// Merge fields into one instance's stored object, leaving its identity and
+    /// every other instance untouched.
+    public static func updateInstance(_ id: String, notify: Bool = true, _ mutate: (inout [String: Any]) -> Void) {
+        guard !id.isEmpty else { return }
+        var stored = instances()
+        guard let index = stored.firstIndex(where: {
+            Prefs($0).nonEmptyString(PrefKey.instanceID) == id
+        }) else { return }
+        mutate(&stored[index])
+        setValue(stored, forKey: PrefKey.services, notify: notify)
     }
 
-    // MARK: - One per-app override inside a service
+    // MARK: - One per-app override inside an instance
 
-    public static func customAppPrefs(service name: String, appID: String, isCustom: Bool) -> Prefs {
+    public static func customAppPrefs(service id: String, appID: String) -> Prefs {
         guard !appID.isEmpty else { return Prefs() }
-        let servicePrefs = service(named: name, isCustom: isCustom)
-        guard let customApps = servicePrefs.dict(PrefKey.customApps) else { return Prefs() }
+        guard let customApps = instance(id).dict(PrefKey.customApps) else { return Prefs() }
         return customApps.dict(appID) ?? Prefs()
     }
 
     public static func setCustomAppPrefs(
         _ appPrefs: [String: Any]?,
-        service name: String,
+        service id: String,
         appID: String,
-        isCustom: Bool,
         notify: Bool = true
     ) {
         guard !appID.isEmpty else { return }
-        updateService(named: name, isCustom: isCustom) { object in
+        updateInstance(id, notify: notify) { object in
             var customApps = (object[PrefKey.customApps] as? [String: Any]) ?? [:]
             if let appPrefs {
                 customApps[appID] = appPrefs
@@ -144,10 +141,10 @@ public enum PrefsStore {
         }
     }
 
-    /// Replace a service's whole per-app override map (used by the
+    /// Replace one instance's whole per-app override map (used by the
     /// "App Customization" UI when an entry is deleted).
-    public static func setCustomApps(_ customApps: [String: Any], service name: String, isCustom: Bool) {
-        updateService(named: name, isCustom: isCustom) { object in
+    public static func setCustomApps(_ customApps: [String: Any], service id: String) {
+        updateInstance(id) { object in
             object[PrefKey.customApps] = customApps
         }
     }
