@@ -162,10 +162,11 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
         }
         SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .instance(id: instanceID))
 
-        // Shared cells (device/sound pickers and the like) come from the type's
-        // own builder, looked up by name so a new service needs no change here.
+        // Shared cells (device/sound pickers, the payload options) come from the
+        // type's own builder, looked up by name so a new service needs no change
+        // here.
         all.append(contentsOf: ServiceSpecifierBuilders.shared.builders(
-            for: serviceType, appID: nil
+            for: serviceType, instanceID: instanceID, appID: nil
         ))
 
         // Device conditions, the SNS page and the log page are shared by every

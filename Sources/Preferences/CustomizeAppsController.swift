@@ -338,22 +338,12 @@ public final class CustomAppController: ListController {
 
         // The per-app cells come from the same builders the service page uses,
         // with the app ID attached so every value lands in this app's override.
-        let cells = ServiceSpecifierBuilders.shared.builders(for: serviceType, appID: appID)
-        for specifier in cells {
-            specifier.setProperty(instanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
-            specifier.setProperty(serviceType, forKey: SpecifierRouting.PropertyKey.serviceType)
-            specifier.setProperty(appID, forKey: SpecifierRouting.PropertyKey.customAppID)
-            // A detail picker (Pushover's devices) reads the app from its own
-            // key, spelled differently from the value cells'.
-            if specifier.cellType == .linkCell {
-                specifier.setProperty(appID, forKey: "customAppIDKey")
-            }
-        }
+        // The per-app cells come from the same builders the service page uses,
+        // already routed into this app's override by the builder.
+        let cells = ServiceSpecifierBuilders.shared.builders(
+            for: serviceType, instanceID: instanceID, appID: appID
+        )
         all.append(contentsOf: cells)
-
-        // The override cells address one app's object inside the instance.
-        SpecifierRouting.route(cells, to: PreferencesStorage.self,
-                               scope: .customApp(id: instanceID, appID: appID))
 
         return NSMutableArray(array: all)
     }

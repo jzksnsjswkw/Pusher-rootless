@@ -46,9 +46,35 @@ public final class ServiceSpecifierBuilders: NSObject {
         register(builder: Self.pusherReceiver, forService: PusherReceiverService.serviceName)
     }
 
-    /// The cells to append to `service`'s page.
-    func builders(for service: String, appID: String?) -> [PSSpecifier] {
-        builders[service]?(appID) ?? []
+    /// The cells to append to `service`'s page, ready to use.
+    ///
+    /// The routing is done here rather than by each caller: a builder's cells are
+    /// generated, not loaded from a plist, so nothing else would give them the
+    /// instance they edit or the setter/getter pair that stores their value. A
+    /// caller that forgot would get cells that silently discard every change.
+    ///
+    /// - Parameters:
+    ///   - service: the descriptor name, which selects the builder.
+    ///   - instanceID: the instance the page edits.
+    ///   - appID: non-nil on a per-app override page.
+    func builders(for service: String, instanceID: String, appID: String?) -> [PSSpecifier] {
+        guard let built = builders[service]?(appID) else { return [] }
+
+        for specifier in built {
+            specifier.setProperty(instanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
+            specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.serviceType)
+            // A detail picker reads the app from its own key, spelled
+            // differently from the value cells'.
+            if specifier.cellType == .linkCell, let appID {
+                specifier.setProperty(appID, forKey: "customAppIDKey")
+            }
+        }
+
+        SpecifierRouting.route(
+            built, to: PreferencesStorage.self,
+            scope: appID.map { .customApp(id: instanceID, appID: $0) } ?? .instance(id: instanceID)
+        )
+        return built
     }
 
     // MARK: - Custom webhook
@@ -305,7 +331,6 @@ public final class ServiceSpecifierBuilders: NSObject {
         appID: String?,
         key: String
     ) {
-        specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.serviceType)
         specifier.setProperty(appID != nil, forKey: SpecifierRouting.PropertyKey.isCustomApp)
         specifier.setProperty(key, forKey: SpecifierRouting.PropertyKey.key)
         // Per-app cells look the key up through this property as well; both are
