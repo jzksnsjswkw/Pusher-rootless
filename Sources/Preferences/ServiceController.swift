@@ -68,6 +68,30 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
         }
         Theme.setActiveTintColor(uiColor)
         tintToPusherColor()
+
+        // The "(N total)" counts on the app-list links were computed when the
+        // cells were built; coming back from the app list with a changed
+        // selection would otherwise keep showing the old number.
+        refreshTitleCounts()
+    }
+
+    /// Recomputes the "(N total)" suffixes on the installed cells.
+    ///
+    /// The base name is recovered by stripping the suffix this method added
+    /// earlier, so repeated appearances do not grow the title.
+    private func refreshTitleCounts() {
+        for case let specifier as PSSpecifier in (super.specifiers ?? []) {
+            guard specifier.cellType == .linkCell,
+                  let name = specifier.name,
+                  name.hasPrefix("App List".localized)
+                      || name.hasPrefix("App Customization".localized)
+                      || name.contains(" (")
+            else { continue }
+            specifier.name = name.components(separatedBy: " (").first
+            updateTitleCounts(specifier)
+            // The title change is only visible after the row is redrawn.
+            reloadSpecifier(specifier, animated: false)
+        }
     }
 
     // MARK: - Specifiers
@@ -80,6 +104,54 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
     /// showing *this* service's settings after a background round trip: the
     /// getter re-derives everything from `service`, so a discarded array can
     /// never be replaced by another page's cells.
+    /// Loads the shared tail every service page gets: device conditions, the
+    /// SNS page link and the log link (the `GlobalAndServices.plist` cells).
+    ///
+    /// The plist declares the flat keys the global page owns; on a service page
+    /// they address the service's own nested copy, and each segment gains a
+    /// "Default" option meaning "follow the global setting". (The global page
+    /// does not route these cells and leaves the segment values untouched; see
+    /// `GlobalSettingsListController.buildSpecifiers()`.)
+    private func globalTailSpecifiers() -> [PSSpecifier] {
+        let loaded = (loadSpecifiers(named: "GlobalAndServices") as? [PSSpecifier]) ?? []
+        for specifier in loaded {
+            specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.service)
+            if specifier.cellType == .segmentCell {
+                // The plist's two real values (Locked/Either/Unlocked, Any/WiFi/
+                // Cellular) get a leading "Default" whose value is the segment
+                // cell's unset sentinel, so an unmodified segment stores nothing
+                // and the service follows the global preference.
+                var values: [Any] = specifier.values ?? []
+                let titleDictionary = specifier.titleDictionary ?? [:]
+                var titles: [String] = ["Default".localized]
+                for value in values {
+                    guard let key = value as? AnyHashable else { continue }
+                    titles.append(titleDictionary[key] as? String ?? "")
+                }
+                values.insert(NSNumber(value: segmentCellDefault), at: 0)
+                specifier.setValues(values, titles: titles)
+                specifier.setProperty(
+                    NSNumber(value: segmentCellDefault),
+                    forKey: SpecifierRouting.PropertyKey.defaultValue
+                )
+            }
+            if specifier.cellType == .linkCell {
+                specifier.setProperty(
+                    isCustomService, forKey: SpecifierRouting.PropertyKey.isCustomService
+                )
+            }
+        }
+        // The tail's cells address the service's own nested copy, so a custom
+        // service routes them the same way as its Custom.plist cells.
+        SpecifierRouting.route(
+            loaded, to: PreferencesStorage.self,
+            scope: isCustomService
+                ? .customService(service: service)
+                : .builtIn(service: service)
+        )
+        return loaded
+    }
+
     private func buildSpecifiers() -> NSMutableArray {
         var all: [PSSpecifier] = []
         if isCustomService {
@@ -88,6 +160,13 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
             let loaded = loadSpecifiers(named: "Custom") as? [PSSpecifier] ?? []
             for specifier in loaded {
                 specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.service)
+                // A custom service's app list lives in the same nested place as
+                // a built-in one's (CustomServices[service][appList]); the app
+                // list controller needs the flag to pick that storage.
+                if specifier.cellType == .linkCell,
+                   specifier.name == "App List".localized {
+                    specifier.setProperty(true, forKey: SpecifierRouting.PropertyKey.isCustomService)
+                }
                 all.append(specifier)
             }
             SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .customService(service: service))
@@ -103,6 +182,10 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
         all.append(contentsOf: ServiceSpecifierBuilders.shared.builders(
             for: service, appID: nil
         ))
+
+        // Device conditions, the SNS page and the log page are shared by every
+        // service (built-in and custom alike); they close out the page.
+        all.append(contentsOf: globalTailSpecifiers())
 
         for specifier in all {
             updateTitleCounts(specifier)

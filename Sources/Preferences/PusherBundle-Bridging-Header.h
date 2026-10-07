@@ -51,11 +51,19 @@
 @interface PSSpecifier (PusherValues)
 - (void)setValues:(NSArray *)values titles:(NSArray *)titles;
 - (void)performSetterWithValue:(id)value;
+@property (nonatomic, retain) NSArray *values;
 @end
 
 /// `PSListController` pushes detail controllers through this method.
 @interface PSListController (PusherNavigation)
 - (void)pushController:(UIViewController *)controller;
+@end
+
+/// `ATLApplicationListControllerBase` implements these two, but the vendored
+/// header only declares `loadPreferences`; the original tweak overrode both.
+/// Without this declaration Swift cannot override `savePreferences`.
+@interface ATLApplicationListControllerBase (PusherPreferences)
+- (void)savePreferences;
 @end
 
 // `CPDistributedMessagingCenter`'s public header declares the reply variants

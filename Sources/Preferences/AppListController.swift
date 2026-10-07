@@ -57,6 +57,7 @@ public final class AppListController: ATLApplicationListMultiSelectionController
     /// Written through immediately rather than only on dismissal, so a crash or
     /// a swipe-back cannot lose the selection.
     public override func setApplicationEnabled(_ enabled: NSNumber, specifier: PSSpecifier) {
+        Diag.note("SAE self=\(ObjectIdentifier(self).hashValue) enabled=\(enabled) spec=\(specifier != nil)")
         guard let appID = specifier.property(forKey: "applicationIdentifier") as? String else { return }
         if enabled.boolValue != defaultSwitchValue {
             selection.add(appID)

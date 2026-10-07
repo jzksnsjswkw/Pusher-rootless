@@ -102,11 +102,14 @@ public enum Runtime {
     ///
     /// Swift does not import ObjC ivars, so the `@public` `SEL setter` /
     /// `SEL getter` slots on `PSSpecifier` have to go through the runtime.
-    public static func getIvar<T>(_ object: AnyObject, _ name: String, as type: T.Type) -> T? {
+    public static func getIvar<T: AnyObject>(_ object: AnyObject, _ name: String, as type: T.Type) -> T? {
         guard let ivar = class_getInstanceVariable(object_getClass(object), name),
               let raw = object_getIvar(object, ivar)
         else { return nil }
-        return unsafeBitCast(raw, to: T.self)
+        // A checked cast, not a bitcast: an ivar that holds something other
+        // than `T` (a different class, or Swift bridging) must read as nil
+        // rather than hand back a lying value for the caller to crash on.
+        return raw as? T
     }
 
     /// Writes an ObjC ivar whose declared type is an object.

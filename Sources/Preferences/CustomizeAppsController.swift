@@ -397,11 +397,15 @@ public final class AppMultiSelectionController: ATLApplicationListMultiSelection
 }
 
 /// The single-select app picker, used by the log viewer's app filter.
+///
+/// AltList calls `loadPreferences` when the page is built and
+/// `savePreferences` when a selection is made, so the value travels through the
+/// framework's own lifecycle rather than a view-transition hook.
 @objc(NSPAppSelectionController)
 public final class AppSelectionController: ATLApplicationListSelectionController {
     @objc public var callback: ((String) -> Void)?
 
-    /// The currently selected app ID, exposed so the caller can preselect it.
+    /// The app ID to preselect, set by the caller before pushing.
     ///
     /// `_selectedApplicationID` is AltList's own `@protected` ivar; it has no
     /// accessor, so it is read and written through the runtime.
@@ -414,16 +418,36 @@ public final class AppSelectionController: ATLApplicationListSelectionController
         alphabeticIndexingEnabled = true
     }
 
-    /// AltList calls this to seed the selection when the page opens.
-    public override func loadPreferences() {}
+    public override func viewDidLoad() {
+        super.viewDidLoad()
 
-    /// Reports the picked app.
+        // Without a way to unset a wrong pick, the only way back to "no filter"
+        // is deleting the preference by hand. The deselect button reports an
+        // empty selection through the same callback.
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            title: "Deselect".localized, style: .plain,
+            target: self, action: #selector(deselect)
+        )
+    }
+
+    @objc private func deselect() {
+        Runtime.setIvar(self, "_selectedApplicationID", nil as NSString?)
+        savePreferences()
+    }
+
+    /// Seeds the picker with the caller's preselection.
+    public override func loadPreferences() {
+        Runtime.setIvar(self, "_selectedApplicationID", selectedAppID as NSString?)
+    }
+
+    /// Reports the picked app and pops, exactly as the original did.
     ///
-    /// AltList has no dismissal hook for the single-select list, so the value is
-    /// reported as the page goes away — which is when the framework has finished
-    /// writing the selection into its own ivar.
-    public override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        callback?(selectedAppID ?? "")
+    /// Anything that is not a picked identifier — no selection, or an ivar that
+    /// is not a string — reports an empty string, which the caller treats as
+    /// "no filter".
+    public override func savePreferences() {
+        let picked = Runtime.getIvar(self, "_selectedApplicationID", as: NSString.self) as String?
+        callback?(picked ?? "")
+        navigationController?.popViewController(animated: true)
     }
 }

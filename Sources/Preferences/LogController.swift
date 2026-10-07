@@ -209,7 +209,9 @@ public final class LogController: PlainViewController, UITableViewDataSource, UI
         picker.selectedAppID = filteredAppID
         picker.callback = { [weak self] appID in
             guard let self else { return }
-            self.filteredAppID = appID
+            // An empty result means the user left without choosing, which
+            // clears the filter rather than pointing it at a nonexistent app.
+            self.filteredAppID = appID.isEmpty ? nil : appID
             self.updateLogAndReload()
             self.showAppFilterTutorialIfNeeded()
         }
@@ -323,13 +325,25 @@ public final class LogController: PlainViewController, UITableViewDataSource, UI
 
         case FixedRow.appFilter:
             cell.accessoryType = .disclosureIndicator
-            guard let filteredAppID else { break }
+            // With no app selected the filter is off and every app's entries
+            // are shown, so the row says so instead of leaving a bare
+            // disclosure indicator.
+            guard let filteredAppID else {
+                cell.textLabel?.text = "App Filter: All Apps".localized
+                break
+            }
             let appName = LSApplicationProxy.applicationProxy(forIdentifier: filteredAppID)?.localizedName
                 ?? "Unknown App".localized
             cell.textLabel?.text = String(format: "App Filter: %@".localized, appName)
             cell.imageView?.image = ApplicationIcon.image(forBundleID: filteredAppID)
 
         case FixedRow.globalOnly:
+            // Shows only on the all-services page: it narrows the merged log
+            // to the pre-fan-out entries.
+            // The original called this "Global Only", which read as gibberish: the
+            // switch hides every service's entries, leaving just the
+            // pre-fan-out log.
+            cell.textLabel?.text = "Hide Service Logs".localized
             let toggle = UISwitch()
             toggle.isOn = filteredGlobalOnly
             toggle.addTarget(self, action: #selector(updateGlobalOnly(_:)), for: .valueChanged)

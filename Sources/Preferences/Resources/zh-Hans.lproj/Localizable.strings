@@ -134,6 +134,9 @@
 "Blocked" = "已拦截";
 "Pushed" = "已推送";
 "App Filter: %@" = "应用筛选：%@";
+"App Filter: All Apps" = "应用筛选：所有应用";
+"Hide Service Logs" = "仅显示全局日志";
+"Deselect" = "取消选择";
 "Synchronized" = "已同步";
 "Synchronize With Global" = "与全局同步";
 "Synchronizes all values with the global preferences. Modifying any of these settings will override that preference, but synchronizing will remove the override and follow the global preferences again." = "将所有值与全局偏好设置同步。修改其中任意设置都会覆盖全局偏好；点击同步会移除覆盖并重新遵循全局偏好设置。";
