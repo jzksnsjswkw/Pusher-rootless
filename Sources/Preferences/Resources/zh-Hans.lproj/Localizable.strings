@@ -326,3 +326,14 @@ console.log(...)——显示在编辑器的运行输出中。";
 "A shared context must stay on the thread it was created on (JSContext thread affinity), so sharing the thread is required and locked on." = "共享的上下文必须固定在创建它的线程上（JSContext 的线程亲和性），因此共享线程是必需的，已强制开启并锁定。";
 "How a run of this type executes." = "该类型的运行方式。";
 "These seed new services of this type, like the options above." = "和上面的选项一样，这些会成为该类型新服务的初始值。";
+"Get a token first" = "先获取令牌";
+"Remember values between runs" = "在多次运行之间记住数值";
+"What the notification carries" = "通知都携带哪些内容";
+"Calling nothing skips the notification instead of forwarding it." = "不调用 push 表示跳过这条通知，而不是转发它。";
+"Top-level await works: the script is run as an async function." = "支持顶层 await：脚本以 async 函数的形式运行。";
+"localStorage is kept per service, so two services of this type do not share it." = "localStorage 按服务隔离，因此同一类型的两个服务不会共享它。";
+"bullet.deviceName, bullet.appName, bullet.appID, bullet.title, bullet.subtitle, bullet.message, bullet.date" = "bullet.deviceName、bullet.appName、bullet.appID、bullet.title、bullet.subtitle、bullet.message、bullet.date";
+"bullet.icon   — base64 PNG of the app icon
+bullet.image  — base64 of the notification's attachment" = "bullet.icon   — 应用图标的 base64 PNG
+bullet.image  — 通知附件图片的 base64";
+"Also available: fetch(url, init), localStorage, console.log()" = "其它可用：fetch(url, init)、localStorage、console.log()";

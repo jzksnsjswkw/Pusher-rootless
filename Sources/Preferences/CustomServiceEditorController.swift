@@ -716,7 +716,7 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         (
             "Skip some notifications",
             """
-            // Calling nothing skips the notification instead of forwarding it.
+            // \("Calling nothing skips the notification instead of forwarding it.".localized)
             if (bullet.message.includes("code")) {
                 push({
                     url: "https://example.com/code",
@@ -729,7 +729,7 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         (
             "Get a token first",
             """
-            // Top-level await works: the script is run as an async function.
+            // \("Top-level await works: the script is run as an async function.".localized)
             const tokenResp = await fetch("https://example.com/token", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -747,8 +747,8 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         (
             "Remember values between runs",
             """
-            // localStorage is kept per service, so two services of this type do
-            // not share it.
+            // \(("localStorage is kept per service, so two services of this type "
+                + "do not share it.").localized)
             let count = Number(localStorage.getItem("count") || "0") + 1;
             localStorage.setItem("count", String(count));
 
@@ -763,12 +763,12 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
             "What the notification carries",
             """
             console.log(bullet);
-            // bullet.deviceName, bullet.appName, bullet.appID
-            // bullet.title, bullet.subtitle, bullet.message, bullet.date
-            // bullet.icon   — base64 PNG of the app icon
-            // bullet.image  — base64 of the notification's attachment
+            // \(("bullet.deviceName, bullet.appName, bullet.appID, "
+                + "bullet.title, bullet.subtitle, bullet.message, bullet.date").localized)
+            // \(("bullet.icon   — base64 PNG of the app icon\n"
+                + "bullet.image  — base64 of the notification's attachment").localized)
             //
-            // Also available: fetch(url, init), localStorage, console.log()
+            // \(("Also available: fetch(url, init), localStorage, console.log()").localized)
             """
         ),
     ]
