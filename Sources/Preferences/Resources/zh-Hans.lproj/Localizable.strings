@@ -245,3 +245,21 @@ Delete：填 1 删除对应 ID 的推送（需同时填写 ID）";
 "After using the app filter, swipe to delete to unset it and show all apps again. Tap on any truncated log to expand it, and touch and hold a log to copy it to the clipboard.\n\nTap anywhere to continue." = "使用应用筛选后，左滑删除即可取消并重新显示所有应用。点按被截断的日志可展开；长按日志可复制到剪贴板。\n\n点按任意位置继续。";
 "Run" = "运行";
 "No output. The script ran and sent nothing — that is how it skips a notification." = "没有输出。脚本运行了但没有发送——跳过通知就是这样做的。";
+"How to write a script" = "如何编写脚本";
+"Scripting Guide" = "脚本编写指南";
+"How a script works" = "脚本如何工作";
+"The script runs once per notification. Call push(req) to send a request — call it more than once to send several, or not at all to skip this notification. Top-level await works, so you can fetch a token before sending." = "脚本每条通知运行一次。调用 push(req) 发送请求——调用多次可发送多条，不调用则跳过这条通知。支持顶层 await，可以先 fetch token 再发送。";
+"bullet — the notification" = "bullet——通知内容";
+"bullet.deviceName, bullet.appName, bullet.appID, bullet.title, bullet.subtitle, bullet.message, bullet.date are strings. bullet.icon and bullet.image are base64 PNG data (strings), present when the notification has them." = "bullet.deviceName、bullet.appName、bullet.appID、bullet.title、bullet.subtitle、bullet.message、bullet.date 均为字符串。bullet.icon 和 bullet.image 是 base64 PNG 数据（字符串），通知带有图标/图片时才存在。";
+"Other functions" = "其它可用函数";
+"fetch(url, init) — real HTTP, like the browser's fetch. Returns a Response with ok, status, and json()/text().
+localStorage — persists values between notifications, per service.
+console.log(...) — shown in the editor's Run output." = "fetch(url, init)——真实 HTTP，与浏览器 fetch 相同。返回 Response，含 ok、status 和 json()/text()。
+localStorage——按服务持久化，跨通知保留。
+console.log(...)——显示在编辑器的运行输出中。";
+"Limits" = "限制";
+"The script must finish within 2 seconds, so no long loops. Fetch runs for real: during a run, requests are actually sent." = "脚本须在 2 秒内完成，不要写长循环。fetch 是真实请求：运行时会真正发出。";
+"Let an AI write it" = "让 AI 来写";
+"Tap the copy button (top right) to copy a prompt that describes this API. Paste it into your AI assistant and add the result you want — which service to send to, what to filter, and so on — then paste the JavaScript it writes back here." = "点右上角的复制按钮，复制描述了本 API 的提示词。粘贴到你的 AI 助手，并补充你想要的结果——发送到哪个服务、如何筛选等——然后把它生成的 JavaScript 粘贴回这里。";
+"Copy AI Prompt" = "复制 AI 提示词";
+"AI prompt copied. Paste it into your AI assistant and describe the result you want." = "AI 提示词已复制。粘贴到你的 AI 助手，并描述你想要的结果。";

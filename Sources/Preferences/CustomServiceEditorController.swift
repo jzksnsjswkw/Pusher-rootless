@@ -58,6 +58,11 @@ public final class CustomServiceEditorController: ListController {
         table?.reloadData()
     }
 
+    /// Presents the scripting guide as a sheet.
+    @objc private func showScriptingGuide() {
+        ScriptingGuide.present(from: self)
+    }
+
     // MARK: - Specifiers
 
     func buildSpecifiers() -> NSMutableArray {
@@ -84,6 +89,18 @@ public final class CustomServiceEditorController: ListController {
                 + "this notification.").localized,
             forKey: "footerText"
         )
+
+        // The guide, as its own tappable row under the script: a footer is not
+        // obviously tappable, and the entry point is what makes the AI workflow
+        // discoverable.
+        if let guideRow = PSSpecifier.preferenceSpecifierNamed(
+            "How to write a script".localized, target: self,
+            set: nil, get: nil, detail: nil, cell: .buttonCell, edit: nil
+        ) {
+            guideRow.buttonAction = #selector(showScriptingGuide)
+            guideRow.setProperty("DefaultService", forKey: "icon")
+            all.append(guideRow)
+        }
 
         let scriptRow = PSSpecifier.preferenceSpecifierNamed(
             "Script".localized, target: nil, set: nil, get: nil,
@@ -271,12 +288,16 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
     /// The script is saved first so what runs is what is on screen. The run uses
     /// the same runner the pipeline does — same options, same `fetch` — so a
     /// script that works here behaves the same when a notification arrives.
+    /// Runs the script as it stands, against a sample notification.
+    ///
+    /// The script is saved first so what runs is what is on screen. The run is
+    /// the pipeline's run: same runner, same options, same real `fetch`, so what
+    /// works here behaves identically when a notification arrives. Real requests
+    /// do go out — the test bullet is what differs from production, not the
+    /// network.
     @objc private func runScript() {
         save()
         guard let script = textView.text, !script.isEmpty else { return }
-
-        var lines: [String] = []
-        var pushed: [String] = []
 
         let outcome = JavaScriptRunner.run(
             script: script,
@@ -284,51 +305,39 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
             options: .init(usesOwnContext: true, usesOwnThread: true,
                            timeout: Pusher.defaultScriptTimeout,
                            maximumResponseBytes: Pusher.defaultMaxResponseBytes),
-            fetch: { request in
-                // The editor's runs do not touch the network: `fetch` resolves
-                // with a fixed, obviously-fake response, so a script can be
-                // exercised without sending anything anywhere.
-                let body = #"{"ok":true}"#
-                return JavaScriptRunner.FetchResult(
-                    status: 200,
-                    headers: ["Content-Type": "application/json"],
-                    body: Data(body.utf8),
-                    finalURL: request.url?.absoluteString
-                )
-            }
+            fetch: ScriptHTTP.perform
         )
 
-        lines.append(contentsOf: outcome.consoleOutput)
-        for request in outcome.requests {
-            let method = request.method
-            let bodyText = request.infoDict.isEmpty
-                ? ""
-                : (try? JSONSerialization.data(withJSONObject: request.infoDict))
-                    .flatMap { String(data: $0, encoding: .utf8) } ?? ""
-            pushed.append("\(method) \(request.urlString)\(bodyText.isEmpty ? "" : "\n  \(bodyText)")")
-        }
-
-        var report: [String] = []
-        if !lines.isEmpty {
-            report.append("console:\n" + lines.joined(separator: "\n"))
-        }
-        if !pushed.isEmpty {
-            report.append("push:\n" + pushed.joined(separator: "\n"))
+        // The trace is the run, in script order, each entry colored by kind:
+        // console stays default, the raw HTTP is purple, and the response is
+        // green or red by outcome.
+        let output = NSMutableAttributedString()
+        for entry in outcome.trace {
+            switch entry {
+            case .console(let line):
+                output.appendColored(line, .label)
+            case .request(_, let raw):
+                output.appendColored(raw, .systemPurple)
+            case .response(let text):
+                output.appendColored(text, text.hasPrefix("failed") ? .systemRed : .systemGreen)
+            }
         }
         if let failure = outcome.failure {
-            report.append("error:\n" + failure.message)
+            output.appendColored(failure.message, .systemRed)
         }
-        if report.isEmpty {
-            report.append("No output. The script ran and sent nothing — that is how it "
-                + "skips a notification.")
+        if output.length == 0 {
+            output.appendColored(
+                "No output. The script ran and sent nothing — that is how it "
+                    + "skips a notification.", .secondaryLabel
+            )
         }
 
-        showOutput(report.joined(separator: "\n\n"))
+        showOutput(output)
     }
 
     /// Presents the run's report below the editor.
-    private func showOutput(_ text: String) {
-        outputView.text = text
+    private func showOutput(_ attributed: NSAttributedString) {
+        outputView.attributedText = attributed
         outputView.isHidden = false
 
         // Two hundred points shows a useful amount of output; more than that
@@ -459,5 +468,21 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         textView.text = existing + separator + code.trimmingCharacters(in: .whitespacesAndNewlines)
         save()
         textView.becomeFirstResponder()
+    }
+}
+
+// MARK: - Output coloring
+
+private extension NSMutableAttributedString {
+    /// Appends `text` as its own block in `color`.
+    func appendColored(_ text: String, _ color: UIColor) {
+        if length > 0 {
+            append(NSAttributedString(string: "\n"))
+        }
+        append(NSAttributedString(
+            string: text,
+            attributes: [.font: UIFont.monospacedSystemFont(ofSize: 12, weight: .regular),
+                         .foregroundColor: color]
+        ))
     }
 }

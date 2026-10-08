@@ -125,6 +125,9 @@ public enum JavaScriptRunner {
         case console(String)
         /// A `push(req)` call, described as raw HTTP.
         case request(method: String, raw: String)
+        /// The response to the fetch that preceded it, phrased for the log:
+        /// `200` or the reason the request failed.
+        case response(String)
     }
 
     // MARK: - Entry point
@@ -253,7 +256,8 @@ public enum JavaScriptRunner {
         bullet: [String: Any],
         storage: [String: String],
         options: Options,
-        fetch: @escaping (URLRequest) -> FetchResult
+        fetch: @escaping (URLRequest) -> FetchResult,
+        fetchRecorder: @escaping (String) -> Void = { _ in }
     ) -> Outcome {
         var requests: [PushRequest] = []
         var consoleOutput: [String] = []
@@ -302,6 +306,10 @@ public enum JavaScriptRunner {
             count: { Int32(store.count) }
         )
         installFetch(into: context, options: options, perform: fetch)
+        installFetchRecorder(into: context) {
+            fetchRecorder($0)
+            trace.append(.response($0))
+        }
         installFetchObserver(into: context)
 
         // The notification, marked non-writable so a script cannot replace it and
@@ -557,7 +565,12 @@ public enum JavaScriptRunner {
                     return;
                 }
                 var data = JSON.parse(raw);
-                if (data.error) { reject(new TypeError(data.error)); return; }
+                if (data.error) {
+                    if (globalThis.__fetchRecord) __fetchRecord("failed: " + data.error);
+                    reject(new TypeError(data.error));
+                    return;
+                }
+                if (globalThis.__fetchRecord) __fetchRecord(String(data.status));
                 if (data.note) { console.warn(data.note); }
 
                 var lower = {};
@@ -591,6 +604,15 @@ public enum JavaScriptRunner {
             });
         };
         """)
+    }
+
+    /// Gives the host a hook that records every fetch outcome, so the editor's
+    /// run can color the response line. The pipeline passes an empty sink.
+    private static func installFetchRecorder(into context: JSContext, record: @escaping (String) -> Void) {
+        let sink: @convention(block) (JSValue?) -> Void = { value in
+            record(value?.toString() ?? "")
+        }
+        context.setObject(sink, forKeyedSubscript: "__fetchRecord" as NSString)
     }
 
     /// Records a failed `fetch` so an ignored rejection can still be reported.
