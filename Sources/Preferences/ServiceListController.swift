@@ -83,7 +83,6 @@ public class ServiceListController: PlainViewController {
         // the back button, and the add button must stay reachable in edit mode,
         // when tapping a row renames rather than opens.
         navigationItem.rightBarButtonItems = [addButton, rightButton]
-        addButton.isEnabled = false
     }
 
     public override func viewWillAppear(_ animated: Bool) {
@@ -125,10 +124,8 @@ public class ServiceListController: PlainViewController {
     @objc private func toggleEditing(_ sender: UIBarButtonItem) {
         servicesTable.setEditing(!servicesTable.isEditing, animated: true)
         sender.title = servicesTable.isEditing ? "Done".localized : "Edit".localized
-        // The bar never changes shape — only which of the two buttons is
-        // enabled — so "Done" is always there to leave edit mode with. The add
-        // button is for adding a service, which is possible in either mode.
-        addButton.isEnabled = true
+        // The bar never changes shape, so "Done" is always there to leave edit
+        // mode with and the add button is always usable.
 
         // Leaving edit mode is the persist point, so a drag in progress is
         // never written.
