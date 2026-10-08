@@ -109,6 +109,9 @@ public enum JavaScriptRunner {
         public let storage: [String: String]
         /// The failure, when the run did not finish.
         public let failure: Failure?
+        /// The script's own `fetch` calls, which the runner performs itself.
+        /// A `push(req)` request is *not* among them: it is collected for the
+        /// caller to send, so its outcome can only be appended by the caller.
 
         /// Everything the script did, in the order it did it: `console` lines and
         /// `push` calls interleaved as they happened. A debug view shows this;

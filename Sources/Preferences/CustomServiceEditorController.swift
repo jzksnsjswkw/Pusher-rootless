@@ -541,12 +541,23 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         // console stays default, the raw HTTP is purple, and the response is
         // green or red by outcome.
         let output = NSMutableAttributedString()
+        var requestIndex = 0
         for entry in outcome.trace {
             switch entry {
             case .console(let line):
                 output.appendColored(line, .label)
             case .request(_, let raw):
                 output.appendColored(raw, .systemPurple)
+                // A push(req) request is only described by the runner; the
+                // caller performs it, so its result is fetched here and shown
+                // after the request it belongs to.
+                if requestIndex < outcome.requests.count {
+                    let sent = Self.send(outcome.requests[requestIndex])
+                    output.appendColored(
+                        sent, sent.hasPrefix("← failed") ? .systemRed : .systemGreen
+                    )
+                    requestIndex += 1
+                }
             case .response(let text):
                 output.appendColored(text, text.hasPrefix("failed") ? .systemRed : .systemGreen)
             }
@@ -562,6 +573,75 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         }
 
         showOutput(output)
+    }
+
+    /// Sends one `push(req)` request and describes the outcome in one line.
+    ///
+    /// Run performs the requests for real — that is the point of the button:
+    /// what the script builds is only half of it, and a service's rejection
+    /// (a bad token, a wrong field name) is invisible until the request is
+    /// actually made.
+    private static func send(_ request: PushRequest) -> String {
+        guard let url = URL(string: request.urlString) else {
+            return "← failed: invalid URL"
+        }
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = request.method
+        urlRequest.timeoutInterval = Pusher.scriptFetchTimeout
+        for (field, value) in request.headers {
+            urlRequest.setValue(value, forHTTPHeaderField: field)
+        }
+
+        let method = request.method.uppercased()
+        let isBodyless = method == "GET" || method == "HEAD"
+        if !isBodyless {
+            let body = request.infoDict
+            if let data = try? JSONSerialization.data(withJSONObject: body) {
+                urlRequest.httpBody = data
+                if urlRequest.value(forHTTPHeaderField: "Content-Type") == nil {
+                    urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                }
+            }
+        } else if !request.infoDict.isEmpty,
+                  var components = URLComponents(string: request.urlString) {
+            var items = components.queryItems ?? []
+            for (key, value) in request.infoDict {
+                items.append(URLQueryItem(name: key, value: String(describing: value)))
+            }
+            components.queryItems = items
+            urlRequest.url = components.url
+        }
+
+        let semaphore = DispatchSemaphore(value: 0)
+        final class Box: @unchecked Sendable { var line = "← failed: no response" }
+        let box = Box()
+        URLSession.shared.dataTask(with: urlRequest) { data, response, error in
+            defer { semaphore.signal() }
+            if let error {
+                box.line = "← failed: \(error.localizedDescription)"
+                return
+            }
+            guard let http = response as? HTTPURLResponse else {
+                box.line = "← failed: no response"
+                return
+            }
+            let bytes = data?.count ?? 0
+            let size = bytes < 1024
+                ? "\(bytes) B"
+                : String(format: "%.1f KB", Double(bytes) / 1024)
+            // The status alone is not enough to debug a service: its error text
+            // is what names the wrong field.
+            var detail = "\(http.statusCode)  \(size)"
+            if !(200..<300).contains(http.statusCode),
+               let data, let text = String(data: data, encoding: .utf8), !text.isEmpty {
+                let trimmed = text.count > 300 ? String(text.prefix(300)) + "…" : text
+                detail += "  \(trimmed.replacingOccurrences(of: "\n", with: " "))"
+            }
+            box.line = "← \(detail)"
+        }.resume()
+
+        _ = semaphore.wait(timeout: .now() + Pusher.scriptFetchTimeout + 5)
+        return box.line
     }
 
     /// Presents the run's report below the editor.
