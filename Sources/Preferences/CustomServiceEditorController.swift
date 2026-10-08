@@ -45,6 +45,7 @@ public final class CustomServiceEditorController: ListController {
         super.viewDidLoad()
         navigationItem.title = definition?.name ?? "Custom".localized
         installSpecifiers(buildSpecifiers())
+        observePreferenceChanges()
     }
 
     public override func rebuildSpecifiers() -> NSMutableArray? {
@@ -61,6 +62,149 @@ public final class CustomServiceEditorController: ListController {
     /// Presents the scripting guide as a sheet.
     @objc private func showScriptingGuide() {
         ScriptingGuide.present(from: self)
+    }
+
+    /// Observes writes to the definition's defaults, so the thread switch can be
+    /// locked while the context switch says "share".
+    ///
+    /// The switches write through `PreferencesStorage`, which has no reference
+    /// back to this controller, so the dependency is enforced here — at the
+    /// observation point — rather than in the setter.
+    /// The switches write through PrefsStore, which posts a **Darwin**
+    /// notification — `CFNotificationCenter`, which `NotificationCenter` cannot
+    /// observe — so the dependency is re-evaluated whenever one arrives.
+    private func observePreferenceChanges() {
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            { _, observer, _, _, _ in
+                guard let observer else { return }
+                let controller = Unmanaged<CustomServiceEditorController>
+                    .fromOpaque(observer).takeUnretainedValue()
+                DispatchQueue.main.async {
+                    controller.enforceScriptRuntimeDependency()
+                }
+            },
+            Pusher.prefsNotification as CFString,
+            nil,
+            .coalesce
+        )
+    }
+
+    deinit {
+        CFNotificationCenterRemoveEveryObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque()
+        )
+    }
+
+    /// Enforces the context/thread dependency after a write.
+    ///
+    /// A shared context must stay on the thread that created it (JSContext's
+    /// thread affinity), so sharing the context forces its own thread and the
+    /// thread switch is disabled with a footer saying why. Sharing a thread
+    /// alone is fine: each run still gets a fresh context.
+    private func enforceScriptRuntimeDependency() {
+        guard hasInstalledSpecifiers,
+              let threadSpecifier = specifier(forID: Self.shareThreadIdentifier),
+              let contextSpecifier = specifier(forID: Self.shareContextIdentifier)
+        else { return }
+
+        let sharing = PrefsStore.instance(definitionID).bool(PrefKey.scriptShareContext)
+
+        threadSpecifier.setProperty(!sharing, forKey: "enabled")
+        contextSpecifier.setProperty(
+            sharing
+                ? ("A shared context must stay on its own thread (JSContext "
+                    + "thread affinity), so every run uses its own thread.")
+                    .localized
+                : ("The script runs once per notification. Call push(req) to "
+                    + "send one, call it more than once to send several, or "
+                    + "not at all to skip this notification.").localized,
+            forKey: "footerText"
+        )
+        reloadSpecifier(threadSpecifier, animated: false)
+        reloadSpecifier(contextSpecifier, animated: false)
+    }
+
+    private static let shareContextIdentifier = "shareContext"
+    private static let shareThreadIdentifier = "shareThread"
+
+    /// The run-options cells: share-context, share-thread, timeout, response cap.
+    ///
+    /// They are written to the definition's defaults, which is what a new
+    /// instance of this type starts from; the instance page offers the same
+    /// cells for its own copy.
+    private static func scriptRuntimeSpecifiers(definitionID: String) -> [PSSpecifier] {
+        var specifiers: [PSSpecifier] = []
+
+        let shareContext = switchCell(
+            title: "Share Context Between Runs".localized,
+            key: PrefKey.scriptShareContext, ownerID: definitionID, defaultValue: false
+        )
+        shareContext.identifier = Self.shareContextIdentifier
+        specifiers.append(shareContext)
+
+        let shareThread = switchCell(
+            title: "Share Thread Between Runs".localized,
+            key: PrefKey.scriptShareThread, ownerID: definitionID, defaultValue: false
+        )
+        shareThread.identifier = Self.shareThreadIdentifier
+        specifiers.append(shareThread)
+
+        let timeout = PSSpecifier.preferenceSpecifierNamed(
+            "Timeout (seconds)".localized,
+            target: PreferencesStorage.self,
+            set: #selector(PreferencesStorage.setValue(_:forInstanceSpecifier:)),
+            get: #selector(PreferencesStorage.readValue(forInstanceSpecifier:)),
+            detail: nil, cell: .editTextCell, edit: nil
+        )
+        timeout?.setProperty(definitionID, forKey: SpecifierRouting.PropertyKey.instanceID)
+        timeout?.setProperty(PrefKey.scriptTimeout, forKey: SpecifierRouting.PropertyKey.key)
+        timeout?.setProperty(true, forKey: "enabled")
+        timeout?.setProperty(true, forKey: "isDecimalPad")
+        timeout?.setProperty(Pusher.defaultScriptTimeout,
+                              forKey: SpecifierRouting.PropertyKey.defaultValue)
+        if let timeout { specifiers.append(timeout) }
+
+        let maxBytes = PSSpecifier.preferenceSpecifierNamed(
+            "Max Response Size (MB)".localized,
+            target: PreferencesStorage.self,
+            set: #selector(PreferencesStorage.setValue(_:forInstanceSpecifier:)),
+            get: #selector(PreferencesStorage.readValue(forInstanceSpecifier:)),
+            detail: nil, cell: .editTextCell, edit: nil
+        )
+        maxBytes?.setProperty(definitionID, forKey: SpecifierRouting.PropertyKey.instanceID)
+        maxBytes?.setProperty(PrefKey.scriptMaxResponseBytes,
+                              forKey: SpecifierRouting.PropertyKey.key)
+        maxBytes?.setProperty(true, forKey: "enabled")
+        maxBytes?.setProperty(true, forKey: "isDecimalPad")
+        // Shown and stored in MB; the runner converts to bytes.
+        maxBytes?.setProperty(Pusher.defaultMaxResponseMB,
+                              forKey: SpecifierRouting.PropertyKey.defaultValue)
+        if let maxBytes { specifiers.append(maxBytes) }
+
+        return specifiers
+    }
+
+    private static func switchCell(
+        title: String,
+        key: String,
+        ownerID: String,
+        defaultValue: Bool
+    ) -> PSSpecifier {
+        let specifier = PSSpecifier.preferenceSpecifierNamed(
+            title, target: PreferencesStorage.self,
+            set: #selector(PreferencesStorage.setValue(_:forInstanceSpecifier:)),
+            get: #selector(PreferencesStorage.readValue(forInstanceSpecifier:)),
+            detail: nil, cell: .switchCell, edit: nil
+        )!
+        specifier.setProperty(ownerID, forKey: SpecifierRouting.PropertyKey.instanceID)
+        specifier.setProperty(key, forKey: SpecifierRouting.PropertyKey.key)
+        specifier.setProperty(key, forKey: SpecifierRouting.PropertyKey.customAppsPrefsKey)
+        specifier.setProperty(true, forKey: "enabled")
+        specifier.setProperty(defaultValue, forKey: SpecifierRouting.PropertyKey.defaultValue)
+        return specifier
     }
 
     // MARK: - Specifiers
@@ -118,6 +262,11 @@ public final class CustomServiceEditorController: ListController {
         let defaultsGroup = PSSpecifier.groupSpecifier(
             withName: "Defaults for New Services".localized
         )
+        // How a run of this type executes: isolated context/thread, the timeout,
+        // and the fetch size cap. They seed new instances exactly like the
+        // payload options above, and an instance can still change its own.
+        all.append(contentsOf: Self.scriptRuntimeSpecifiers(definitionID: definitionID))
+
         defaultsGroup?.setProperty(
             ("Services you add from this type start with these, and can still "
                 + "change them individually.").localized,

@@ -57,6 +57,8 @@ public enum Pusher {
     /// The largest response body a script's `fetch` will accept, in bytes. A
     /// larger body is truncated and noted on the console rather than refused.
     public static let defaultMaxResponseBytes = 1_048_576
+    /// The same limit, in the MB the settings page shows.
+    public static let defaultMaxResponseMB = 1
 
     // MARK: - Test push
 

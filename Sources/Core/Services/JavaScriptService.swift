@@ -141,13 +141,14 @@ public enum JavaScriptService: PushService {
     static func options(config: ServiceConfig) -> JavaScriptRunner.Options {
         let raw = config.raw
         let timeout = raw.double(PrefKey.scriptTimeout)
-        let maximumBytes = raw.int(PrefKey.scriptMaxResponseBytes)
+        // Stored in MB (the unit the page shows); zero means the default.
+        let maximumMB = raw.double(PrefKey.scriptMaxResponseBytes)
         return JavaScriptRunner.Options(
             sharingContext: raw.bool(PrefKey.scriptShareContext),
             sharingThread: raw.bool(PrefKey.scriptShareThread),
             timeout: timeout > 0 ? timeout : Pusher.defaultScriptTimeout,
-            maximumResponseBytes: maximumBytes > 0
-                ? maximumBytes
+            maximumResponseBytes: maximumMB > 0
+                ? Int(maximumMB * 1024 * 1024)
                 : Pusher.defaultMaxResponseBytes
         )
     }
