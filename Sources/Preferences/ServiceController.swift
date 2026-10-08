@@ -111,6 +111,54 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     /// "Default" option meaning "follow the global setting". (The global page
     /// does not route these cells and leaves the segment values untouched; see
     /// `GlobalSettingsListController.buildSpecifiers()`.)
+    /// The app black/whitelist cells for a script service.
+    ///
+    /// Built as code rather than loaded from a plist, because the script page
+    /// loads no plist; the segment's titles and values are the ones
+    /// `Custom.plist` carries for the same cells.
+    func appFilterSpecifiers() -> [PSSpecifier] {
+        var specifiers: [PSSpecifier] = []
+
+        if let group = PSSpecifier.groupSpecifier(withName: "Apps".localized) {
+            specifiers.append(group)
+        }
+
+        if let segment = PSSpecifier.preferenceSpecifierNamed(
+            nil, target: PreferencesStorage.self,
+            set: #selector(PreferencesStorage.setValue(_:forInstanceSpecifier:)),
+            get: #selector(PreferencesStorage.readValue(forInstanceSpecifier:)),
+            detail: nil, cell: .segmentCell, edit: nil
+        ) {
+            segment.identifier = "appListIsBlacklist"
+            segment.name = nil
+            segment.setProperty(serviceInstanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
+            segment.setProperty(PrefKey.appListIsBlacklist, forKey: SpecifierRouting.PropertyKey.key)
+            segment.setProperty(PrefKey.appListIsBlacklist,
+                                forKey: SpecifierRouting.PropertyKey.customAppsPrefsKey)
+            segment.setProperty(true, forKey: "enabled")
+            segment.setProperty(true, forKey: SpecifierRouting.PropertyKey.defaultValue)
+            segment.setValues([true, false], titles: ["Blacklist".localized, "Whitelist".localized])
+            specifiers.append(segment)
+        }
+
+        if let appList = PSSpecifier.preferenceSpecifierNamed(
+            "App List".localized, target: nil, set: nil, get: nil,
+            detail: AppListController.self, cell: .linkCell, edit: nil
+        ) {
+            appList.setProperty("app_list", forKey: "icon")
+            appList.setProperty(serviceInstanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
+            appList.setProperty(serviceType, forKey: SpecifierRouting.PropertyKey.serviceType)
+            appList.setProperty(isWebhook, forKey: SpecifierRouting.PropertyKey.isWebhook)
+            appList.setProperty(true, forKey: "useSearchBar")
+            appList.setProperty(true, forKey: "alphabeticIndexingEnabled")
+            appList.setProperty(
+                NSValue(nonretainedObject: self), forKey: SpecifierRouting.PropertyKey.listReference
+            )
+            specifiers.append(appList)
+        }
+        return specifiers
+    }
+
     func globalTailSpecifiers() -> [PSSpecifier] {
         let loaded = (loadSpecifiers(named: "GlobalAndServices") as? [PSSpecifier]) ?? []
         for specifier in loaded {
@@ -184,6 +232,15 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         all.append(contentsOf: ServiceSpecifierBuilders.shared.builders(
             for: serviceType, instanceID: serviceInstanceID, appID: nil
         ))
+
+        // A script service carries the app filter, since which apps it applies
+        // to is the instance's business — two services of one script may serve
+        // different apps. The segment cell comes with the "Default" option the
+        // global tail adds to its own segments, so an untouched filter follows
+        // the global app list.
+        if isScriptType {
+            all.append(contentsOf: appFilterSpecifiers())
+        }
 
         // Device conditions, the SNS page and the log page are shared by every
         // instance; they close out the page.
