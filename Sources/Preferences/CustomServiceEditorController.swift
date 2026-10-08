@@ -131,25 +131,28 @@ public final class CustomServiceEditorController: ListController {
             threadSpecifier.setProperty(true, forKey: "enabled")
         }
 
-        // The explanation travels on the group's footer — the footer on a
-        // non-group cell is not rendered.
-        if let group = specifier(forID: Self.advancedGroupIdentifier) {
-            group.setProperty(
+        // The forced state is explained on the thread switch's own group
+        // footer, under the switch it concerns.
+        if let threadGroup = specifier(forID: Self.shareThreadGroupIdentifier) {
+            threadGroup.setProperty(
                 sharing
                     ? ("A shared context must stay on the thread it was created "
-                        + "on (JSContext thread affinity), so every run shares "
-                        + "the thread too.").localized
-                    : ("Services you add from this type start with these, and "
-                        + "can still change them individually.").localized,
+                        + "on (JSContext thread affinity), so sharing the thread "
+                        + "is required and locked on.").localized
+                    : ("Runs queue on one thread. A shared context requires this "
+                        + "(JSContext thread affinity); with own contexts it only "
+                        + "orders the runs.").localized,
                 forKey: "footerText"
             )
-            reloadSpecifier(group, animated: false)
+            reloadSpecifier(threadGroup, animated: false)
         }
         reloadSpecifier(threadSpecifier, animated: false)
     }
 
     private static let shareContextIdentifier = "shareContext"
     private static let shareThreadIdentifier = "shareThread"
+    private static let shareContextGroupIdentifier = "shareContextGroup"
+    private static let shareThreadGroupIdentifier = "shareThreadGroup"
     private static let advancedGroupIdentifier = "advancedGroup"
 
     /// The run-options cells: share-context, share-thread, timeout, response cap.
