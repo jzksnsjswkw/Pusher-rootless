@@ -163,29 +163,28 @@ public final class CustomServiceEditorController: ListController {
 /// insertable examples, since a user starting from nothing needs to see the shape
 /// of a script before they can write one.
 @objc(NSPCustomServiceScriptController)
-public final class CustomServiceScriptController: UIViewController {
+public final class CustomServiceScriptController: PSViewController {
     private let definitionID: String
     private let textView = UITextView()
 
-    /// The framework builds a `detail`-named controller through these, so both
-    /// are written out even though this page is normally pushed directly: a
-    /// class that adds its own initializer hides the inherited ones, and the
-    /// framework's call would land on an unimplemented one.
-    override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
+    /// A `PSViewController`, because the framework sets `rootController` on a
+    /// detail page it pushes — a plain `UIViewController` has no such setter, and
+    /// the push ended in `unrecognized selector sent to instance`. The two
+    /// initializers are written out for the reason given on
+    /// ``ServiceListController``: a class that adds its own hides the inherited
+    /// ones, and the framework's construction path would land on a stub.
+    public override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
         self.definitionID = ""
         super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
     }
 
-    /// `UIViewController` has no `initForContentSize:`, so this is not an
-    /// override; declaring it as a plain initializer carrying the selector is
-    /// what makes the framework's construction path work should it ever be used.
-    @objc public init(forContentSize contentSize: CGSize) {
+    public override init(forContentSize contentSize: CGSize) {
         self.definitionID = ""
         super.init(nibName: nil, bundle: nil)
     }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+    public required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     init(definitionID: String) {
         self.definitionID = definitionID
