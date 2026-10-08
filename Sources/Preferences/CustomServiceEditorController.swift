@@ -554,12 +554,14 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
                 if requestIndex < outcome.requests.count {
                     let sent = Self.send(outcome.requests[requestIndex])
                     output.appendColored(
-                        sent, sent.hasPrefix("← failed") ? .systemRed : .systemGreen
+                        sent, sent.hasPrefix("← failed") ? .systemRed : Self.successColor
                     )
                     requestIndex += 1
                 }
             case .response(let text):
-                output.appendColored(text, text.hasPrefix("failed") ? .systemRed : .systemGreen)
+                output.appendColored(
+                    text, text.hasPrefix("failed") ? .systemRed : Self.successColor
+                )
             }
         }
         if let failure = outcome.failure {
@@ -573,6 +575,20 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         }
 
         showOutput(output)
+    }
+
+    /// The color a successful response line is drawn in.
+    ///
+    /// A deep green rather than the system's: the system green is tuned for
+    /// glyphs and fills, and at text size on a light background it reads as
+    /// pale. This resolves per theme, because a green dark enough for white
+    /// paper is unreadable on a black one.
+    private static var successColor: UIColor {
+        UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 0.35, green: 0.78, blue: 0.40, alpha: 1)
+                : UIColor(red: 0.00, green: 0.42, blue: 0.17, alpha: 1)
+        }
     }
 
     /// Sends one `push(req)` request and describes the outcome in one line.
