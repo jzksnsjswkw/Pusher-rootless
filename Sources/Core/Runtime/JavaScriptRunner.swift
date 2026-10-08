@@ -110,8 +110,21 @@ public enum JavaScriptRunner {
         /// The failure, when the run did not finish.
         public let failure: Failure?
 
+        /// Everything the script did, in the order it did it: `console` lines and
+        /// `push` calls interleaved as they happened. A debug view shows this;
+        /// the send path only reads ``requests``.
+        public let trace: [TraceEntry]
+
         /// Whether the script chose not to forward this notification.
         public var isSkipped: Bool { failure == nil && requests.isEmpty }
+    }
+
+    /// One thing a script did, in order.
+    public enum TraceEntry {
+        /// A `console.log` line.
+        case console(String)
+        /// A `push(req)` call, described as raw HTTP.
+        case request(method: String, raw: String)
     }
 
     // MARK: - Entry point
@@ -165,10 +178,10 @@ public enum JavaScriptRunner {
 
         guard finished.wait(timeout: .now() + options.timeout) == .success else {
             return Outcome(requests: [], consoleOutput: [], storage: storage,
-                           failure: .timedOut(options.timeout))
+                           failure: .timedOut(options.timeout), trace: [])
         }
         return box.value ?? Outcome(requests: [], consoleOutput: [], storage: storage,
-                                    failure: .script("Script produced no result"))
+                                    failure: .script("Script produced no result"), trace: [])
     }
 
     /// The one host used for shared-context runs.
@@ -222,7 +235,7 @@ public enum JavaScriptRunner {
     ) -> Outcome {
         guard let context = JSContext() else {
             return Outcome(requests: [], consoleOutput: [], storage: storage,
-                           failure: .script("Could not create a JavaScript context"))
+                           failure: .script("Could not create a JavaScript context"), trace: [])
         }
         return evaluate(
             script: script, in: context, bullet: bullet, storage: storage,
@@ -244,6 +257,7 @@ public enum JavaScriptRunner {
     ) -> Outcome {
         var requests: [PushRequest] = []
         var consoleOutput: [String] = []
+        var trace: [TraceEntry] = []
         var store = storage
         var failure: Failure?
 
@@ -253,7 +267,10 @@ public enum JavaScriptRunner {
             failure = .script(describe(exception))
         }
 
-        installConsole(into: context) { consoleOutput.append($0) }
+        installConsole(into: context) {
+            consoleOutput.append($0)
+            trace.append(.console($0))
+        }
 
         // `push(req)`: the only way a script sends anything.
         let push: @convention(block) (JSValue?) -> Bool = { value in
@@ -266,6 +283,10 @@ public enum JavaScriptRunner {
                 return false
             }
             requests.append(request)
+            trace.append(.request(
+                method: request.method,
+                raw: rawHTTP(request)
+            ))
             return true
         }
         context.setObject(push, forKeyedSubscript: "push" as NSString)
@@ -328,8 +349,27 @@ public enum JavaScriptRunner {
         }
 
         return Outcome(
-            requests: requests, consoleOutput: consoleOutput, storage: store, failure: failure
+            requests: requests, consoleOutput: consoleOutput, storage: store,
+            failure: failure, trace: trace
         )
+    }
+
+    /// One pushed request, as the raw HTTP a client would have sent.
+    private static func rawHTTP(_ request: PushRequest) -> String {
+        let target = URL(string: request.urlString)
+        let path = target.flatMap { $0.path.isEmpty ? "/" : $0.path } ?? "/"
+        let query = target?.query.map { "?\($0)" } ?? ""
+        var lines = ["\(request.method) \(path)\(query) HTTP/1.1",
+                     "Host: \(target?.host ?? "?")"]
+        for field in request.headers.keys.sorted() {
+            lines.append("\(field): \(request.headers[field] ?? "")")
+        }
+        if let body = try? JSONSerialization.data(withJSONObject: request.infoDict),
+           let text = String(data: body, encoding: .utf8), !request.infoDict.isEmpty {
+            lines.append("")
+            lines.append(text)
+        }
+        return lines.joined(separator: "\n")
     }
 
 
@@ -378,7 +418,8 @@ public enum JavaScriptRunner {
         // parameter receives only the first one.
         let sink: @convention(block) () -> Void = {
             let arguments = JSContext.currentArguments() as? [JSValue] ?? []
-            append(arguments.map { render($0) }.joined(separator: " "))
+            let line = arguments.map { render($0) }.joined(separator: " ")
+            append(line)
         }
 
         let console = JSValue(newObjectIn: context)
@@ -667,12 +708,12 @@ private final class ScriptHost {
         guard box.finished.wait(timeout: .now() + deadline) == .success else {
             return JavaScriptRunner.Outcome(
                 requests: [], consoleOutput: [], storage: storage,
-                failure: .timedOut(options.timeout)
+                failure: .timedOut(options.timeout), trace: []
             )
         }
         return box.outcome ?? JavaScriptRunner.Outcome(
             requests: [], consoleOutput: [], storage: storage,
-            failure: .script("Script produced no result")
+            failure: .script("Script produced no result"), trace: []
         )
     }
 

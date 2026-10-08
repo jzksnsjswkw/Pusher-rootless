@@ -61,12 +61,9 @@ public enum JavaScriptService: PushService {
             fetch: ScriptHTTP.perform
         )
 
-        // Everything the script printed goes to this instance's log, before the
-        // failure is reported, so a script that prints its way to a mistake
-        // leaves the trace behind.
-        for line in outcome.consoleOutput {
-            PushLog.add(service: config.name, context: context, label: "console", object: line)
-        }
+        // The pipeline keeps console output out of the log: a script may print
+        // per notification, and a chatty one would fill the log unbounded. The
+        // editor's Run shows it instead; failures are still logged here.
         persist(storage: outcome.storage, context: context, config: config)
 
         if let failure = outcome.failure {
