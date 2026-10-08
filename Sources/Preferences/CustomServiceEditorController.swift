@@ -86,7 +86,7 @@ public final class CustomServiceEditorController: ListController {
         )
 
         let scriptRow = PSSpecifier.preferenceSpecifierNamed(
-            scriptSummary(), target: nil, set: nil, get: nil,
+            "Script".localized, target: nil, set: nil, get: nil,
             detail: CustomServiceScriptController.self, cell: .linkCell, edit: nil
         )
         scriptRow?.identifier = Self.scriptRowIdentifier
@@ -116,18 +116,6 @@ public final class CustomServiceEditorController: ListController {
         return NSMutableArray(array: all)
     }
 
-    /// A one-line summary of the script, so the row stays a row.
-    private func scriptSummary() -> String {
-        let script = (definition?.script ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !script.isEmpty else { return "Script".localized }
-        let lines = script.split(separator: "\n").count
-        let firstLine = script
-            .split(separator: "\n", omittingEmptySubsequences: true)
-            .first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            .map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
-        let shown = firstLine.count > 38 ? String(firstLine.prefix(38)) + "…" : firstLine
-        return "\(shown)  (\(lines))"
-    }
 
     // MARK: - Name
 

@@ -230,3 +230,11 @@ Delete：填 1 删除对应 ID 的推送（需同时填写 ID）";
 "Max Response Size (bytes)" = "最大响应大小（字节）";
 "The script runs for each notification. Call push(req) to send one; call it more than once to send several, or not at all to skip this notification." = "脚本会针对每条通知运行。调用 push(req) 发送推送；调用多次可发送多条，完全不调用则跳过这条通知。";
 "Sharing a context or a thread is faster but lets one notification's variables reach the next. A separate context is the safer default; a separate thread keeps a runaway script off the others." = "共享上下文或线程更快，但会让一条通知里的变量泄漏到下一条。独立上下文是更安全的默认值；独立线程可避免失控脚本影响其他运行。";
+
+/* Custom service definitions */
+"New Service" = "新建服务";
+"Delete Service" = "删除服务";
+"Defaults for New Services" = "新服务的默认选项";
+"Services You Defined" = "你定义的服务";
+"Service" = "服务";
+"%d services use this. They will keep their settings but stop sending until they are given another type." = "%d 个服务正在使用它。它们的设置会保留，但在换绑其它类型之前不会再发送。";
