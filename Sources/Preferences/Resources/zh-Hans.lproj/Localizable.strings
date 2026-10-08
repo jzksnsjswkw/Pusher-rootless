@@ -320,3 +320,4 @@ console.log(...)——显示在编辑器的运行输出中。";
 "Max Response Size (MB)" = "最大响应大小（MB）";
 "A shared context must stay on its own thread (JSContext thread affinity), so every run uses its own thread." = "共享的上下文必须固定在创建它的线程上（JSContext 的线程亲和性），因此每次运行都会使用独立线程。";
 "A shared context must stay on the thread it was created on (JSContext thread affinity), so every run shares the thread too." = "共享的上下文必须固定在创建它的线程上（JSContext 的线程亲和性），因此每次运行也必然共享线程。";
+"Advanced Settings" = "高级设置";

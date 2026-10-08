@@ -106,8 +106,7 @@ public final class CustomServiceEditorController: ListController {
     /// alone is fine: each run still gets a fresh context.
     private func enforceScriptRuntimeDependency() {
         guard hasInstalledSpecifiers,
-              let threadSpecifier = specifier(forID: Self.shareThreadIdentifier),
-              let contextSpecifier = specifier(forID: Self.shareContextIdentifier)
+              let threadSpecifier = specifier(forID: Self.shareThreadIdentifier)
         else { return }
 
         let sharing = CustomServiceStore.rawEntry(id: definitionID)
@@ -132,22 +131,26 @@ public final class CustomServiceEditorController: ListController {
             threadSpecifier.setProperty(true, forKey: "enabled")
         }
 
-        contextSpecifier.setProperty(
-            sharing
-                ? ("A shared context must stay on the thread it was created on "
-                    + "(JSContext thread affinity), so every run shares the "
-                    + "thread too.").localized
-                : ("The script runs once per notification. Call push(req) to "
-                    + "send one, call it more than once to send several, or "
-                    + "not at all to skip this notification.").localized,
-            forKey: "footerText"
-        )
+        // The explanation travels on the group's footer — the footer on a
+        // non-group cell is not rendered.
+        if let group = specifier(forID: Self.advancedGroupIdentifier) {
+            group.setProperty(
+                sharing
+                    ? ("A shared context must stay on the thread it was created "
+                        + "on (JSContext thread affinity), so every run shares "
+                        + "the thread too.").localized
+                    : ("Services you add from this type start with these, and "
+                        + "can still change them individually.").localized,
+                forKey: "footerText"
+            )
+            reloadSpecifier(group, animated: false)
+        }
         reloadSpecifier(threadSpecifier, animated: false)
-        reloadSpecifier(contextSpecifier, animated: false)
     }
 
     private static let shareContextIdentifier = "shareContext"
     private static let shareThreadIdentifier = "shareThread"
+    private static let advancedGroupIdentifier = "advancedGroup"
 
     /// The run-options cells: share-context, share-thread, timeout, response cap.
     ///
@@ -285,11 +288,6 @@ public final class CustomServiceEditorController: ListController {
         let defaultsGroup = PSSpecifier.groupSpecifier(
             withName: "Defaults for New Services".localized
         )
-        // How a run of this type executes: isolated context/thread, the timeout,
-        // and the fetch size cap. They seed new instances exactly like the
-        // payload options above, and an instance can still change its own.
-        all.append(contentsOf: Self.scriptRuntimeSpecifiers(definitionID: definitionID))
-
         defaultsGroup?.setProperty(
             ("Services you add from this type start with these, and can still "
                 + "change them individually.").localized,
@@ -304,6 +302,23 @@ public final class CustomServiceEditorController: ListController {
             for: ServiceSpecifierBuilders.payloadOptionsKey,
             instanceID: definitionID, appID: nil
         ))
+
+        // ── Advanced: how a run of this type executes ───────────────────────
+        // Its own block at the bottom, because these are the options a script
+        // author rarely touches: context/thread sharing, the timeout, and the
+        // fetch size cap. They seed new instances like the payload options, and
+        // an instance can still change its own.
+        let advancedGroup = PSSpecifier.groupSpecifier(
+            withName: "Advanced Settings".localized
+        )
+        advancedGroup?.identifier = Self.advancedGroupIdentifier
+        advancedGroup?.setProperty(
+            ("Services you add from this type start with these, and can still "
+                + "change them individually.").localized,
+            forKey: "footerText"
+        )
+        if let advancedGroup { all.append(advancedGroup) }
+        all.append(contentsOf: Self.scriptRuntimeSpecifiers(definitionID: definitionID))
 
         return NSMutableArray(array: all)
     }
