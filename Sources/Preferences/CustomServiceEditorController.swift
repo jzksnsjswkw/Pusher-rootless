@@ -206,6 +206,16 @@ public final class CustomServiceEditorController: ListController {
         shareThread.identifier = Self.shareThreadIdentifier
         specifiers.append(shareThread)
 
+        // The two numbers are their own block, so the thread note above stays
+        // attached to the switch it explains rather than trailing the numbers.
+        let limitsGroup = PSSpecifier.emptyGroup()
+        limitsGroup?.setProperty(
+            ("These seed new services of this type, like the options above.")
+                .localized,
+            forKey: "footerText"
+        )
+        if let limitsGroup { specifiers.append(limitsGroup) }
+
         let timeout = PSSpecifier.preferenceSpecifierNamed(
             "Timeout (seconds)".localized,
             target: PreferencesStorage.self,
@@ -343,8 +353,7 @@ public final class CustomServiceEditorController: ListController {
         )
         advancedGroup?.identifier = Self.advancedGroupIdentifier
         advancedGroup?.setProperty(
-            ("Services you add from this type start with these, and can still "
-                + "change them individually.").localized,
+            "How a run of this type executes.".localized,
             forKey: "footerText"
         )
         if let advancedGroup { all.append(advancedGroup) }
