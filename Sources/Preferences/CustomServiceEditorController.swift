@@ -47,6 +47,10 @@ public final class CustomServiceEditorController: ListController {
         installSpecifiers(buildSpecifiers())
     }
 
+    public override func rebuildSpecifiers() -> NSMutableArray? {
+        buildSpecifiers()
+    }
+
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         // The name or script may have changed on the pages this one pushes.
@@ -56,7 +60,7 @@ public final class CustomServiceEditorController: ListController {
 
     // MARK: - Specifiers
 
-    private func buildSpecifiers() -> NSMutableArray {
+    func buildSpecifiers() -> NSMutableArray {
         var all: [PSSpecifier] = []
 
         // ── The identity ────────────────────────────────────────────────────
