@@ -415,6 +415,16 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
     private let outputView = UITextView()
     private let runButton = UIButton(type: .system)
     private var outputHeight: NSLayoutConstraint!
+    /// The line-number column, and the label inside it that carries the digits.
+    private let gutter = UIView()
+    private let gutterLabel = UILabel()
+    /// Two mutually exclusive bottoms for the editor: the page is the editor's
+    /// until the first run, after which the output pane takes the lower part.
+    private var editorFillsPage: NSLayoutConstraint!
+    private var editorAboveOutput: NSLayoutConstraint!
+
+    /// The width of the line-number column.
+    private static let gutterWidth: CGFloat = 34
 
     /// The sample notification the run button feeds the script.
     private static let testBullet: [String: Any] = [
@@ -468,8 +478,10 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
 
         view.backgroundColor = .systemGroupedBackground
 
-        // The editor takes the upper area; the output pane sits below it and
-        // grows with its content.
+        // The editor owns the page until a run splits the output off, so the
+        // output pane starts collapsed: a hidden view still takes part in
+        // layout, and leaving it at its full height would reserve a strip of
+        // the page for nothing.
         textView.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
         textView.autocapitalizationType = .none
         textView.autocorrectionType = .no
@@ -482,8 +494,27 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         textView.backgroundColor = .secondarySystemGroupedBackground
         textView.layer.cornerRadius = 10
         textView.text = CustomServiceStore.definition(id: definitionID)?.script ?? ""
+        textView.textContainerInset = UIEdgeInsets(
+            top: 8, left: Self.gutterWidth + 4, bottom: 8, right: 8
+        )
         textView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(textView)
+
+        // The numbers are their own view beside the editor rather than text
+        // inside it: an edit must not be able to touch them, and a selection
+        // must not include them. The editor's inset above is what makes room.
+        gutter.clipsToBounds = true
+        gutter.backgroundColor = textView.backgroundColor
+        gutter.layer.cornerRadius = 10
+        gutter.layer.maskedCorners = [.layerMinXMinYCorner, .layerMinXMaxYCorner]
+        gutter.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(gutter)
+
+        gutterLabel.font = textView.font
+        gutterLabel.textColor = .tertiaryLabel
+        gutterLabel.numberOfLines = 0
+        gutterLabel.textAlignment = .right
+        gutter.addSubview(gutterLabel)
 
         outputView.isEditable = false
         outputView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
@@ -493,14 +524,25 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         outputView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(outputView)
 
-        outputHeight = outputView.heightAnchor.constraint(equalToConstant: 200)
+        outputHeight = outputView.heightAnchor.constraint(equalToConstant: 0)
         outputHeight.isActive = true
+
+        editorFillsPage = textView.bottomAnchor.constraint(
+            equalTo: view.keyboardLayoutGuide.topAnchor, constant: -12
+        )
+        editorAboveOutput = textView.bottomAnchor.constraint(
+            equalTo: outputView.topAnchor, constant: -12
+        )
 
         NSLayoutConstraint.activate([
             textView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
             textView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
             textView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
-            textView.bottomAnchor.constraint(equalTo: outputView.topAnchor, constant: -12),
+
+            gutter.topAnchor.constraint(equalTo: textView.topAnchor),
+            gutter.bottomAnchor.constraint(equalTo: textView.bottomAnchor),
+            gutter.leadingAnchor.constraint(equalTo: textView.leadingAnchor),
+            gutter.widthAnchor.constraint(equalToConstant: Self.gutterWidth),
 
             outputView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
             outputView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
@@ -508,6 +550,79 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
                 equalTo: view.keyboardLayoutGuide.topAnchor, constant: -12
             ),
         ])
+        editorFillsPage.isActive = true
+    }
+
+    public override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateGutter()
+    }
+
+    // MARK: - Line numbers
+
+    /// Draws the numbers beside the code, moved by the scroll offset.
+    private func updateGutter() {
+        guard gutter.bounds.width > 0 else { return }
+        gutterLabel.text = lineNumbers()
+
+        let width = max(Self.gutterWidth - 6, 1)
+        let height = gutterLabel.sizeThatFits(
+            CGSize(width: width, height: .greatestFiniteMagnitude)
+        ).height
+        // The numbers do not scroll themselves: they are placed against the
+        // content offset, so the first visible row carries its own number.
+        gutterLabel.frame = CGRect(
+            x: 0,
+            y: textView.textContainerInset.top - textView.contentOffset.y,
+            width: width,
+            height: height
+        )
+    }
+
+    /// One number per *visual* line, with a wrapped row left blank.
+    ///
+    /// A wrapped line would otherwise put every number below it out of step
+    /// with the code beside it.
+    private func lineNumbers() -> String {
+        let text = textView.text ?? ""
+        guard !text.isEmpty else { return "1" }
+
+        // A fragment reports a UTF-16 offset, so the line starts are counted in
+        // the same units — an emoji would shift them otherwise.
+        var lineStarts: [Int] = [0]
+        for (offset, unit) in text.utf16.enumerated() where unit == 0x0A {
+            lineStarts.append(offset + 1)
+        }
+
+        let layoutManager = textView.layoutManager
+        let container = textView.textContainer
+        layoutManager.ensureLayout(for: container)
+
+        var numbers: [String] = []
+        var previous = -1
+        var glyph = 0
+        while glyph < layoutManager.numberOfGlyphs {
+            var range = NSRange()
+            layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: &range)
+            let character = layoutManager.characterIndexForGlyph(at: range.location)
+
+            var line = 0
+            for (position, start) in lineStarts.enumerated() where start <= character {
+                line = position
+            }
+            numbers.append(line == previous ? "" : String(line + 1))
+            previous = line
+            glyph = NSMaxRange(range)
+        }
+        return numbers.isEmpty ? "1" : numbers.joined(separator: "\n")
+    }
+
+    public func textViewDidChange(_ textView: UITextView) {
+        updateGutter()
+    }
+
+    public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        updateGutter()
     }
 
     // MARK: - Running
@@ -663,12 +778,20 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
     /// Presents the run's report below the editor.
     private func showOutput(_ attributed: NSAttributedString) {
         outputView.attributedText = attributed
+        if editorFillsPage.isActive {
+            // The first run is what splits the page. Below this width the
+            // editor keeps the whole of it, which is what makes writing
+            // comfortable.
+            editorFillsPage.isActive = false
+            editorAboveOutput.isActive = true
+        }
         outputView.isHidden = false
 
         // Two hundred points shows a useful amount of output; more than that
         // scrolls inside the pane rather than pushing the editor off screen.
         outputHeight.constant = min(260, max(120, outputView.contentSize.height + 16))
         view.layoutIfNeeded()
+        updateGutter()
     }
 
     // MARK: - Saving
