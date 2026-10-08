@@ -264,3 +264,55 @@ console.log(...)——显示在编辑器的运行输出中。";
 "Copy AI Prompt" = "复制 AI 提示词";
 "AI prompt copied. Paste it into your AI assistant and describe the result you want." = "AI 提示词已复制。粘贴到你的 AI 助手，并描述你想要的结果。";
 "Close" = "关闭";
+"This is a SYSTEM PROMPT. Everything before the marker below is fixed context you must follow; after the marker is what the user wants. Do not answer the system part — generate code only." = "这是一段系统提示词。下面分隔线之前的内容是固定背景，你必须遵守；分隔线之后是用户的需求。不要回应系统提示本身——只生成代码。";
+"Write a JavaScript script for Pusher, an iOS tweak that forwards notifications to a push service." = "为 Pusher 编写一段 JavaScript 脚本。Pusher 是一个把 iOS 通知转发到推送服务的越狱插件。";
+"Runtime: JavaScriptCore on iOS. The script runs once per notification, as an async function, so top-level await works. Modern syntax (const/let, arrow functions, destructuring, optional chaining, async/await, Promise) is available. There is no DOM, no Node APIs, no timers." = "运行时：iOS 上的 JavaScriptCore。脚本每条通知运行一次，以 async 函数形式执行，支持顶层 await。可用现代语法（const/let、箭头函数、解构、可选链、async/await、Promise）。没有 DOM、没有 Node API、没有定时器。";
+"Injected values:" = "注入的变量：";
+"- bullet — the notification:
+    bullet.deviceName  string  this iPhone's name
+    bullet.appName     string  the sending app's display name
+    bullet.appID       string  the sending app's bundle ID
+    bullet.title       string  may be empty
+    bullet.subtitle    string  may be empty
+    bullet.message     string  the notification body
+    bullet.date        string  formatted timestamp
+    bullet.icon        string  base64 PNG of the app icon
+    bullet.image       string  base64 of the attachment image" = "- bullet——通知内容：
+    bullet.deviceName  字符串  本机名称
+    bullet.appName     字符串  发送通知的应用显示名
+    bullet.appID       字符串  发送通知的应用 bundle ID
+    bullet.title       字符串  可能为空
+    bullet.subtitle    字符串  可能为空
+    bullet.message     字符串  通知正文
+    bullet.date        字符串  已格式化的时间戳
+    bullet.icon        字符串  应用图标的 base64 PNG
+    bullet.image       字符串  通知附件图片的 base64";
+"Injected functions:" = "注入的函数：";
+"- push(req) — sends a request. Call once to send, several times to send several, or never to skip this notification. req:
+      { url: string (required),
+        method: \"GET\" | \"POST\" | ... (default \"POST\"),
+        headers: { name: value },
+        body: object (sent as JSON) or string (sent as-is) }
+- fetch(url, init) — real HTTP, web-platform semantics: a Promise of a Response with ok, status, headers, url, and json()/text().
+- localStorage.getItem/setItem/removeItem/clear — persists per service.
+- console.log/info/warn/error — shown in the editor's Run output" = "- push(req)——发送一个请求。调用一次发送一条，调用多次发送多条，不调用则跳过该通知。req 结构：
+      { url: 字符串（必填），
+        method: \"GET\" | \"POST\" | …（默认 \"POST\"），
+        headers: { 名称: 值 },
+        body: 对象（以 JSON 发送）或字符串（原样发送） }
+- fetch(url, init)——真实 HTTP，与 Web 平台语义一致：返回 Promise<Response>，含 ok、status、headers、url 和 json()/text()。
+- localStorage.getItem/setItem/removeItem/clear——按服务持久化。
+- console.log/info/warn/error——显示在脚本编辑器的运行输出中。";
+"Rules:" = "规则：";
+"- Call push() to forward the notification; without it, nothing is sent.
+- The script must finish within 2 seconds.
+- Do not use while(true) loops or blocking patterns." = "- 调用 push() 才会转发通知；不调用则什么都不会发送。
+- 脚本必须在 2 秒内完成。
+- 不要使用 while(true) 死循环或阻塞式写法。";
+"Output ONLY the JavaScript source — no markdown fences, no explanation, no commentary." = "只输出 JavaScript 源码——不要 markdown 代码围栏、不要解释、不要任何说明文字。";
+"USER REQUIREMENT — replace the line below with what you want, or write your requirement after this prompt:" = "用户需求——把下面这一行替换成你想要的效果，或直接在本提示词后面写下你的需求：";
+"★ Write here what you want the script to do." = "★ 在这里写下你想让脚本实现的效果。";
+"The prompt tells the AI the API. Add what you want the script to do below — the AI only writes code, it does not invent your requirement." = "提示词教给 AI 的是本插件的 API。在下面补充你想让脚本做什么——AI 只负责写代码，不会替你发明需求。";
+"What should the script do?" = "你想让脚本做什么？";
+"Copy" = "复制";
+"Copied. Paste it into your AI assistant." = "已复制。粘贴到你的 AI 助手即可。";
