@@ -511,8 +511,19 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         textView.backgroundColor = .secondarySystemGroupedBackground
         textView.layer.cornerRadius = 10
         textView.text = CustomServiceStore.definition(id: definitionID)?.script ?? ""
+        // Every inset lives in the text container and none in the scroll view.
+        // A scroll view's own bottom inset is added to the content height, so a
+        // non-zero one makes content that *is* taller than the box look
+        // unscrollable until it exceeds the box by that much — which is exactly
+        // what a "threshold" feels like. The container inset gives the same
+        // bottom breathing room without touching the scrollable range.
+        textView.contentInset = .zero
+        textView.contentInsetAdjustmentBehavior = .never
+        // The frame already stops above the keyboard, so the keyboard needs no
+        // inset; adding one would push the last line out of reach instead.
+        textView.scrollIndicatorInsets = .zero
         textView.textContainerInset = UIEdgeInsets(
-            top: 8, left: Self.gutterWidth + 4, bottom: 8, right: 8
+            top: 8, left: Self.gutterWidth + 4, bottom: 24, right: 8
         )
         textView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(textView)
