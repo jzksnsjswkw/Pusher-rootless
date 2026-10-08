@@ -1,12 +1,19 @@
 import Foundation
 
-/// A push destination defined by a script.
+/// The kind of service a user's script defines.
 ///
-/// The script is the service: it receives the notification as `bullet` and
-/// decides what to send by calling `push(req)`. Not calling `push` skips that
-/// notification, so a script can filter as well as forward — and, because it can
-/// also `await fetch(...)`, it can obtain a credential first (an access token,
-/// say) the way the built-in Wechat service does.
+/// A script is a *type*, not a destination: the user writes one (see
+/// ``CustomServiceDefinition``) and it then behaves like any built-in service —
+/// addable, enabled, orderable, with its own app list and log, and addable more
+/// than once. Each instance keeps its own settings and its own `localStorage`,
+/// while the script itself lives on the definition, so editing it takes effect
+/// for every service using it.
+///
+/// The script receives the notification as `bullet` and decides what to send by
+/// calling `push(req)`. Not calling `push` skips that notification, so a script
+/// can filter as well as forward — and, because it can also `await fetch(...)`,
+/// it can obtain a credential first (an access token, say) the way the built-in
+/// Wechat service does.
 ///
 /// ## Why there is no `request(context:config:)`
 ///
@@ -35,9 +42,13 @@ public enum JavaScriptService: PushService {
         config: ServiceConfig,
         completion: @escaping (PushRequest?) -> Void
     ) {
-        let script = config.raw.string(PrefKey.script, default: "")
-        guard !script.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            PushLog.add(service: config.name, context: context, label: "Script is empty")
+        // The script belongs to the definition, so it is read at send time: an
+        // edit then applies to every service already using it.
+        let script = CustomServiceStore.definition(id: config.type)?
+            .script.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !script.isEmpty else {
+            PushLog.add(service: config.name, context: context,
+                        label: "Script is empty or its service was deleted")
             completion(nil)
             return
         }
@@ -168,7 +179,8 @@ public enum JavaScriptService: PushService {
 
     public static func defaultPrefs() -> [String: Any] {
         [
-            PrefKey.script: "",
+            // No script here: it lives on the definition. What an *instance*
+            // stores is its own storage and the options below.
             PrefKey.scriptStorage: [String: String](),
             // Advanced options, with the defaults the runner documents.
             PrefKey.scriptShareContext: false,

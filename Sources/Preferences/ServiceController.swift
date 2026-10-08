@@ -142,15 +142,37 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             }
         }
         SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .instance(id: serviceInstanceID))
+
         return loaded
     }
 
     func buildSpecifiers() -> NSMutableArray {
-        // Which plist describes this instance is a property of its *type*: the
-        // generic webhook shares one plist, every other service has its own.
-        let plistName = isWebhook ? "Custom" : serviceType
+        // Which cells describe this instance is a property of its *type*: a
+        // built-in service has its own plist, and every user-defined type — the
+        // generic webhook and each script a user wrote — is configured like a
+        // webhook, because a script says how to send and the instance only says
+        // where to.
+        let plistName = isBuiltInType ? serviceType : "Custom"
         let loaded = loadSpecifiers(named: plistName) as? [PSSpecifier] ?? []
         var all: [PSSpecifier] = loaded
+
+        // A script-defined type gets a row for the script it follows, at the top
+        // of the page: the script is the one thing about the instance that
+        // belongs to its type, and the row is what makes the page say so before
+        // it is tapped.
+        if let definition = CustomServiceStore.definition(id: serviceType) {
+            if let scriptRow = PSSpecifier.preferenceSpecifierNamed(
+                "Script".localized, target: nil, set: nil, get: nil,
+                detail: CustomServiceScriptController.self, cell: .linkCell, edit: nil
+            ) {
+                scriptRow.setProperty("DefaultService", forKey: "icon")
+                scriptRow.setProperty(
+                    String(format: "Defined by \"%@\"".localized, definition.name),
+                    forKey: "footerText"
+                )
+                all.insert(scriptRow, at: 0)
+            }
+        }
         for specifier in loaded {
             specifier.setProperty(serviceInstanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
             specifier.setProperty(serviceType, forKey: SpecifierRouting.PropertyKey.serviceType)
@@ -161,6 +183,22 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             }
         }
         SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .instance(id: serviceInstanceID))
+
+        // A script-defined type gets a row for the script it follows, first on
+        // the page: the script is the one thing about the instance that belongs
+        // to its type, and the row is what makes the page say so.
+        if let definition = CustomServiceStore.definition(id: serviceType) {
+            let scriptRow = PSSpecifier.preferenceSpecifierNamed(
+                "Script".localized, target: nil, set: nil, get: nil,
+                detail: CustomServiceScriptController.self, cell: .linkCell, edit: nil
+            )!
+            scriptRow.setProperty("DefaultService", forKey: "icon")
+            scriptRow.setProperty(
+                String(format: "Defined by \"%@\"".localized, definition.name),
+                forKey: "footerText"
+            )
+            all.append(scriptRow)
+        }
 
         // Shared cells (device/sound pickers, the payload options) come from the
         // type's own builder, looked up by name so a new service needs no change
@@ -182,7 +220,11 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     }
 
     /// Whether this instance is a user-defined webhook.
-    private var isWebhook: Bool { !ServiceRegistry.isBuiltIn(serviceType) }
+    /// Whether this instance's type is a built-in service.
+    private var isBuiltInType: Bool { ServiceRegistry.isBuiltIn(serviceType) }
+
+    /// Whether this instance's type is one the user defined.
+    private var isWebhook: Bool { !isBuiltInType }
 
     /// The cells, rebuilt whenever the framework has discarded the array.
     public override func rebuildSpecifiers() -> NSMutableArray? {

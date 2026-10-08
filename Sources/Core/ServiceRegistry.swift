@@ -41,12 +41,16 @@ public struct ServiceDescriptor {
     /// - Parameter displayName: the label shown in the add list. Defaults to the
     ///   registry name, which is already the user-facing spelling for most
     ///   services (`"Bark"`, `"Pushover"`, …).
+    /// - Parameter registryName: overrides the name this descriptor answers to.
+    ///   A script definition needs it: the descriptor is built from one service
+    ///   type, but each definition is a type of its own, identified by its id.
     public init<S: PushService>(
         _ type: S.Type,
         displayName: String? = nil,
-        isAddable: Bool = true
+        isAddable: Bool = true,
+        registryName: String? = nil
     ) {
-        name = S.serviceName
+        name = registryName ?? S.serviceName
         self.displayName = displayName ?? (S.serviceName.isEmpty ? "Custom" : S.serviceName)
         self.isAddable = isAddable
         url = { S.url(eventName: $0, dbName: $1, serverURL: $2) }
@@ -59,6 +63,22 @@ public struct ServiceDescriptor {
         shouldIncludeIcon = { S.shouldIncludeIcon(config: $0) }
         shouldIncludeImage = { S.shouldIncludeImage(config: $0) }
         logImageDataProperties = S.logImageDataProperties
+    }
+
+    /// Builds the descriptor for one of the user's script definitions.
+    ///
+    /// The closure captures the definition's id rather than its script, and the
+    /// script itself is read from storage at send time: editing a definition then
+    /// takes effect for every service already using it, which is the point of
+    /// separating a type from the instances of it.
+    public init(definition: CustomServiceDefinition) {
+        self.init(
+            JavaScriptService.self,
+            displayName: definition.name,
+            // The identity is the definition, so the descriptor answers to the
+            // id an instance stores — not to the JavaScript type's own name.
+            registryName: definition.id
+        )
     }
 
     /// The settings a new instance of this type starts with.
@@ -102,17 +122,37 @@ public enum ServiceRegistry {
 
     /// The descriptor registered under `name`.
     ///
-    /// An unknown name resolves to the webhook descriptor rather than to `nil`:
-    /// an instance whose type is not in this build (a service removed from a
-    /// later version, say) still has to be sendable, and the webhook's builder
-    /// works off whatever that instance's config happens to contain.
+    /// Resolution covers three cases, in order:
+    ///
+    ///  1. a built-in service, by its registry name;
+    ///  2. a *user-defined* service, by a definition id — which is how a script
+    ///     the user wrote becomes a type the service list can reference, and why
+    ///     definition ids are prefixed so they cannot collide with case 1;
+    ///  3. anything else, which resolves to the generic webhook rather than to
+    ///     `nil`, so an instance whose type is unknown (a definition that was
+    ///     deleted, a service dropped from a later build) still sends, using
+    ///     whatever its config contains.
     public static func service(named name: String) -> ServiceDescriptor {
-        addableServices.first { $0.name == name } ?? customService
+        if let builtIn = addableServices.first(where: { $0.name == name }) { return builtIn }
+        if let definition = CustomServiceStore.definition(id: name) {
+            return .init(definition: definition)
+        }
+        return customService
     }
 
     /// The descriptor for `name` only when it is a known service.
+    ///
+    /// "Known" means a built-in one or one of the user's definitions — whatever
+    /// the add list can offer.
     public static func knownService(named name: String) -> ServiceDescriptor? {
-        addableServices.first { $0.name == name }
+        if let builtIn = addableServices.first(where: { $0.name == name }) { return builtIn }
+        return CustomServiceStore.definition(id: name).map { .init(definition: $0) }
+    }
+
+    /// Every type the add list should offer: the built-ins, then the user's own
+    /// definitions, in the order they were written.
+    public static func allAddableServices() -> [ServiceDescriptor] {
+        addableServices + CustomServiceStore.definitions().map { .init(definition: $0) }
     }
 
     /// Whether `name` is a built-in (non-webhook) service.

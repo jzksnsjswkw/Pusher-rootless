@@ -97,6 +97,9 @@ public enum PrefKey {
     // source of truth for what the pipeline sends to. `Global` holds the
     // settings that are not per-instance.
     public static let services = "Services"
+    /// The user's service *definitions*: the scripts that make new kinds of
+    /// service, which the `Services` list then references by id.
+    public static let customServices = "CustomServices"
     public static let global = "Global"
 
     // Identity of one entry in `Services`. `id` is stable and opaque while
@@ -133,6 +136,8 @@ public enum PrefKey {
 
     /// The user's JavaScript source.
     public static let script = "script"
+    /// A definition's own explanatory text, shown on its page.
+    public static let serviceDescription = "description"
     /// The script's `localStorage`, persisted across runs.
     public static let scriptStorage = "scriptStorage"
     /// Run every script in one shared context instead of a fresh one.
