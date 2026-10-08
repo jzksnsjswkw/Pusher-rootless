@@ -75,12 +75,15 @@ public class ServiceListController: PlainViewController {
         addButton = UIBarButtonItem(
             barButtonSystemItem: .add, target: self, action: #selector(addService)
         )
-        addButton.isEnabled = false
         rightButton = UIBarButtonItem(
             title: "Edit".localized, style: .plain, target: self, action: #selector(toggleEditing(_:))
         )
         navigationItem.title = "Services".localized
-        navigationItem.rightBarButtonItem = rightButton
+        // Both actions sit on the right, as on the Custom page: the left slot is
+        // the back button, and the add button must stay reachable in edit mode,
+        // when tapping a row renames rather than opens.
+        navigationItem.rightBarButtonItems = [addButton, rightButton]
+        addButton.isEnabled = false
     }
 
     public override func viewWillAppear(_ animated: Bool) {
@@ -122,11 +125,10 @@ public class ServiceListController: PlainViewController {
     @objc private func toggleEditing(_ sender: UIBarButtonItem) {
         servicesTable.setEditing(!servicesTable.isEditing, animated: true)
         sender.title = servicesTable.isEditing ? "Done".localized : "Edit".localized
-        // The add button is only meaningful while editing, when tapping a row
-        // renames rather than opens; it lives beside the edit button, never in
-        // the left slot, which is the back button's.
-        navigationItem.rightBarButtonItem = servicesTable.isEditing ? addButton : rightButton
-        addButton.isEnabled = servicesTable.isEditing
+        // The bar never changes shape — only which of the two buttons is
+        // enabled — so "Done" is always there to leave edit mode with. The add
+        // button is for adding a service, which is possible in either mode.
+        addButton.isEnabled = true
 
         // Leaving edit mode is the persist point, so a drag in progress is
         // never written.
