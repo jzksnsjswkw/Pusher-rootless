@@ -256,8 +256,7 @@ public enum JavaScriptRunner {
         bullet: [String: Any],
         storage: [String: String],
         options: Options,
-        fetch: @escaping (URLRequest) -> FetchResult,
-        fetchRecorder: @escaping (String) -> Void = { _ in }
+        fetch: @escaping (URLRequest) -> FetchResult
     ) -> Outcome {
         var requests: [PushRequest] = []
         var consoleOutput: [String] = []
@@ -306,10 +305,7 @@ public enum JavaScriptRunner {
             count: { Int32(store.count) }
         )
         installFetch(into: context, options: options, perform: fetch)
-        installFetchRecorder(into: context) {
-            fetchRecorder($0)
-            trace.append(.response($0))
-        }
+        installFetchRecorder(into: context) { trace.append($0) }
         installFetchObserver(into: context)
 
         // The notification, marked non-writable so a script cannot replace it and
@@ -566,11 +562,18 @@ public enum JavaScriptRunner {
                 }
                 var data = JSON.parse(raw);
                 if (data.error) {
-                    if (globalThis.__fetchRecord) __fetchRecord("failed: " + data.error);
+                    if (globalThis.__fetchRecord) {
+                        __fetchRecord(JSON.stringify({ error: data.error }));
+                    }
                     reject(new TypeError(data.error));
                     return;
                 }
-                if (globalThis.__fetchRecord) __fetchRecord(String(data.status));
+                if (globalThis.__fetchRecord) {
+                    __fetchRecord(JSON.stringify({
+                        status: data.status,
+                        bytes: (data.body || '').length
+                    }));
+                }
                 if (data.note) { console.warn(data.note); }
 
                 var lower = {};
@@ -606,13 +609,41 @@ public enum JavaScriptRunner {
         """)
     }
 
-    /// Gives the host a hook that records every fetch outcome, so the editor's
-    /// run can color the response line. The pipeline passes an empty sink.
-    private static func installFetchRecorder(into context: JSContext, record: @escaping (String) -> Void) {
+    /// Records every fetch outcome into the trace, so a run's report shows what
+    /// each request answered — the half of the exchange a script author needs
+    /// when a service rejects the call.
+    ///
+    /// Unconditional: the trace is the editor's channel, and the pipeline simply
+    /// never reads it.
+    private static func installFetchRecorder(
+        into context: JSContext,
+        append: @escaping (TraceEntry) -> Void
+    ) {
         let sink: @convention(block) (JSValue?) -> Void = { value in
-            record(value?.toString() ?? "")
+            guard let text = value?.toString() else { return }
+            // The script side sends a JSON object so status and size stay
+            // separate; a plain string is still accepted.
+            if let data = text.data(using: .utf8),
+               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if let error = object["error"] as? String {
+                    append(.response("← failed: \(error)"))
+                    return
+                }
+                let status = object["status"] as? Int ?? 0
+                let bytes = object["bytes"] as? Int ?? 0
+                append(.response("← \(status)  \(Self.byteCount(bytes))"))
+                return
+            }
+            append(.response(text))
         }
         context.setObject(sink, forKeyedSubscript: "__fetchRecord" as NSString)
+    }
+
+    /// A byte count as a person reads it.
+    private static func byteCount(_ bytes: Int) -> String {
+        if bytes < 1024 { return "\(bytes) B" }
+        if bytes < 1024 * 1024 { return String(format: "%.1f KB", Double(bytes) / 1024) }
+        return String(format: "%.1f MB", Double(bytes) / (1024 * 1024))
     }
 
     /// Records a failed `fetch` so an ignored rejection can still be reported.
