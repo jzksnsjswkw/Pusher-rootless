@@ -25,6 +25,9 @@ public class ServiceListController: PlainViewController {
 
     private var servicesTable: UITableView!
     private var addButton: UIBarButtonItem!
+    /// The edit/done button, kept so toggling editing can swap the add button
+    /// in beside it without rebuilding the bar.
+    private var rightButton: UIBarButtonItem!
     /// Set while the list is reordered, so the visual order is kept without
     /// re-sorting underneath the drag.
     private var isReordering = false
@@ -72,10 +75,12 @@ public class ServiceListController: PlainViewController {
         addButton = UIBarButtonItem(
             barButtonSystemItem: .add, target: self, action: #selector(addService)
         )
-        navigationItem.title = "Services".localized
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
+        addButton.isEnabled = false
+        rightButton = UIBarButtonItem(
             title: "Edit".localized, style: .plain, target: self, action: #selector(toggleEditing(_:))
         )
+        navigationItem.title = "Services".localized
+        navigationItem.rightBarButtonItem = rightButton
     }
 
     public override func viewWillAppear(_ animated: Bool) {
@@ -117,7 +122,11 @@ public class ServiceListController: PlainViewController {
     @objc private func toggleEditing(_ sender: UIBarButtonItem) {
         servicesTable.setEditing(!servicesTable.isEditing, animated: true)
         sender.title = servicesTable.isEditing ? "Done".localized : "Edit".localized
-        navigationItem.leftBarButtonItem = servicesTable.isEditing ? addButton : nil
+        // The add button is only meaningful while editing, when tapping a row
+        // renames rather than opens; it lives beside the edit button, never in
+        // the left slot, which is the back button's.
+        navigationItem.rightBarButtonItem = servicesTable.isEditing ? addButton : rightButton
+        addButton.isEnabled = servicesTable.isEditing
 
         // Leaving edit mode is the persist point, so a drag in progress is
         // never written.

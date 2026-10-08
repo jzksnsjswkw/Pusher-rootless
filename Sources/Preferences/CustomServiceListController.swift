@@ -32,12 +32,14 @@ public final class CustomServiceListController: PlainViewController {
         view.addSubview(tableView)
 
         navigationItem.title = "Custom".localized
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            barButtonSystemItem: .add, target: self, action: #selector(addDefinition)
-        )
-        navigationItem.leftBarButtonItem = UIBarButtonItem(
-            title: "Edit".localized, style: .plain, target: self, action: #selector(toggleEditing(_:))
-        )
+        // Both actions sit on the right: the left slot is the back button, and
+        // taking it traps the user on this page.
+        navigationItem.rightBarButtonItems = [
+            UIBarButtonItem(barButtonSystemItem: .add, target: self,
+                            action: #selector(addDefinition)),
+            UIBarButtonItem(title: "Edit".localized, style: .plain, target: self,
+                            action: #selector(toggleEditing(_:))),
+        ]
     }
 
     public override func viewWillAppear(_ animated: Bool) {
@@ -57,7 +59,7 @@ public final class CustomServiceListController: PlainViewController {
 
     /// The edit button is pointless with nothing to reorder or delete.
     private func updateEditButton() {
-        navigationItem.leftBarButtonItem?.isEnabled = !definitions.isEmpty
+        navigationItem.rightBarButtonItems?.last?.isEnabled = !definitions.isEmpty
         if definitions.isEmpty, tableView.isEditing {
             tableView.setEditing(false, animated: true)
         }
@@ -84,6 +86,10 @@ public final class CustomServiceListController: PlainViewController {
     @objc private func toggleEditing(_ sender: UIBarButtonItem) {
         tableView.setEditing(!tableView.isEditing, animated: true)
         sender.title = tableView.isEditing ? "Done".localized : "Edit".localized
+        // Disabling the button while editing would leave no way out of edit
+        // mode, so it is only ever disabled when editing is already off.
+        navigationItem.rightBarButtonItems?.last?.isEnabled =
+            tableView.isEditing || !definitions.isEmpty
     }
 
     /// Renames a definition, refusing a name another one already has.
