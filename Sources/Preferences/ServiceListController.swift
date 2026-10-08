@@ -13,10 +13,19 @@ import Preferences
 /// an instance is on, and the order instances are tried in. Both are only
 /// persisted when editing ends, so a half-finished drag is never saved.
 @objc(NSPServiceListController)
-public final class ServiceListController: PlainViewController {
+public class ServiceListController: PlainViewController {
     private static let cellIdentifier = "ServiceCell"
 
-    /// Every instance, in order.
+    /// Which kinds of service this list shows, or `nil` for all of them.
+    ///
+    /// The same page serves the general "Services" list and the "Custom" list,
+    /// which differ only in what they scope to: a script service and a webhook
+    /// are configured nothing like a Pushover account, so the home page offers
+    /// them separately. Everything else — adding, renaming, reordering,
+    /// enabling, deleting — is identical, which is why this is one controller.
+    private var scopedTypes: Set<String>?
+
+    /// Every instance this list shows, in order.
     private var instances: [ServiceInstance] = []
     /// Icons, keyed by instance type (not by instance — two instances of one
     /// service share their artwork).
@@ -28,6 +37,39 @@ public final class ServiceListController: PlainViewController {
     /// Set while the list is reordered, so the visual order is kept without
     /// re-sorting underneath the drag.
     private var isReordering = false
+
+    /// - Parameter scopedTypes: the descriptor names to show, or `nil` for all.
+    public init(scopedTypes: Set<String>? = nil) {
+        self.scopedTypes = scopedTypes
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    /// The initializers the Preferences framework uses to build a detail page.
+    ///
+    /// A specifier plist names a controller *class*, and the framework creates it
+    /// through one of these two. Declaring the scoped initializer above took the
+    /// inherited ones away, so both have to be written out: without
+    /// `init(nibName:bundle:)` the framework's call reaches an unimplemented
+    /// initializer, and without `init(forContentSize:)` Swift's synthesized stub
+    /// for it forwards through `objc_msgSendSuper2` without putting `self` in the
+    /// receiver slot — the same trap that a `PSViewController` subclass hits, and
+    /// here it lands in `CreateDetailControllerInstanceWithClass`.
+    ///
+    /// The page they build is the unscoped one, which is what the home page's
+    /// "Services" row means; the "Custom" row is built by
+    /// ``CustomServiceListController``.
+    public override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
+        self.scopedTypes = nil
+        super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
+    }
+
+    @objc public override init(forContentSize contentSize: CGSize) {
+        self.scopedTypes = nil
+        super.init(forContentSize: contentSize)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     // MARK: - Lifecycle
 
@@ -47,7 +89,7 @@ public final class ServiceListController: PlainViewController {
         addButton = UIBarButtonItem(
             barButtonSystemItem: .add, target: self, action: #selector(addService)
         )
-        navigationItem.title = "Services".localized
+        navigationItem.title = (scopedTypes == nil ? "Services" : "Custom").localized
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             title: "Edit".localized, style: .plain, target: self, action: #selector(toggleEditing(_:))
         )
@@ -69,7 +111,10 @@ public final class ServiceListController: PlainViewController {
 
     /// Re-reads the instances and reloads the table.
     private func reloadData() {
-        instances = ServiceInstanceStore.instances()
+        let all = ServiceInstanceStore.instances()
+        instances = scopedTypes.map { scope in
+            all.filter { scope.contains($0.type) }
+        } ?? all
         for instance in instances where icons[instance.type] == nil {
             icons[instance.type] = ServiceIcon.image(forType: instance.type)
         }
@@ -106,7 +151,7 @@ public final class ServiceListController: PlainViewController {
     /// The picker lists the descriptors, not the configured instances, so adding
     /// a second Pushover account is the same gesture as adding the first.
     @objc private func addService() {
-        let picker = ServiceTypePickerController { [weak self] type, name in
+        let picker = ServiceTypePickerController(restrictedTo: scopedTypes) { [weak self] type, name in
             guard let self else { return }
             ServiceInstanceStore.add(type: type, name: name)
             self.reloadData()
@@ -200,7 +245,12 @@ public final class ServiceListController: PlainViewController {
         if let cached = loadedControllers[instance.id] {
             controller = cached
         } else {
-            controller = ServiceController(instance: instance)
+            // A script service has no specifier plist, so its page is built in
+            // code rather than loaded from one; everything else shares the one
+            // plist-driven page.
+            controller = instance.isScript
+                ? JavaScriptController(instanceID: instance.id)
+                : ServiceController(instance: instance)
             loadedControllers[instance.id] = controller
         }
         push(controller)
@@ -370,7 +420,7 @@ enum ServiceIcon {
 @objc(NSPushServiceTypePickerController)
 public final class ServiceTypePickerController: ListController {
     private let onPick: (String, String) -> Void
-    private let descriptors = ServiceRegistry.addableServices
+    private let descriptors: [ServiceDescriptor]
     /// Names already in use, case-folded for comparison.
     private let takenNames: Set<String>
 
@@ -394,10 +444,20 @@ public final class ServiceTypePickerController: ListController {
     /// twice.
     private var observedFields: Set<ObjectIdentifier> = []
 
-    /// - Parameter onPick: called with the chosen service type and the name the
-    ///   user entered (already trimmed).
-    public init(onPick: @escaping (String, String) -> Void) {
+    /// - Parameters:
+    ///   - restrictedTo: the types to offer, or `nil` for every type. The custom
+    ///     list passes its own scope, so the page it opens offers only the kinds
+    ///     of service that can be listed there.
+    ///   - onPick: called with the chosen service type and the name the user
+    ///     entered (already trimmed).
+    public init(
+        restrictedTo: Set<String>? = nil,
+        onPick: @escaping (String, String) -> Void
+    ) {
         self.onPick = onPick
+        self.descriptors = ServiceRegistry.addableServices.filter { descriptor in
+            restrictedTo.map { $0.contains(descriptor.name) } ?? true
+        }
         self.takenNames = Set(ServiceInstanceStore.instances().map { Self.normalized($0.name) })
         super.init(nibName: nil, bundle: nil)
     }
@@ -676,3 +736,40 @@ final class ServiceTypeCell: PSTableCell {
 /// which is what tells the framework the row is a live link rather than a
 /// disabled one.
 final class ServiceTypeDetailPlaceholder: PSViewController {}
+
+// MARK: - The custom list
+
+/// The "Custom" list from the home page: the script and webhook services.
+///
+/// It is the same page as the general service list, scoped to the kinds of
+/// service that are configured from scratch rather than by typing in an account's
+/// credentials. Keeping it one controller is what makes adding, renaming,
+/// reordering and deleting behave identically in both places.
+@objc(NSPCustomServiceListController)
+public final class CustomServiceListController: ServiceListController {
+    /// The descriptor names the custom list holds.
+    private static let customTypes: Set<String> = [
+        CustomService.serviceName,
+        JavaScriptService.serviceName,
+    ]
+
+    public override init(scopedTypes: Set<String>? = nil) {
+        super.init(scopedTypes: Self.customTypes)
+    }
+
+    /// The framework's initializers, which are the ones a specifier naming this
+    /// class reaches: the scope is what makes this a different page, so it is
+    /// applied here too rather than leaving the row unscoped. Both are written
+    /// out for the reason given on the superclass.
+    public override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
+        super.init(scopedTypes: Self.customTypes)
+    }
+
+    @objc public override init(forContentSize contentSize: CGSize) {
+        super.init(scopedTypes: Self.customTypes)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+}
+

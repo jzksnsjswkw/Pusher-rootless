@@ -9,8 +9,8 @@ import Preferences
 /// the instance's *type*: a built-in service loads its own specifier plist
 /// (`Bark.plist`, …), the generic webhook loads `Custom.plist`.
 @objc(NSPServiceController)
-public final class ServiceController: ListController, UNUserNotificationCenterDelegate {
-    private let instanceID: String
+public class ServiceController: ListController, UNUserNotificationCenterDelegate {
+    let serviceInstanceID: String
     /// The descriptor name, which selects the specifier plist.
     private let serviceType: String
     private let icon: UIImage?
@@ -19,7 +19,7 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
 
     /// - Parameter instance: the instance to configure.
     public init(instance: ServiceInstance) {
-        self.instanceID = instance.id
+        self.serviceInstanceID = instance.id
         self.serviceType = instance.type
         self.icon = ServiceIcon.image(forType: instance.type)
         super.init(nibName: nil, bundle: nil)
@@ -43,8 +43,8 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
         guard let icon else { return }
         let label = UILabel()
         label.text = Localization.instanceDisplayName(
-            ServiceInstanceStore.instance(id: instanceID)
-                ?? ServiceInstance(id: instanceID, type: serviceType,
+            ServiceInstanceStore.instance(id: serviceInstanceID)
+                ?? ServiceInstance(id: serviceInstanceID, type: serviceType,
                                    name: serviceType, isEnabled: false, config: Prefs())
         )
         label.font = .boldSystemFont(ofSize: 17)
@@ -111,10 +111,10 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
     /// "Default" option meaning "follow the global setting". (The global page
     /// does not route these cells and leaves the segment values untouched; see
     /// `GlobalSettingsListController.buildSpecifiers()`.)
-    private func globalTailSpecifiers() -> [PSSpecifier] {
+    func globalTailSpecifiers() -> [PSSpecifier] {
         let loaded = (loadSpecifiers(named: "GlobalAndServices") as? [PSSpecifier]) ?? []
         for specifier in loaded {
-            specifier.setProperty(instanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
+            specifier.setProperty(serviceInstanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
             specifier.setProperty(serviceType, forKey: SpecifierRouting.PropertyKey.serviceType)
             if specifier.cellType == .segmentCell {
                 // The plist's two real values (Locked/Either/Unlocked, Any/WiFi/
@@ -141,18 +141,18 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
                 )
             }
         }
-        SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .instance(id: instanceID))
+        SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .instance(id: serviceInstanceID))
         return loaded
     }
 
-    private func buildSpecifiers() -> NSMutableArray {
+    func buildSpecifiers() -> NSMutableArray {
         // Which plist describes this instance is a property of its *type*: the
         // generic webhook shares one plist, every other service has its own.
         let plistName = isWebhook ? "Custom" : serviceType
         let loaded = loadSpecifiers(named: plistName) as? [PSSpecifier] ?? []
         var all: [PSSpecifier] = loaded
         for specifier in loaded {
-            specifier.setProperty(instanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
+            specifier.setProperty(serviceInstanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
             specifier.setProperty(serviceType, forKey: SpecifierRouting.PropertyKey.serviceType)
             // The app list controller needs to know whether this page belongs to
             // a webhook so it can seed a new override correctly.
@@ -160,13 +160,13 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
                 specifier.setProperty(isWebhook, forKey: SpecifierRouting.PropertyKey.isWebhook)
             }
         }
-        SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .instance(id: instanceID))
+        SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .instance(id: serviceInstanceID))
 
         // Shared cells (device/sound pickers, the payload options) come from the
         // type's own builder, looked up by name so a new service needs no change
         // here.
         all.append(contentsOf: ServiceSpecifierBuilders.shared.builders(
-            for: serviceType, instanceID: instanceID, appID: nil
+            for: serviceType, instanceID: serviceInstanceID, appID: nil
         ))
 
         // Device conditions, the SNS page and the log page are shared by every
@@ -200,9 +200,9 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
 
         let count: Int
         if isAppList {
-            count = AppListStorage.forInstance(instanceID).count
+            count = AppListStorage.forInstance(serviceInstanceID).count
         } else {
-            count = PrefsStore.instance(instanceID).dict(PrefKey.customApps)?.keys.count ?? 0
+            count = PrefsStore.instance(serviceInstanceID).dict(PrefKey.customApps)?.keys.count ?? 0
         }
         AppListTitle.apply(specifier, base: base, count: count)
 
@@ -214,7 +214,7 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
     }
 
     /// The "Send Test Notification" button.
-    private func testPushSection() -> [PSSpecifier] {
+    func testPushSection() -> [PSSpecifier] {
         guard let group = PSSpecifier.emptyGroup() else { return [] }
         guard let button = PSSpecifier.preferenceSpecifierNamed(
             "Send Test Notification".localized,
@@ -238,7 +238,7 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
     /// than as an error.
     @objc public func sendTestNotification(_ specifier: PSSpecifier) {
         view.endEditing(true)
-        PusherLog.debug("Sending test for \(instanceID)")
+        PusherLog.debug("Sending test for \(serviceInstanceID)")
 
         // No server is listening until SpringBoard has been restarted after
         // installation, which is reported as a failed send rather than as an
@@ -248,7 +248,7 @@ public final class ServiceController: ListController, UNUserNotificationCenterDe
             // The reply is optional: a `nil` result means no server answered,
             // which is treated as a failed send rather than an error.
             let reply = center.sendMessageAndReceiveReplyName(
-                Pusher.testPushMessageName, userInfo: ["service": instanceID]
+                Pusher.testPushMessageName, userInfo: ["service": serviceInstanceID]
             ) as? [String: Any]
             success = (reply?["success"] as? NSNumber)?.boolValue ?? false
         }

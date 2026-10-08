@@ -44,6 +44,20 @@ public enum Pusher {
     public static let defaultMaxHeight: CGFloat = 1000
     public static let defaultShrinkFactor: CGFloat = 2.5
 
+    // MARK: Script services
+
+    /// How long a user script may run before it is abandoned. Long enough for a
+    /// couple of network round trips, short enough that a runaway script is not
+    /// left holding a login item.
+    public static let defaultScriptTimeout: TimeInterval = 2
+
+    /// How long one `fetch` from a script may take.
+    public static let scriptFetchTimeout: TimeInterval = 10
+
+    /// The largest response body a script's `fetch` will accept, in bytes. A
+    /// larger body is truncated and noted on the console rather than refused.
+    public static let defaultMaxResponseBytes = 1_048_576
+
     // MARK: - Test push
 
     public static let messagingCenterName = "com.noahsaso.pusher/testpush"
@@ -114,6 +128,21 @@ public enum PrefKey {
     public static let dateFormat = "dateFormat"
     public static let includeIcon = "includeIcon"
     public static let includeImage = "includeImage"
+
+    // MARK: Script services
+
+    /// The user's JavaScript source.
+    public static let script = "script"
+    /// The script's `localStorage`, persisted across runs.
+    public static let scriptStorage = "scriptStorage"
+    /// Run every script in one shared context instead of a fresh one.
+    public static let scriptShareContext = "scriptShareContext"
+    /// Run every script on one shared thread instead of a fresh one.
+    public static let scriptShareThread = "scriptShareThread"
+    /// Seconds a run may take.
+    public static let scriptTimeout = "scriptTimeout"
+    /// Largest response body `fetch` accepts, in bytes.
+    public static let scriptMaxResponseBytes = "scriptMaxResponseBytes"
     public static let curateData = "curateData"
     public static let imageMaxWidth = "imageMaxWidth"
     public static let imageMaxHeight = "imageMaxHeight"

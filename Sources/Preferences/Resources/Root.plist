@@ -4,18 +4,17 @@
 <dict>
 	<key>items</key>
 	<array>
-		<!--  Enable Switch -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 		</dict>
 		<dict>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
 			<key>default</key>
-			<true />
+			<true/>
 			<key>defaults</key>
 			<string>com.noahsaso.pusher</string>
 			<key>icon</key>
@@ -25,7 +24,6 @@
 			<key>label</key>
 			<string>Enabled</string>
 		</dict>
-
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -40,7 +38,6 @@
 			<key>label</key>
 			<string>Global Settings</string>
 		</dict>
-
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -55,8 +52,20 @@
 			<key>label</key>
 			<string>Services</string>
 		</dict>
-
-		<!--  Support -->
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>NSPCustomServiceListController</string>
+			<key>icon</key>
+			<string>DefaultService</string>
+			<key>label</key>
+			<string>Custom</string>
+		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -64,24 +73,24 @@
 			<string>Support</string>
 		</dict>
 		<dict>
-			<key>cell</key>
-			<string>PSButtonCell</string>
-			<key>label</key>
-			<string>Original Developer: @NoahSaso</string>
-			<key>icon</key>
-			<string>twitter</string>
 			<key>action</key>
 			<string>openTwitterNoahSaso</string>
-		</dict>
-		<dict>
 			<key>cell</key>
 			<string>PSButtonCell</string>
-			<key>label</key>
-			<string>Maintainer / GitHub</string>
 			<key>icon</key>
-			<string>github</string>
+			<string>twitter</string>
+			<key>label</key>
+			<string>Original Developer: @NoahSaso</string>
+		</dict>
+		<dict>
 			<key>action</key>
 			<string>openGitHub</string>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>icon</key>
+			<string>github</string>
+			<key>label</key>
+			<string>Maintainer / GitHub</string>
 		</dict>
 	</array>
 	<key>title</key>

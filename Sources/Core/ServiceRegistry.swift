@@ -90,6 +90,7 @@ public enum ServiceRegistry {
         .init(PushoverService.self),
         .init(WechatService.self),
         .init(CustomService.self, displayName: "Custom Webhook"),
+        .init(JavaScriptService.self, displayName: "JavaScript"),
     ]
 
     /// The generic webhook descriptor.

@@ -43,6 +43,11 @@ public struct ServiceInstance {
     public var isCustom: Bool {
         ServiceRegistry.customServiceName == type
     }
+
+    /// Whether this instance is defined by a script.
+    public var isScript: Bool {
+        JavaScriptService.serviceName == type
+    }
 }
 
 // MARK: - Instance identifiers

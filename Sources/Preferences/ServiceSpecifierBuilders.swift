@@ -30,6 +30,12 @@ public final class ServiceSpecifierBuilders: NSObject {
         builders[service] = builder
     }
 
+    /// The builder key for the payload options every service shares.
+    ///
+    /// The script service has no specifier plist, so its page asks for these by
+    /// name rather than through a service of its own.
+    static let payloadOptionsKey = "\u{1}payloadOptions"
+
     /// Registers every service that has extra cells.
     ///
     /// The webhook is registered too: it has no specifier plist of its own
@@ -37,6 +43,7 @@ public final class ServiceSpecifierBuilders: NSObject {
     /// other services'. A service without an entry (Feishu, for example)
     /// contributes nothing.
     private func registerAll() {
+        register(builder: Self.payloadOptions, forService: Self.payloadOptionsKey)
         register(builder: Self.webhook, forService: CustomService.serviceName)
         register(builder: Self.pushover, forService: PushoverService.serviceName)
         register(builder: Self.pushbullet, forService: PushbulletService.serviceName)
@@ -75,6 +82,30 @@ public final class ServiceSpecifierBuilders: NSObject {
             scope: appID.map { .customApp(id: instanceID, appID: $0) } ?? .instance(id: instanceID)
         )
         return built
+    }
+
+    // MARK: - Payload options
+
+    /// The icon/image options, which every service that builds a payload offers.
+    private static func payloadOptions(appID: String?) -> [PSSpecifier] {
+        var specifiers: [PSSpecifier] = [
+            toggle("Include Icon", service: Self.payloadOptionsKey, appID: appID,
+                   key: PrefKey.includeIcon, defaultValue: true),
+            toggle("Include Image", service: Self.payloadOptionsKey, appID: appID,
+                   key: PrefKey.includeImage, defaultValue: true),
+        ]
+        if appID == nil {
+            specifiers.append(contentsOf: [
+                decimalField("Maximum Image Width (pixels)", service: Self.payloadOptionsKey,
+                             key: PrefKey.imageMaxWidth, defaultValue: Pusher.defaultMaxWidth),
+                decimalField("Maximum Image Height (pixels)", service: Self.payloadOptionsKey,
+                             key: PrefKey.imageMaxHeight, defaultValue: Pusher.defaultMaxHeight),
+                decimalField("Image Shrink Factor Upon Retry", service: Self.payloadOptionsKey,
+                             key: PrefKey.imageShrinkFactor,
+                             defaultValue: Pusher.defaultShrinkFactor),
+            ])
+        }
+        return specifiers
     }
 
     // MARK: - Custom webhook
