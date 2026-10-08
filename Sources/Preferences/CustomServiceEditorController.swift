@@ -144,13 +144,19 @@ public final class CustomServiceEditorController: ListController {
     // MARK: - Rows
 
     public override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        super.tableView(tableView, didSelectRowAt: indexPath)
         tableView.deselectRow(at: indexPath, animated: true)
 
-        guard let specifier = specifier(at: indexPath),
-              specifier.identifier == Self.scriptRowIdentifier, let definition
-        else { return }
-        push(CustomServiceScriptController(definitionID: definition.id))
+        // The script row is handled here, and *before* super: the framework's
+        // selection handling sees the row's detail class and pushes a fresh
+        // instance of it, which would open an empty page next to the real one.
+        // The definition is already in hand here, so pushing it directly both
+        // skips that construction and carries the id.
+        if let specifier = specifier(at: indexPath),
+           specifier.identifier == Self.scriptRowIdentifier, let definition {
+            push(CustomServiceScriptController(definitionID: definition.id))
+            return
+        }
+        super.tableView(tableView, didSelectRowAt: indexPath)
     }
 }
 
