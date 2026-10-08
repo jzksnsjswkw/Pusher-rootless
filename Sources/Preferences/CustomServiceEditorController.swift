@@ -79,9 +79,9 @@ public final class CustomServiceEditorController: ListController {
         // ── The script ──────────────────────────────────────────────────────
         let scriptGroup = PSSpecifier.emptyGroup()
         scriptGroup?.setProperty(
-            "The script runs for every notification. Call push(req) to send one; "
-                .localized + "call it more than once to send several, or not at all "
-                .localized + "to skip this notification.".localized,
+            ("The script runs for every notification. Call push(req) to send one, "
+                + "call it more than once to send several, or not at all to skip "
+                + "this notification.").localized,
             forKey: "footerText"
         )
 
@@ -99,8 +99,8 @@ public final class CustomServiceEditorController: ListController {
             withName: "Defaults for New Services".localized
         )
         defaultsGroup?.setProperty(
-            "Services you add from this type start with these, and can still change "
-                .localized + "them individually.".localized,
+            ("Services you add from this type start with these, and can still "
+                + "change them individually.").localized,
             forKey: "footerText"
         )
         if let defaultsGroup { all.append(defaultsGroup) }

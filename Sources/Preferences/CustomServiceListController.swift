@@ -191,11 +191,11 @@ extension CustomServiceListController: UITableViewDataSource, UITableViewDelegat
 
     public func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         guard definitions.isEmpty else {
-            return "Each one becomes a service type you can add on the Services page."
-                .localized
+            return ("Each one becomes a service type you can add on the Services "
+                + "page.").localized
         }
-        return "Define a service by writing a script, then add it on the Services page."
-            .localized
+        return ("Define a service by writing a script, then add it on the Services "
+            + "page.").localized
     }
 
     public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {

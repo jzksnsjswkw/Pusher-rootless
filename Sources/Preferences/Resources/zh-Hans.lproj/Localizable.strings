@@ -238,3 +238,7 @@ Delete：填 1 删除对应 ID 的推送（需同时填写 ID）";
 "Services You Defined" = "你定义的服务";
 "Service" = "服务";
 "%d services use this. They will keep their settings but stop sending until they are given another type." = "%d 个服务正在使用它。它们的设置会保留，但在换绑其它类型之前不会再发送。";
+"The script runs for every notification. Call push(req) to send one, call it more than once to send several, or not at all to skip this notification." = "脚本会针对每条通知运行。调用 push(req) 发送一条；调用多次可发送多条，不调用则跳过这条通知。";
+"Services you add from this type start with these, and can still change them individually." = "从该类型添加的服务会以这些为初始值，之后仍可单独修改。";
+"Each one becomes a service type you can add on the Services page." = "每一个都会成为可在“服务”页添加的服务类型。";
+"Define a service by writing a script, then add it on the Services page." = "写一个脚本来定义服务，然后在“服务”页添加它。";
