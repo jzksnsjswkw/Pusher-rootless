@@ -152,14 +152,21 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // generic webhook and each script a user wrote — is configured like a
         // webhook, because a script says how to send and the instance only says
         // where to.
-        let plistName = isBuiltInType ? serviceType : "Custom"
-        let loaded = loadSpecifiers(named: plistName) as? [PSSpecifier] ?? []
-        var all: [PSSpecifier] = loaded
+        // A script-defined type has no plist of its own: the script decides the
+        // URL, method and body, so the webhook fields Custom.plist carries would
+        // be dead controls. Its page is the Script row followed by the shared
+        // cells, which is also why there is exactly one way in to the script.
+        let isScriptType = CustomServiceStore.definition(id: serviceType) != nil
+        let loaded: [PSSpecifier]
+        var all: [PSSpecifier]
+        if isScriptType {
+            loaded = []
+            all = []
+        } else {
+            loaded = loadSpecifiers(named: serviceType) as? [PSSpecifier] ?? []
+            all = loaded
+        }
 
-        // A script-defined type gets a row for the script it follows, at the top
-        // of the page: the script is the one thing about the instance that
-        // belongs to its type, and the row is what makes the page say so before
-        // it is tapped.
         if let definition = CustomServiceStore.definition(id: serviceType) {
             if let scriptRow = PSSpecifier.preferenceSpecifierNamed(
                 "Script".localized, target: nil, set: nil, get: nil,
@@ -184,21 +191,6 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         }
         SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .instance(id: serviceInstanceID))
 
-        // A script-defined type gets a row for the script it follows, first on
-        // the page: the script is the one thing about the instance that belongs
-        // to its type, and the row is what makes the page say so.
-        if let definition = CustomServiceStore.definition(id: serviceType) {
-            let scriptRow = PSSpecifier.preferenceSpecifierNamed(
-                "Script".localized, target: nil, set: nil, get: nil,
-                detail: CustomServiceScriptController.self, cell: .linkCell, edit: nil
-            )!
-            scriptRow.setProperty("DefaultService", forKey: "icon")
-            scriptRow.setProperty(
-                String(format: "Defined by \"%@\"".localized, definition.name),
-                forKey: "footerText"
-            )
-            all.append(scriptRow)
-        }
 
         // Shared cells (device/sound pickers, the payload options) come from the
         // type's own builder, looked up by name so a new service needs no change
