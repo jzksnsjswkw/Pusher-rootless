@@ -730,12 +730,29 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
             "Get a token first",
             """
             // \("Top-level await works: the script is run as an async function.".localized)
-            const tokenResp = await fetch("https://example.com/token", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: { user: "me" }
-            });
-            const token = (await tokenResp.json()).token;
+            //
+            // \("The token is cached in localStorage, so a page of notifications "
+                + "does not fetch a new one for every message. It is re-fetched "
+                + "once it is older than the expiry the server returned."
+                ).localized)
+            const key = "token";
+            const cached = JSON.parse(localStorage.getItem(key) || "null");
+            let token = cached && cached.expires > Date.now() ? cached.value : null;
+
+            if (!token) {
+                const response = await fetch("https://example.com/token", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: { user: "me" }
+                });
+                const data = await response.json();
+                token = data.token;
+                localStorage.setItem(key, JSON.stringify({
+                    value: token,
+                    // A minute early, so a token cannot expire mid-flight.
+                    expires: Date.now() + (data.expires_in - 60) * 1000
+                }));
+            }
 
             await fetch("https://example.com/send", {
                 method: "POST",
