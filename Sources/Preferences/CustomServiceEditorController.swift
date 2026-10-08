@@ -533,6 +533,16 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         // The numbers are their own view beside the editor rather than text
         // inside it: an edit must not be able to touch them, and a selection
         // must not include them. The editor's inset above is what makes room.
+        // The column and its label are positioned by frame and take part in no
+        // constraints at all.
+        //
+        // A frame-positioned view with autoresizing translation left on does
+        // enter the constraint system: UIKit derives constraints from the frame.
+        // The label is as tall as the whole script, so that derived height would
+        // travel through the gutter — pinned to the editor's top and bottom — and
+        // stretch the editor itself, which then grew with the text instead of
+        // scrolling it. Removing the gutter's own constraints is what keeps the
+        // editor's height the page's business and nobody else's.
         gutter.clipsToBounds = true
         // The column overlaps the editor's left edge, so it must not take the
         // touches that belong to the text view — a drag there has to scroll.
@@ -540,20 +550,13 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         gutter.backgroundColor = textView.backgroundColor
         gutter.layer.cornerRadius = 10
         gutter.layer.maskedCorners = [.layerMinXMinYCorner, .layerMinXMaxYCorner]
-        gutter.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(gutter)
 
         gutterLabel.font = textView.font
         gutterLabel.textColor = .tertiaryLabel
         gutterLabel.numberOfLines = 0
         gutterLabel.textAlignment = .right
-        // Its position comes from a frame, so no autoresizing translation: that
-        // translation would make UIKit derive a height constraint from the
-        // frame, and the label is as tall as the whole script — a constraint
-        // that would push through the gutter, which is pinned to the editor's
-        // top and bottom, and stretch the editor itself. The editor would then
-        // grow with the text instead of scrolling it.
-        gutterLabel.translatesAutoresizingMaskIntoConstraints = false
+        gutterLabel.frame = CGRect(x: 0, y: 0, width: Self.gutterWidth - 6, height: 0)
         gutter.addSubview(gutterLabel)
 
         outputView.isEditable = false
@@ -569,27 +572,29 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         outputToSafeArea = outputView.bottomAnchor.constraint(
             equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12
         )
-        outputToSafeArea.priority = .defaultHigh
+        outputToSafeArea.priority = UILayoutPriority(999)
         outputWithinKeyboard = outputView.bottomAnchor.constraint(
             lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -12
         )
 
         // The editor's bottom is *two* constraints, not one.
         //
-        // Pinning it to the keyboard guide alone puts it at the raw bottom of
-        // the view, which is past the safe area — under the home indicator. The
-        // editor then reports a box taller than what is actually visible, so
-        // content a few lines short of that box does not scroll while its last
-        // lines sit behind the indicator: a scroll threshold that no amount of
-        // inset correction explains.
+        // The keyboard guide's top, with no keyboard, is the raw bottom of the
+        // view — 34 points past the safe area, behind the home indicator. Pinning
+        // the editor there makes it report a box taller than what is visible, so
+        // a script a few lines short of that box does not scroll while its last
+        // lines are hidden: the threshold.
         //
-        // Equality to the safe area with the keyboard as a required upper bound
-        // gives the right behavior with the keyboard down (stop at the visible
-        // edge) and with it up (shrink to the keyboard, breaking the equality).
+        // The priority is the load-bearing part. A text view resists being
+        // squashed below its content at 750, so an equality at `defaultHigh`
+        // (also 750) loses the tie: the solver grows the box to fit the text,
+        // and the editor stops scrolling. Just under required still beats that
+        // resistance, while the required keyboard bound above can still override
+        // it when the keyboard appears.
         editorToSafeArea = textView.bottomAnchor.constraint(
             equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12
         )
-        editorToSafeArea.priority = .defaultHigh
+        editorToSafeArea.priority = UILayoutPriority(999)
         editorWithinKeyboard = textView.bottomAnchor.constraint(
             lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -12
         )
@@ -601,11 +606,6 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
             textView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
             textView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
             textView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
-
-            gutter.topAnchor.constraint(equalTo: textView.topAnchor),
-            gutter.bottomAnchor.constraint(equalTo: textView.bottomAnchor),
-            gutter.leadingAnchor.constraint(equalTo: textView.leadingAnchor),
-            gutter.widthAnchor.constraint(equalToConstant: Self.gutterWidth),
 
             outputView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
             outputView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
@@ -620,7 +620,15 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
 
     public override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-    
+
+        // The column is placed from the editor's frame, clipped to the part of
+        // it the text view is actually showing.
+        let editor = textView.frame
+        let visible = textView.bounds
+        gutter.frame = CGRect(
+            x: editor.minX, y: editor.minY,
+            width: Self.gutterWidth, height: visible.height
+        )
         updateGutter()
     }
 
@@ -908,102 +916,115 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
     /// Offering them beats documenting them: a user starting from nothing needs to
     /// see the shape of a script before they can write one, and there is no
     /// reference page inside Settings to point at.
-    static let examples: [(title: String, code: String)] = [
-        (
-            "Send a notification",
-            """
-            push({
-                url: "https://example.com/notify",
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: {
-                    title: bullet.title,
-                    message: bullet.message,
-                    app: bullet.appName
-                }
-            });
-            """
-        ),
-        (
-            "Skip some notifications",
-            """
-            // \("Calling nothing skips the notification instead of forwarding it.".localized)
-            if (bullet.message.includes("code")) {
-                push({
-                    url: "https://example.com/code",
-                    method: "POST",
-                    body: { code: bullet.message }
-                });
-            }
-            """
-        ),
-        (
-            "Get a token first",
-            """
-            // \("Top-level await works: the script is run as an async function.".localized)
-            //
-            // \("The token is cached in localStorage, so a page of notifications "
-                + "does not fetch a new one for every message. It is re-fetched "
-                + "once it is older than the expiry the server returned."
-                ).localized)
-            const key = "token";
-            const cached = JSON.parse(localStorage.getItem(key) || "null");
-            let token = cached && cached.expires > Date.now() ? cached.value : null;
+    /// The API, as runnable snippets.
+    ///
+    /// The comments are translated, not built by interpolation: a snippet is
+    /// text a user reads and edits, and an interpolation marker left inside one
+    /// — which is what a `.localized` in the middle of a multi-line literal
+    /// produces — ends up in their script.
+    static var examples: [(title: String, code: String)] {
+        // Comments are translated line by line and joined with "\n", never
+        // interpolated into a multi-line literal: an interpolation closed on the
+        // wrong side of a delimiter leaves its marker in the user's new script.
+        func comment(_ lines: String...) -> [String] {
+            lines.map { "// " + $0.localized }
+        }
 
-            if (!token) {
-                const response = await fetch("https://example.com/token", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: { user: "me" }
-                });
-                const data = await response.json();
-                token = data.token;
-                // The server's own lifetime when it gives one; an hour when it
-                // does not, since a cache that never expires is worse than one
-                // that expires too early.
-                const lifetime = Number(data.expires_in) > 0 ? Number(data.expires_in) : 3600;
-                localStorage.setItem(key, JSON.stringify({
-                    value: token,
-                    // A minute early, so a token cannot expire mid-flight.
-                    expires: Date.now() + Math.max(lifetime - 60, 30) * 1000
-                }));
-            }
+        let header = [
+            "push({",
+            "    url: \"https://example.com/notify\",",
+            "    method: \"POST\",",
+            "    headers: { \"Content-Type\": \"application/json\" },",
+            "    body: {",
+            "        title: bullet.title,",
+            "        message: bullet.message,",
+            "        app: bullet.appName",
+            "    }",
+            "});",
+        ].joined(separator: "\n")
 
-            await fetch("https://example.com/send", {
-                method: "POST",
-                headers: { Authorization: "Bearer " + token },
-                body: { title: bullet.title, message: bullet.message }
-            });
-            """
-        ),
-        (
-            "Remember values between runs",
-            """
-            // \(("localStorage is kept per service, so two services of this type "
-                + "do not share it.").localized)
-            let count = Number(localStorage.getItem("count") || "0") + 1;
-            localStorage.setItem("count", String(count));
+        let skip = (comment("Calling nothing skips the notification instead of forwarding it.")
+            + [""] + [
+            "if (bullet.message.includes(\"code\")) {",
+            "    push({",
+            "        url: \"https://example.com/code\",",
+            "        method: \"POST\",",
+            "        body: { code: bullet.message }",
+            "    });",
+            "}",
+        ]).joined(separator: "\n")
 
-            push({
-                url: "https://example.com/notify",
-                method: "POST",
-                body: { seen: count, title: bullet.title }
-            });
-            """
-        ),
-        (
-            "What the notification carries",
-            """
-            console.log(bullet);
-            // \(("bullet.deviceName, bullet.appName, bullet.appID, "
-                + "bullet.title, bullet.subtitle, bullet.message, bullet.date").localized)
-            // \(("bullet.icon   — base64 PNG of the app icon\n"
-                + "bullet.image  — base64 of the notification's attachment").localized)
-            //
-            // \(("Also available: fetch(url, init), localStorage, console.log()").localized)
-            """
-        ),
-    ]
+        let token = (
+            comment("Top-level await works: the script is run as an async function.", "")
+            + comment("The token is cached in localStorage, so a page of notifications does "
+                + "not fetch a new one for every message. It is re-fetched once it is "
+                + "older than the expiry the server returned.")
+            + [""] + [
+            "const key = \"token\";",
+            "const cached = JSON.parse(localStorage.getItem(key) || \"null\");",
+            "let token = cached && cached.expires > Date.now() ? cached.value : null;",
+            "",
+            "if (!token) {",
+            "    const response = await fetch(\"https://example.com/token\", {",
+            "        method: \"POST\",",
+            "        headers: { \"Content-Type\": \"application/json\" },",
+            "        body: { user: \"me\" }",
+            "    });",
+            "    const data = await response.json();",
+            "    token = data.token;",
+        ]
+            + comment("The server's own lifetime when it gives one; an hour when it does "
+                + "not, since a cache that never expires is worse than one that expires "
+                + "too early.")
+            + [
+            "    const lifetime = Number(data.expires_in) > 0 ? Number(data.expires_in) : 3600;",
+            "    localStorage.setItem(key, JSON.stringify({",
+            "        value: token,",
+        ]
+            + comment("A minute early, so a token cannot expire mid-flight.")
+            + [
+            "        expires: Date.now() + Math.max(lifetime - 60, 30) * 1000",
+            "    }));",
+            "}",
+            "",
+            "await fetch(\"https://example.com/send\", {",
+            "    method: \"POST\",",
+            "    headers: { Authorization: \"Bearer \" + token },",
+            "    body: { title: bullet.title, message: bullet.message }",
+            "});",
+        ]).joined(separator: "\n")
+
+        let storage = (comment("localStorage is kept per service, so two services of this "
+            + "type do not share it.")
+            + [""] + [
+            "let count = Number(localStorage.getItem(\"count\") || \"0\") + 1;",
+            "localStorage.setItem(\"count\", String(count));",
+            "",
+            "push({",
+            "    url: \"https://example.com/notify\",",
+            "    method: \"POST\",",
+            "    body: { seen: count, title: bullet.title }",
+            "});",
+        ]).joined(separator: "\n")
+
+        let fields = ([
+            "console.log(bullet);",
+        ]
+            + comment("bullet.deviceName, bullet.appName, bullet.appID, bullet.title, "
+                + "bullet.subtitle, bullet.message, bullet.date")
+            + comment("bullet.icon   — base64 PNG of the app icon")
+            + comment("bullet.image  — base64 of the notification's attachment", "")
+            + comment("Also available: fetch(url, init), localStorage, console.log()")
+        ).joined(separator: "\n")
+
+        return [
+            ("Send a notification", header),
+            ("Skip some notifications", skip),
+            ("Get a token first", token),
+            ("Remember values between runs", storage),
+            ("What the notification carries", fields),
+        ]
+    }
 
     @objc private func showExamples() {
         let sheet = UIAlertController(title: "Examples".localized, message: nil,

@@ -338,3 +338,7 @@ bullet.image  — base64 of the notification's attachment" = "bullet.icon   — 
 bullet.image  — 通知附件图片的 base64";
 "Also available: fetch(url, init), localStorage, console.log()" = "其它可用：fetch(url, init)、localStorage、console.log()";
 "The token is cached in localStorage, so a page of notifications does not fetch a new one for every message. It is re-fetched once it is older than the expiry the server returned." = "令牌会缓存在 localStorage 中，因此一批通知不会为每条消息都去获取新令牌。当它超过服务器返回的有效期后才会重新获取。";
+"The server's own lifetime when it gives one; an hour when it does not, since a cache that never expires is worse than one that expires too early." = "服务器给了有效期就用它的；没给则按一小时算——永不过期的缓存比过早过期的更糟。";
+"A minute early, so a token cannot expire mid-flight." = "提前一分钟过期，避免令牌在飞行途中失效。";
+"bullet.icon   — base64 PNG of the app icon" = "bullet.icon   — 应用图标的 base64 PNG";
+"bullet.image  — base64 of the notification's attachment" = "bullet.image  — 通知附件图片的 base64";
