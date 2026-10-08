@@ -614,6 +614,12 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
             previous = line
             glyph = NSMaxRange(range)
         }
+        // A trailing newline opens a line the cursor sits on but no glyph
+        // occupies, so layout reports nothing for it — the number is added here
+        // rather than leaving the cursor's own line unnumbered.
+        if text.hasSuffix("\n") {
+            numbers.append(String(lineStarts.count))
+        }
         return numbers.isEmpty ? "1" : numbers.joined(separator: "\n")
     }
 
