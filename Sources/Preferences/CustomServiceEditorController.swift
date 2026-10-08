@@ -167,13 +167,30 @@ public final class CustomServiceScriptController: UIViewController {
     private let definitionID: String
     private let textView = UITextView()
 
-    init(definitionID: String) {
-        self.definitionID = definitionID
+    /// The framework builds a `detail`-named controller through these, so both
+    /// are written out even though this page is normally pushed directly: a
+    /// class that adds its own initializer hides the inherited ones, and the
+    /// framework's call would land on an unimplemented one.
+    override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
+        self.definitionID = ""
+        super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
+    }
+
+    /// `UIViewController` has no `initForContentSize:`, so this is not an
+    /// override; declaring it as a plain initializer carrying the selector is
+    /// what makes the framework's construction path work should it ever be used.
+    @objc public init(forContentSize contentSize: CGSize) {
+        self.definitionID = ""
         super.init(nibName: nil, bundle: nil)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    init(definitionID: String) {
+        self.definitionID = definitionID
+        super.init(nibName: nil, bundle: nil)
+    }
 
     public override func viewDidLoad() {
         super.viewDidLoad()
