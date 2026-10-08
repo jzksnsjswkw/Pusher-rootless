@@ -163,6 +163,20 @@ public final class CustomServiceEditorController: ListController {
     private static func scriptRuntimeSpecifiers(definitionID: String) -> [PSSpecifier] {
         var specifiers: [PSSpecifier] = []
 
+        // Each switch sits in its own group so the note below it is that
+        // switch's: a group footer is where the framework renders a note, and
+        // one group per row keeps the two notes from reading as one block.
+        let contextGroup = PSSpecifier.emptyGroup()
+        contextGroup?.identifier = Self.shareContextGroupIdentifier
+        contextGroup?.setProperty(
+            ("A fresh JavaScript context per run: one run's variables can never "
+                + "leak into another. Off, every run reuses one context — faster, "
+                + "but a script's variables survive between notifications.")
+                .localized,
+            forKey: "footerText"
+        )
+        if let contextGroup { specifiers.append(contextGroup) }
+
         let shareContext = switchCell(
             title: "Share Context Between Runs".localized,
             key: PrefKey.scriptShareContext, ownerID: definitionID, defaultValue: false
@@ -170,6 +184,16 @@ public final class CustomServiceEditorController: ListController {
         shareContext.setProperty(true, forKey: SpecifierRouting.PropertyKey.isDefinition)
         shareContext.identifier = Self.shareContextIdentifier
         specifiers.append(shareContext)
+
+        let threadGroup = PSSpecifier.emptyGroup()
+        threadGroup?.identifier = Self.shareThreadGroupIdentifier
+        threadGroup?.setProperty(
+            ("Runs queue on one thread. A shared context requires this (JSContext "
+                + "thread affinity); with own contexts it only orders the runs.")
+                .localized,
+            forKey: "footerText"
+        )
+        if let threadGroup { specifiers.append(threadGroup) }
 
         let shareThread = switchCell(
             title: "Share Thread Between Runs".localized,
