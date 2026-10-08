@@ -112,6 +112,30 @@ public enum CustomServiceStore {
         return definition
     }
 
+    /// Merge fields into one definition's stored object.
+    ///
+    /// The run options the definition page edits (share-context/thread, timeout,
+    /// response cap) are stored on the definition itself, next to the payload
+    /// options, and every instance of the type seeds from them.
+    public static func update(id: String, notify: Bool = true, _ mutate: (inout [String: Any]) -> Void) {
+        guard !id.isEmpty else { return }
+        var stored = rawDefinitions()
+        guard let index = stored.firstIndex(where: {
+            Prefs($0).nonEmptyString(PrefKey.instanceID) == id
+        }) else { return }
+        mutate(&stored[index])
+        setDefinitions(stored, notify: notify)
+    }
+
+    /// The raw stored object of one definition, for reads the typed struct does
+    /// not carry.
+    public static func rawEntry(id: String) -> Prefs {
+        guard !id.isEmpty else { return Prefs() }
+        return rawDefinitions()
+            .first { Prefs($0).nonEmptyString(PrefKey.instanceID) == id }
+            .map(Prefs.init) ?? Prefs()
+    }
+
     /// The payload options a definition holds, as the defaults its services start
     /// with.
     ///

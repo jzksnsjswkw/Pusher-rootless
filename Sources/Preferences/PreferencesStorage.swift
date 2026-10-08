@@ -27,6 +27,21 @@ public final class PreferencesStorage: NSObject {
 
         guard let key = specifier.string(SpecifierRouting.PropertyKey.key) else { return }
 
+        // A definition page's run-options edit the *definition* — the same
+        // object every instance of the type seeds from. Definitions live in
+        // their own array, so an instance lookup here would silently write to
+        // nothing and the switch would never save.
+        if specifier.bool(SpecifierRouting.PropertyKey.isDefinition) {
+            CustomServiceStore.update(id: id) { object in
+                if let value {
+                    object[key] = value
+                } else {
+                    object.removeValue(forKey: key)
+                }
+            }
+            return
+        }
+
         PrefsStore.updateInstance(id) { object in
             if let value, !isDefaultBool(key: key, value: value) {
                 object[key] = value
@@ -45,6 +60,10 @@ public final class PreferencesStorage: NSObject {
         }
 
         guard let key = specifier.string(SpecifierRouting.PropertyKey.key) else { return nil }
+
+        if specifier.bool(SpecifierRouting.PropertyKey.isDefinition) {
+            return CustomServiceStore.rawEntry(id: id)[key] ?? specifier.storedDefault
+        }
 
         let stored = PrefsStore.instance(id)
         if let value = stored[key] { return value }

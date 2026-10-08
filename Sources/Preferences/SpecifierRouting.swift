@@ -82,6 +82,10 @@ public enum SpecifierRouting {
         /// right specifier plist, which is the one thing about an instance that
         /// depends on its *type* rather than its own settings.
         static let serviceType = "serviceType"
+        /// Whether the `instanceID` names a service *definition* rather than a
+        /// service instance: the two live in different arrays, so the storage
+        /// routers on this flag.
+        static let isDefinition = "isDefinition"
         /// Whether the instance is a user-defined webhook. A link cell carries
         /// it so the page it pushes can seed a new override the same way.
         static let isWebhook = "isWebhook"

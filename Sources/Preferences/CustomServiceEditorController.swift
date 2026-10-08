@@ -110,7 +110,8 @@ public final class CustomServiceEditorController: ListController {
               let contextSpecifier = specifier(forID: Self.shareContextIdentifier)
         else { return }
 
-        let sharing = PrefsStore.instance(definitionID).bool(PrefKey.scriptShareContext)
+        let sharing = CustomServiceStore.rawEntry(id: definitionID)
+            .bool(PrefKey.scriptShareContext)
 
         threadSpecifier.setProperty(!sharing, forKey: "enabled")
         contextSpecifier.setProperty(
@@ -142,6 +143,7 @@ public final class CustomServiceEditorController: ListController {
             title: "Share Context Between Runs".localized,
             key: PrefKey.scriptShareContext, ownerID: definitionID, defaultValue: false
         )
+        shareContext.setProperty(true, forKey: SpecifierRouting.PropertyKey.isDefinition)
         shareContext.identifier = Self.shareContextIdentifier
         specifiers.append(shareContext)
 
@@ -149,6 +151,7 @@ public final class CustomServiceEditorController: ListController {
             title: "Share Thread Between Runs".localized,
             key: PrefKey.scriptShareThread, ownerID: definitionID, defaultValue: false
         )
+        shareThread.setProperty(true, forKey: SpecifierRouting.PropertyKey.isDefinition)
         shareThread.identifier = Self.shareThreadIdentifier
         specifiers.append(shareThread)
 
@@ -160,6 +163,7 @@ public final class CustomServiceEditorController: ListController {
             detail: nil, cell: .editTextCell, edit: nil
         )
         timeout?.setProperty(definitionID, forKey: SpecifierRouting.PropertyKey.instanceID)
+        timeout?.setProperty(true, forKey: SpecifierRouting.PropertyKey.isDefinition)
         timeout?.setProperty(PrefKey.scriptTimeout, forKey: SpecifierRouting.PropertyKey.key)
         timeout?.setProperty(true, forKey: "enabled")
         timeout?.setProperty(true, forKey: "isDecimalPad")
@@ -175,6 +179,7 @@ public final class CustomServiceEditorController: ListController {
             detail: nil, cell: .editTextCell, edit: nil
         )
         maxBytes?.setProperty(definitionID, forKey: SpecifierRouting.PropertyKey.instanceID)
+        maxBytes?.setProperty(true, forKey: SpecifierRouting.PropertyKey.isDefinition)
         maxBytes?.setProperty(PrefKey.scriptMaxResponseBytes,
                               forKey: SpecifierRouting.PropertyKey.key)
         maxBytes?.setProperty(true, forKey: "enabled")
