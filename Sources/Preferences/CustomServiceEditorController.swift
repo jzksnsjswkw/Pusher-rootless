@@ -435,6 +435,13 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
     /// scroll.
     private var gutterText = "1"
     private var gutterTextHeight: CGFloat = 0
+    /// Whether the text changed since the column was last built.
+    ///
+    /// This is what keeps layout and rebuilding from chasing each other:
+    /// assigning the label's text dirties layout, so a layout pass that rebuilt
+    /// unconditionally would request another pass, forever — the main thread
+    /// never idles, and scrolling stops responding.
+    private var gutterNeedsRebuild = true
 
     /// The sample notification the run button feeds the script.
     private static let testBullet: [String: Any] = [
@@ -514,6 +521,9 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         // inside it: an edit must not be able to touch them, and a selection
         // must not include them. The editor's inset above is what makes room.
         gutter.clipsToBounds = true
+        // The column overlaps the editor's left edge, so it must not take the
+        // touches that belong to the text view — a drag there has to scroll.
+        gutter.isUserInteractionEnabled = false
         gutter.backgroundColor = textView.backgroundColor
         gutter.layer.cornerRadius = 10
         gutter.layer.maskedCorners = [.layerMinXMinYCorner, .layerMinXMaxYCorner]
@@ -572,19 +582,29 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
 
     /// Draws the numbers beside the code, moved by the scroll offset.
     private func updateGutter() {
-        guard gutter.bounds.width > 0 else { return }
+        moveGutter()
+        guard gutterNeedsRebuild else { return }
+        gutterNeedsRebuild = false
 
         let numbers = lineNumbers()
-        if numbers != gutterText {
-            gutterText = numbers
-            gutterLabel.text = numbers
-            let width = max(Self.gutterWidth - 6, 1)
-            gutterTextHeight = gutterLabel.sizeThatFits(
-                CGSize(width: width, height: .greatestFiniteMagnitude)
-            ).height
-        }
+        // The text decides whether the numbers changed; a rebuild that produces
+        // the same column must not assign it again, or the assignment dirties
+        // layout, which lays out again, which rebuilds again.
+        guard numbers != gutterText else { return }
+        gutterText = numbers
+        gutterLabel.text = numbers
 
-        // Scrolling moves the column; it never rewrites it.
+        let width = max(Self.gutterWidth - 6, 1)
+        gutterTextHeight = gutterLabel.sizeThatFits(
+            CGSize(width: width, height: .greatestFiniteMagnitude)
+        ).height
+        moveGutter()
+    }
+
+    /// Puts the column at the scroll position. A frame change on a subview does
+    /// not lay the view controller out again, so this is safe to call freely.
+    private func moveGutter() {
+        guard gutterTextHeight > 0 else { return }
         gutterLabel.frame = CGRect(
             x: 0,
             y: textView.textContainerInset.top - textView.contentOffset.y,
@@ -638,14 +658,13 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
     }
 
     public func textViewDidChange(_ textView: UITextView) {
+        gutterNeedsRebuild = true
         updateGutter()
     }
 
     /// Scrolling only moves the number column — see ``updateGutter()``.
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard gutterTextHeight > 0 else { return }
-        gutterLabel.frame.origin.y =
-            textView.textContainerInset.top - textView.contentOffset.y
+        moveGutter()
     }
 
     // MARK: - Running
