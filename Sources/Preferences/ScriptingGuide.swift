@@ -57,7 +57,10 @@ enum ScriptingGuide {
     """
 
     /// The copy action's target, which a bar button item needs to stay alive.
-    private final class CopyTarget: NSObject {
+    /// The sheet's actions. A bar button item holds its target weakly, so the
+    /// target lives as an associated object on the presented controller rather
+    /// than in this method's scope.
+    private final class Target: NSObject {
         weak var host: UIViewController?
 
         @objc func close() {
@@ -68,8 +71,8 @@ enum ScriptingGuide {
             UIPasteboard.general.string = aiPrompt
             let alert = UIAlertController(
                 title: nil,
-                message: "AI prompt copied. Paste it into your AI assistant and "
-                    + "describe the result you want.".localized,
+                message: ("AI prompt copied. Paste it into your AI assistant and "
+                    + "describe the result you want.").localized,
                 preferredStyle: .alert
             )
             alert.addAction(UIAlertAction(title: "Ok".localized, style: .default))
@@ -77,34 +80,27 @@ enum ScriptingGuide {
         }
     }
 
+    private enum AssociatedKeys {
+        static var target = 0
+    }
+
     /// Presents the guide over `controller`.
     static func present(from controller: UIViewController) {
         let host = UIViewController()
-        let copyTarget = CopyTarget()
-        copyTarget.host = host
+        let target = Target()
+        target.host = host
         host.modalPresentationStyle = .pageSheet
         host.view.backgroundColor = .systemGroupedBackground
         host.navigationItem.title = "Scripting Guide".localized
 
-        let copy = UIAction(title: "Copy AI Prompt".localized) { [weak host] _ in
-            UIPasteboard.general.string = aiPrompt
-            let alert = UIAlertController(
-                title: nil,
-                message: "AI prompt copied. Paste it into your AI assistant and "
-                    + "describe the result you want.".localized,
-                preferredStyle: .alert
-            )
-            alert.addAction(UIAlertAction(title: "Ok".localized, style: .default))
-            host?.present(alert, animated: true)
-        }
-        // Plain items rather than `systemItem: .close` with a primaryAction:
-        // that combination does not render reliably on this iOS line, and the
-        // copy button went missing with it.
+        // Plain bar button items with a real target: systemItem plus
+        // primaryAction did not render on this iOS line, and an earlier draft
+        // pointed the copy item at the host, which has no such selector.
         host.navigationItem.rightBarButtonItems = [
-            UIBarButtonItem(title: "Close".localized, style: .plain,
-                            target: copyTarget, action: #selector(CopyTarget.close)),
             UIBarButtonItem(title: "Copy AI Prompt".localized, style: .plain,
-                            target: host, action: #selector(CopyTarget.copyPrompt)),
+                            target: target, action: #selector(Target.copyPrompt)),
+            UIBarButtonItem(title: "Close".localized, style: .plain,
+                            target: target, action: #selector(Target.close)),
         ]
 
         let scrollView = UIScrollView()
@@ -135,30 +131,30 @@ enum ScriptingGuide {
 
         section("How a script works".localized, (
             "The script runs once per notification. Call push(req) to send a "
-                + "request — call it more than once to send several, or not at "
-                + "all to skip this notification. Top-level await works, so you "
-                + "can fetch a token before sending."
-        ))
+            + "request — call it more than once to send several, or not at "
+            + "all to skip this notification. Top-level await works, so you "
+            + "can fetch a token before sending."
+        ).localized)
 
         section("bullet — the notification".localized, (
             "bullet.deviceName, bullet.appName, bullet.appID, bullet.title, "
-                + "bullet.subtitle, bullet.message, bullet.date are strings. "
-                + "bullet.icon and bullet.image are base64 PNG data (strings), "
-                + "present when the notification has them."
-        ))
+            + "bullet.subtitle, bullet.message, bullet.date are strings. "
+            + "bullet.icon and bullet.image are base64 PNG data (strings), "
+            + "present when the notification has them."
+        ).localized)
 
         section("Other functions".localized, (
-            "fetch(url, init) — real HTTP, like the browser's fetch. Returns a "
-                + "Response with ok, status, and json()/text().\n"
-                + "localStorage — persists values between notifications, per "
-                + "service.\n"
-                + "console.log(...) — shown in the editor's Run output."
-        ))
+            "fetch(url, init) — real HTTP, like the browser's fetch. Returns "
+            + "a Response with ok, status, and json()/text().\n"
+            + "localStorage — persists values between notifications, per "
+            + "service.\n"
+            + "console.log(...) — shown in the editor's Run output."
+        ).localized)
 
         section("Limits".localized, (
             "The script must finish within 2 seconds, so no long loops. Fetch "
-                + "runs for real: during a run, requests are actually sent."
-        ))
+            + "runs for real: during a run, requests are actually sent."
+        ).localized)
 
         let promptNote = UILabel()
         promptNote.text = "Let an AI write it".localized
@@ -167,10 +163,10 @@ enum ScriptingGuide {
         stack.addArrangedSubview(promptNote)
 
         let promptBody = UILabel()
-        promptBody.text = "Tap the copy button (top right) to copy a prompt that "
+        promptBody.text = ("Tap the copy button (top right) to copy a prompt that "
             + "describes this API. Paste it into your AI assistant and add the "
             + "result you want — which service to send to, what to filter, and so "
-            + "on — then paste the JavaScript it writes back here.".localized
+            + "on — then paste the JavaScript it writes back here.").localized
         promptBody.font = .preferredFont(forTextStyle: .subheadline)
         promptBody.textColor = .secondaryLabel
         promptBody.numberOfLines = 0
@@ -191,12 +187,17 @@ enum ScriptingGuide {
 
         // The target outlives the presentation: a bar button holds its target
         // weakly, so the copy action would die with this method's scope.
-        objc_setAssociatedObject(host, &AssociatedKeys.copyTarget, copyTarget,
+        objc_setAssociatedObject(host, &AssociatedKeys.target, target,
                                  .OBJC_ASSOCIATION_RETAIN)
-        controller.present(host, animated: true)
+
+        // A bare view controller shows no navigation bar, and its
+        // navigationItem — title and both buttons — is never displayed.
+        let navigation = UINavigationController(rootViewController: host)
+        navigation.modalPresentationStyle = .pageSheet
+        controller.present(navigation, animated: true)
     }
 }
 
 private enum AssociatedKeys {
-    static var copyTarget = 0
+    static var target = 0
 }
