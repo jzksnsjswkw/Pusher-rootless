@@ -228,10 +228,10 @@ public final class LogController: PlainViewController, UITableViewDataSource, UI
         guard !PrefsStore.prefs().bool(key) else { return }
         PrefsStore.setValue(true, forKey: key, notify: false)
 
-        let message = "After using the app filter, you can swipe to delete to unset "
-            .localized + "it and show all apps again.\n\nTap on any truncated log to "
-            .localized + "expand it.\n\n Tap and hold on a log to copy it to the "
-            .localized + "clipboard.\n\nTap anywhere to continue.".localized
+        let message = ("After using the app filter, swipe to delete to unset it "
+            + "and show all apps again. Tap on any truncated log to expand it, "
+            + "and touch and hold a log to copy it to the clipboard.\n\n"
+            + "Tap anywhere to continue.").localized
         TutorialOverlay.present(message, from: self, in: view.window)
     }
 

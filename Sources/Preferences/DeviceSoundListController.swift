@@ -291,8 +291,8 @@ public final class DeviceListController: DeviceSoundListController {
         case PushoverService.serviceName:
             return "Selecting none will forward push notifications to all devices.".localized
         case PushbulletService.serviceName:
-            return "Pushbullet only allows one receiving device. Selecting none will "
-                .localized + "forward push notifications to all devices.".localized
+            return ("Pushbullet only allows one receiving device. Selecting none "
+                + "will forward push notifications to all devices.").localized
         default:
             return nil
         }

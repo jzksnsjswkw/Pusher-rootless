@@ -242,3 +242,4 @@ Delete：填 1 删除对应 ID 的推送（需同时填写 ID）";
 "Services you add from this type start with these, and can still change them individually." = "从该类型添加的服务会以这些为初始值，之后仍可单独修改。";
 "Each one becomes a service type you can add on the Services page." = "每一个都会成为可在“服务”页添加的服务类型。";
 "Define a service by writing a script, then add it on the Services page." = "写一个脚本来定义服务，然后在“服务”页添加它。";
+"After using the app filter, swipe to delete to unset it and show all apps again. Tap on any truncated log to expand it, and touch and hold a log to copy it to the clipboard.\n\nTap anywhere to continue." = "使用应用筛选后，左滑删除即可取消并重新显示所有应用。点按被截断的日志可展开；长按日志可复制到剪贴板。\n\n点按任意位置继续。";

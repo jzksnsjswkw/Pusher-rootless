@@ -61,9 +61,10 @@ public final class SNSListController: ListController {
     private func insertSynchronizeControls(isSynchronized: Bool) {
         let group = PSSpecifier.emptyGroup()!
         group.setProperty(
-            "Synchronizes all values with the global preferences. Modifying any of these "
-                .localized + "settings will override that preference, but synchronizing will remove "
-                .localized + "the override and follow the global preferences again.".localized,
+            ("Synchronizes all values with the global preferences. Modifying any "
+                + "of these settings will override that preference, but synchronizing "
+                + "will remove the override and follow the global preferences again.")
+                .localized,
             forKey: "footerText"
         )
 
