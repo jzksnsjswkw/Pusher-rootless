@@ -319,3 +319,4 @@ console.log(...)——显示在编辑器的运行输出中。";
 "Tap Copy AI Prompt (top right). The prompt is a system prompt — it teaches the AI this API. The copy dialog asks what you want the script to do; write it there, then paste the whole thing to your AI assistant and paste the JavaScript it writes back here." = "点右上角的「复制 AI 提示词」。提示词是系统提示词——教给 AI 本插件的 API。复制对话框会问你想让脚本做什么；在那里填上，然后把整段内容粘贴给你的 AI 助手，再把它生成的 JavaScript 粘贴回这里。";
 "Max Response Size (MB)" = "最大响应大小（MB）";
 "A shared context must stay on its own thread (JSContext thread affinity), so every run uses its own thread." = "共享的上下文必须固定在创建它的线程上（JSContext 的线程亲和性），因此每次运行都会使用独立线程。";
+"A shared context must stay on the thread it was created on (JSContext thread affinity), so every run shares the thread too." = "共享的上下文必须固定在创建它的线程上（JSContext 的线程亲和性），因此每次运行也必然共享线程。";

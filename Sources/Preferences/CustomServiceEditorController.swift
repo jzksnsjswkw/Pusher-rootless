@@ -113,12 +113,19 @@ public final class CustomServiceEditorController: ListController {
         let sharing = CustomServiceStore.rawEntry(id: definitionID)
             .bool(PrefKey.scriptShareContext)
 
-        // Sharing the context pins the run to the context's thread, so the
-        // thread switch is switched off (in storage, which is what the getter
-        // reports), disabled, and explained.
+        // Sharing the context pins every run to the thread the context was
+        // created on, so Share Thread is switched on (in storage, which is what
+        // the getter reports), locked, and explained. Sharing a thread alone
+        // leaves Share Context free: each run still gets a fresh context.
         if sharing {
-            CustomServiceStore.update(id: definitionID) { object in
-                object.removeValue(forKey: PrefKey.scriptShareThread)
+            if !CustomServiceStore.rawEntry(id: definitionID)
+                .bool(PrefKey.scriptShareThread) {
+                CustomServiceStore.update(id: definitionID) { object in
+                    object[PrefKey.scriptShareThread] = true
+                }
+                // The write posts another notification; the re-entry below is
+                // idempotent, so returning here is enough.
+                return
             }
             threadSpecifier.setProperty(false, forKey: "enabled")
         } else {
@@ -127,9 +134,9 @@ public final class CustomServiceEditorController: ListController {
 
         contextSpecifier.setProperty(
             sharing
-                ? ("A shared context must stay on its own thread (JSContext "
-                    + "thread affinity). Share Thread was switched off.")
-                    .localized
+                ? ("A shared context must stay on the thread it was created on "
+                    + "(JSContext thread affinity), so every run shares the "
+                    + "thread too.").localized
                 : ("The script runs once per notification. Call push(req) to "
                     + "send one, call it more than once to send several, or "
                     + "not at all to skip this notification.").localized,
