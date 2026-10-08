@@ -418,10 +418,13 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
     /// The line-number column, and the label inside it that carries the digits.
     private let gutter = UIView()
     private let gutterLabel = UILabel()
-    /// Two mutually exclusive bottoms for the editor: the page is the editor's
-    /// until the first run, after which the output pane takes the lower part.
-    private var editorFillsPage: NSLayoutConstraint!
+    /// Three constraints on the editor's bottom edge, only two of them active at
+    /// a time. See the comment where they are created.
+    private var editorToSafeArea: NSLayoutConstraint!
+    private var editorWithinKeyboard: NSLayoutConstraint!
     private var editorAboveOutput: NSLayoutConstraint!
+    private var outputToSafeArea: NSLayoutConstraint!
+    private var outputWithinKeyboard: NSLayoutConstraint!
 
     /// The width of the line-number column.
     private static let gutterWidth: CGFloat = 34
@@ -480,7 +483,6 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
 
     public override func viewDidLoad() {
         super.viewDidLoad()
-
         navigationItem.title = "Script".localized
         navigationItem.rightBarButtonItems = [
             UIBarButtonItem(
@@ -545,6 +547,13 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         gutterLabel.textColor = .tertiaryLabel
         gutterLabel.numberOfLines = 0
         gutterLabel.textAlignment = .right
+        // Its position comes from a frame, so no autoresizing translation: that
+        // translation would make UIKit derive a height constraint from the
+        // frame, and the label is as tall as the whole script — a constraint
+        // that would push through the gutter, which is pinned to the editor's
+        // top and bottom, and stretch the editor itself. The editor would then
+        // grow with the text instead of scrolling it.
+        gutterLabel.translatesAutoresizingMaskIntoConstraints = false
         gutter.addSubview(gutterLabel)
 
         outputView.isEditable = false
@@ -557,9 +566,32 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
 
         outputHeight = outputView.heightAnchor.constraint(equalToConstant: 0)
         outputHeight.isActive = true
+        outputToSafeArea = outputView.bottomAnchor.constraint(
+            equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12
+        )
+        outputToSafeArea.priority = .defaultHigh
+        outputWithinKeyboard = outputView.bottomAnchor.constraint(
+            lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -12
+        )
 
-        editorFillsPage = textView.bottomAnchor.constraint(
-            equalTo: view.keyboardLayoutGuide.topAnchor, constant: -12
+        // The editor's bottom is *two* constraints, not one.
+        //
+        // Pinning it to the keyboard guide alone puts it at the raw bottom of
+        // the view, which is past the safe area — under the home indicator. The
+        // editor then reports a box taller than what is actually visible, so
+        // content a few lines short of that box does not scroll while its last
+        // lines sit behind the indicator: a scroll threshold that no amount of
+        // inset correction explains.
+        //
+        // Equality to the safe area with the keyboard as a required upper bound
+        // gives the right behavior with the keyboard down (stop at the visible
+        // edge) and with it up (shrink to the keyboard, breaking the equality).
+        editorToSafeArea = textView.bottomAnchor.constraint(
+            equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12
+        )
+        editorToSafeArea.priority = .defaultHigh
+        editorWithinKeyboard = textView.bottomAnchor.constraint(
+            lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -12
         )
         editorAboveOutput = textView.bottomAnchor.constraint(
             equalTo: outputView.topAnchor, constant: -12
@@ -577,15 +609,18 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
 
             outputView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
             outputView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
-            outputView.bottomAnchor.constraint(
-                equalTo: view.keyboardLayoutGuide.topAnchor, constant: -12
-            ),
+            // Same pair as the editor: the pane may not go below the keyboard,
+            // and it prefers to sit at the visible bottom edge.
+            outputToSafeArea,
+            outputWithinKeyboard,
         ])
-        editorFillsPage.isActive = true
+        editorToSafeArea.isActive = true
+        editorWithinKeyboard.isActive = true
     }
 
     public override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+    
         updateGutter()
     }
 
@@ -675,6 +710,7 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
 
     /// Scrolling only moves the number column — see ``updateGutter()``.
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+    
         moveGutter()
     }
 
@@ -831,11 +867,10 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
     /// Presents the run's report below the editor.
     private func showOutput(_ attributed: NSAttributedString) {
         outputView.attributedText = attributed
-        if editorFillsPage.isActive {
-            // The first run is what splits the page. Below this width the
-            // editor keeps the whole of it, which is what makes writing
-            // comfortable.
-            editorFillsPage.isActive = false
+        if editorToSafeArea.isActive {
+            // The first run is what splits the page. Before it, the editor keeps
+            // the whole of it, which is what makes writing comfortable.
+            editorToSafeArea.isActive = false
             editorAboveOutput.isActive = true
         }
         outputView.isHidden = false
