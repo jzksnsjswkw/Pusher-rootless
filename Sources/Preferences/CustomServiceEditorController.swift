@@ -160,17 +160,31 @@ public final class CustomServiceEditorController: ListController {
 /// screen, monospaced text and no autocorrection. The navigation bar carries the
 /// insertable examples, since a user starting from nothing needs to see the shape
 /// of a script before they can write one.
+// MARK: - The script editor, with the run button
+
 @objc(NSPCustomServiceScriptController)
-public final class CustomServiceScriptController: PSViewController {
+public final class CustomServiceScriptController: PSViewController, UITextViewDelegate {
     private let definitionID: String
     private let textView = UITextView()
+    private let outputView = UITextView()
+    private let runButton = UIButton(type: .system)
+    private var outputHeight: NSLayoutConstraint!
 
-    /// A `PSViewController`, because the framework sets `rootController` on a
-    /// detail page it pushes — a plain `UIViewController` has no such setter, and
-    /// the push ended in `unrecognized selector sent to instance`. The two
-    /// initializers are written out for the reason given on
-    /// ``ServiceListController``: a class that adds its own hides the inherited
-    /// ones, and the framework's construction path would land on a stub.
+    /// The sample notification the run button feeds the script.
+    private static let testBullet: [String: Any] = [
+        "deviceName": UIDevice.current.name,
+        "appName": "Bark",
+        "appID": "me.fin.bark",
+        "title": "Test Title",
+        "subtitle": "Test Subtitle",
+        "message": "Hello from Pusher",
+        "date": "Jan 1, 12:00 PM",
+    ]
+
+    /// The framework builds a `detail`-named controller through these, so both
+    /// are written out even though this page is normally pushed directly: a
+    /// class that adds its own initializer hides the inherited ones, and the
+    /// framework's call would land on an unimplemented one.
     public override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
         self.definitionID = ""
         super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
@@ -189,16 +203,27 @@ public final class CustomServiceScriptController: PSViewController {
         super.init(nibName: nil, bundle: nil)
     }
 
+    // MARK: - Layout
+
     public override func viewDidLoad() {
         super.viewDidLoad()
 
         navigationItem.title = "Script".localized
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            title: "Examples".localized, style: .plain,
-            target: self, action: #selector(showExamples)
-        )
+        navigationItem.rightBarButtonItems = [
+            UIBarButtonItem(
+                title: "Run".localized, style: .plain,
+                target: self, action: #selector(runScript)
+            ),
+            UIBarButtonItem(
+                title: "Examples".localized, style: .plain,
+                target: self, action: #selector(showExamples)
+            ),
+        ]
 
         view.backgroundColor = .systemGroupedBackground
+
+        // The editor takes the upper area; the output pane sits below it and
+        // grows with its content.
         textView.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
         textView.autocapitalizationType = .none
         textView.autocorrectionType = .no
@@ -207,18 +232,112 @@ public final class CustomServiceScriptController: PSViewController {
         textView.smartInsertDeleteType = .no
         textView.spellCheckingType = .no
         textView.keyboardType = .asciiCapable
+        textView.delegate = self
+        textView.backgroundColor = .secondarySystemGroupedBackground
+        textView.layer.cornerRadius = 10
         textView.text = CustomServiceStore.definition(id: definitionID)?.script ?? ""
         textView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(textView)
 
+        outputView.isEditable = false
+        outputView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        outputView.backgroundColor = .secondarySystemGroupedBackground
+        outputView.layer.cornerRadius = 10
+        outputView.isHidden = true
+        outputView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(outputView)
+
+        outputHeight = outputView.heightAnchor.constraint(equalToConstant: 200)
+        outputHeight.isActive = true
+
         NSLayoutConstraint.activate([
-            textView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            textView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            textView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            // Anchored to the keyboard guide so the caret is never underneath it.
-            textView.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
+            textView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            textView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            textView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            textView.bottomAnchor.constraint(equalTo: outputView.topAnchor, constant: -12),
+
+            outputView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            outputView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            outputView.bottomAnchor.constraint(
+                equalTo: view.keyboardLayoutGuide.topAnchor, constant: -12
+            ),
         ])
     }
+
+    // MARK: - Running
+
+    /// Runs the script as it stands, against a sample notification.
+    ///
+    /// The script is saved first so what runs is what is on screen. The run uses
+    /// the same runner the pipeline does — same options, same `fetch` — so a
+    /// script that works here behaves the same when a notification arrives.
+    @objc private func runScript() {
+        save()
+        guard let script = textView.text, !script.isEmpty else { return }
+
+        var lines: [String] = []
+        var pushed: [String] = []
+
+        let outcome = JavaScriptRunner.run(
+            script: script,
+            bullet: Self.testBullet,
+            options: .init(usesOwnContext: true, usesOwnThread: true,
+                           timeout: Pusher.defaultScriptTimeout,
+                           maximumResponseBytes: Pusher.defaultMaxResponseBytes),
+            fetch: { request in
+                // The editor's runs do not touch the network: `fetch` resolves
+                // with a fixed, obviously-fake response, so a script can be
+                // exercised without sending anything anywhere.
+                let body = #"{"ok":true}"#
+                return JavaScriptRunner.FetchResult(
+                    status: 200,
+                    headers: ["Content-Type": "application/json"],
+                    body: Data(body.utf8),
+                    finalURL: request.url?.absoluteString
+                )
+            }
+        )
+
+        lines.append(contentsOf: outcome.consoleOutput)
+        for request in outcome.requests {
+            let method = request.method
+            let bodyText = request.infoDict.isEmpty
+                ? ""
+                : (try? JSONSerialization.data(withJSONObject: request.infoDict))
+                    .flatMap { String(data: $0, encoding: .utf8) } ?? ""
+            pushed.append("\(method) \(request.urlString)\(bodyText.isEmpty ? "" : "\n  \(bodyText)")")
+        }
+
+        var report: [String] = []
+        if !lines.isEmpty {
+            report.append("console:\n" + lines.joined(separator: "\n"))
+        }
+        if !pushed.isEmpty {
+            report.append("push:\n" + pushed.joined(separator: "\n"))
+        }
+        if let failure = outcome.failure {
+            report.append("error:\n" + failure.message)
+        }
+        if report.isEmpty {
+            report.append("No output. The script ran and sent nothing — that is how it "
+                + "skips a notification.")
+        }
+
+        showOutput(report.joined(separator: "\n\n"))
+    }
+
+    /// Presents the run's report below the editor.
+    private func showOutput(_ text: String) {
+        outputView.text = text
+        outputView.isHidden = false
+
+        // Two hundred points shows a useful amount of output; more than that
+        // scrolls inside the pane rather than pushing the editor off screen.
+        outputHeight.constant = min(260, max(120, outputView.contentSize.height + 16))
+        view.layoutIfNeeded()
+    }
+
+    // MARK: - Saving
 
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
@@ -227,12 +346,14 @@ public final class CustomServiceScriptController: PSViewController {
 
     /// Writes the script back onto its definition, which is what makes an edit
     /// take effect for every service using it.
-    private func save() {
-        guard var definition = CustomServiceStore.definition(id: definitionID) else { return }
+    @discardableResult
+    private func save() -> Bool {
+        guard var definition = CustomServiceStore.definition(id: definitionID) else { return false }
         let text = textView.text ?? ""
-        guard text != definition.script else { return }
+        guard text != definition.script else { return false }
         definition.script = text
         CustomServiceStore.save(definition)
+        return true
     }
 
     // MARK: - Examples
@@ -328,7 +449,7 @@ public final class CustomServiceScriptController: PSViewController {
             })
         }
         sheet.addAction(UIAlertAction(title: "Cancel".localized, style: .cancel))
-        sheet.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem
+        sheet.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItems?.last
         present(sheet, animated: true)
     }
 
