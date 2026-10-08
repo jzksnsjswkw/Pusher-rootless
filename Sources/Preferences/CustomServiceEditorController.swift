@@ -747,10 +747,14 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
                 });
                 const data = await response.json();
                 token = data.token;
+                // The server's own lifetime when it gives one; an hour when it
+                // does not, since a cache that never expires is worse than one
+                // that expires too early.
+                const lifetime = Number(data.expires_in) > 0 ? Number(data.expires_in) : 3600;
                 localStorage.setItem(key, JSON.stringify({
                     value: token,
                     // A minute early, so a token cannot expire mid-flight.
-                    expires: Date.now() + (data.expires_in - 60) * 1000
+                    expires: Date.now() + Math.max(lifetime - 60, 30) * 1000
                 }));
             }
 
