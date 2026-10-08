@@ -56,9 +56,32 @@ enum ScriptingGuide {
     Output ONLY the JavaScript source, no markdown fences, no explanation.
     """
 
+    /// The copy action's target, which a bar button item needs to stay alive.
+    private final class CopyTarget: NSObject {
+        weak var host: UIViewController?
+
+        @objc func close() {
+            host?.dismiss(animated: true)
+        }
+
+        @objc func copyPrompt() {
+            UIPasteboard.general.string = aiPrompt
+            let alert = UIAlertController(
+                title: nil,
+                message: "AI prompt copied. Paste it into your AI assistant and "
+                    + "describe the result you want.".localized,
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "Ok".localized, style: .default))
+            host?.present(alert, animated: true)
+        }
+    }
+
     /// Presents the guide over `controller`.
     static func present(from controller: UIViewController) {
         let host = UIViewController()
+        let copyTarget = CopyTarget()
+        copyTarget.host = host
         host.modalPresentationStyle = .pageSheet
         host.view.backgroundColor = .systemGroupedBackground
         host.navigationItem.title = "Scripting Guide".localized
@@ -74,12 +97,14 @@ enum ScriptingGuide {
             alert.addAction(UIAlertAction(title: "Ok".localized, style: .default))
             host?.present(alert, animated: true)
         }
+        // Plain items rather than `systemItem: .close` with a primaryAction:
+        // that combination does not render reliably on this iOS line, and the
+        // copy button went missing with it.
         host.navigationItem.rightBarButtonItems = [
-            UIBarButtonItem(systemItem: .close, primaryAction: UIAction { [weak host] _ in
-                host?.dismiss(animated: true)
-            }),
-            UIBarButtonItem(image: UIImage(systemName: "doc.on.doc"),
-                             menu: UIMenu(children: [copy])),
+            UIBarButtonItem(title: "Close".localized, style: .plain,
+                            target: copyTarget, action: #selector(CopyTarget.close)),
+            UIBarButtonItem(title: "Copy AI Prompt".localized, style: .plain,
+                            target: host, action: #selector(CopyTarget.copyPrompt)),
         ]
 
         let scrollView = UIScrollView()
@@ -164,6 +189,14 @@ enum ScriptingGuide {
             stack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -40),
         ])
 
+        // The target outlives the presentation: a bar button holds its target
+        // weakly, so the copy action would die with this method's scope.
+        objc_setAssociatedObject(host, &AssociatedKeys.copyTarget, copyTarget,
+                                 .OBJC_ASSOCIATION_RETAIN)
         controller.present(host, animated: true)
     }
+}
+
+private enum AssociatedKeys {
+    static var copyTarget = 0
 }

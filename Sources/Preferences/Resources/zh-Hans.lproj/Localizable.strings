@@ -263,3 +263,4 @@ console.log(...)——显示在编辑器的运行输出中。";
 "Tap the copy button (top right) to copy a prompt that describes this API. Paste it into your AI assistant and add the result you want — which service to send to, what to filter, and so on — then paste the JavaScript it writes back here." = "点右上角的复制按钮，复制描述了本 API 的提示词。粘贴到你的 AI 助手，并补充你想要的结果——发送到哪个服务、如何筛选等——然后把它生成的 JavaScript 粘贴回这里。";
 "Copy AI Prompt" = "复制 AI 提示词";
 "AI prompt copied. Paste it into your AI assistant and describe the result you want." = "AI 提示词已复制。粘贴到你的 AI 助手，并描述你想要的结果。";
+"Close" = "关闭";

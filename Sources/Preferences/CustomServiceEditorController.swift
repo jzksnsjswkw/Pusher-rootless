@@ -82,13 +82,18 @@ public final class CustomServiceEditorController: ListController {
         if let name { all.append(name) }
 
         // ── The script ──────────────────────────────────────────────────────
+        // The group head, the script row, then the guide: the guide sits under
+        // the script it explains, inside the same group.
         let scriptGroup = PSSpecifier.emptyGroup()
-        scriptGroup?.setProperty(
-            ("The script runs for every notification. Call push(req) to send one, "
-                + "call it more than once to send several, or not at all to skip "
-                + "this notification.").localized,
-            forKey: "footerText"
+        if let scriptGroup { all.append(scriptGroup) }
+
+        let scriptRow = PSSpecifier.preferenceSpecifierNamed(
+            "Script".localized, target: nil, set: nil, get: nil,
+            detail: CustomServiceScriptController.self, cell: .linkCell, edit: nil
         )
+        scriptRow?.identifier = Self.scriptRowIdentifier
+        scriptRow?.setProperty("DefaultService", forKey: "icon")
+        if let scriptRow { all.append(scriptRow) }
 
         // The guide, as its own tappable row under the script: a footer is not
         // obviously tappable, and the entry point is what makes the AI workflow
@@ -102,14 +107,12 @@ public final class CustomServiceEditorController: ListController {
             all.append(guideRow)
         }
 
-        let scriptRow = PSSpecifier.preferenceSpecifierNamed(
-            "Script".localized, target: nil, set: nil, get: nil,
-            detail: CustomServiceScriptController.self, cell: .linkCell, edit: nil
+        scriptGroup?.setProperty(
+            ("The script runs for every notification. Call push(req) to send one, "
+                + "call it more than once to send several, or not at all to skip "
+                + "this notification.").localized,
+            forKey: "footerText"
         )
-        scriptRow?.identifier = Self.scriptRowIdentifier
-        scriptRow?.setProperty("DefaultService", forKey: "icon")
-        if let scriptGroup { all.append(scriptGroup) }
-        if let scriptRow { all.append(scriptRow) }
 
         // ── The defaults for services of this kind ──────────────────────────
         let defaultsGroup = PSSpecifier.groupSpecifier(
