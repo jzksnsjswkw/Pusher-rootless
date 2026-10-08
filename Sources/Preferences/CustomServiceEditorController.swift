@@ -113,11 +113,22 @@ public final class CustomServiceEditorController: ListController {
         let sharing = CustomServiceStore.rawEntry(id: definitionID)
             .bool(PrefKey.scriptShareContext)
 
-        threadSpecifier.setProperty(!sharing, forKey: "enabled")
+        // Sharing the context pins the run to the context's thread, so the
+        // thread switch is switched off (in storage, which is what the getter
+        // reports), disabled, and explained.
+        if sharing {
+            CustomServiceStore.update(id: definitionID) { object in
+                object.removeValue(forKey: PrefKey.scriptShareThread)
+            }
+            threadSpecifier.setProperty(false, forKey: "enabled")
+        } else {
+            threadSpecifier.setProperty(true, forKey: "enabled")
+        }
+
         contextSpecifier.setProperty(
             sharing
                 ? ("A shared context must stay on its own thread (JSContext "
-                    + "thread affinity), so every run uses its own thread.")
+                    + "thread affinity). Share Thread was switched off.")
                     .localized
                 : ("The script runs once per notification. Call push(req) to "
                     + "send one, call it more than once to send several, or "
