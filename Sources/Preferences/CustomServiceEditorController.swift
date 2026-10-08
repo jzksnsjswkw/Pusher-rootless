@@ -46,6 +46,9 @@ public final class CustomServiceEditorController: ListController {
         navigationItem.title = definition?.name ?? "Custom".localized
         installSpecifiers(buildSpecifiers())
         observePreferenceChanges()
+        // The switches' locked state depends on the stored values, which a
+        // previous visit may have left in the forced combination.
+        enforceScriptRuntimeDependency()
     }
 
     public override func rebuildSpecifiers() -> NSMutableArray? {
@@ -169,9 +172,9 @@ public final class CustomServiceEditorController: ListController {
         let contextGroup = PSSpecifier.emptyGroup()
         contextGroup?.identifier = Self.shareContextGroupIdentifier
         contextGroup?.setProperty(
-            ("A fresh JavaScript context per run: one run's variables can never "
-                + "leak into another. Off, every run reuses one context — faster, "
-                + "but a script's variables survive between notifications.")
+            ("Every run reuses one JavaScript context — faster, and a script can "
+                + "carry state between notifications. Off, each run gets a fresh "
+                + "context, so one run's variables can never leak into another.")
                 .localized,
             forKey: "footerText"
         )

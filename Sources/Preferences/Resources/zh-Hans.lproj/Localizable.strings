@@ -321,6 +321,6 @@ console.log(...)——显示在编辑器的运行输出中。";
 "A shared context must stay on its own thread (JSContext thread affinity), so every run uses its own thread." = "共享的上下文必须固定在创建它的线程上（JSContext 的线程亲和性），因此每次运行都会使用独立线程。";
 "A shared context must stay on the thread it was created on (JSContext thread affinity), so every run shares the thread too." = "共享的上下文必须固定在创建它的线程上（JSContext 的线程亲和性），因此每次运行也必然共享线程。";
 "Advanced Settings" = "高级设置";
-"A fresh JavaScript context per run: one run's variables can never leak into another. Off, every run reuses one context — faster, but a script's variables survive between notifications." = "每次运行使用全新的 JavaScript 上下文：上一条推送的变量绝不会泄漏到下一条。关闭后所有运行共用一个上下文——更快，但脚本的变量会在通知之间保留。";
+"A fresh JavaScript context per run: one run's variables can never leak into another. Off, every run reuses one context — faster, but a script's variables survive between notifications." = "每次运行复用同一个 JavaScript 上下文——更快，且脚本可以在通知之间携带状态。关闭后每次运行都会获得全新上下文，上一条推送的变量绝不会泄漏到下一条。";
 "Runs queue on one thread. A shared context requires this (JSContext thread affinity); with own contexts it only orders the runs." = "所有运行在同一条线程上排队。共享上下文时必须如此（JSContext 的线程亲和性）；使用独立上下文时它只负责让运行按顺序执行。";
 "A shared context must stay on the thread it was created on (JSContext thread affinity), so sharing the thread is required and locked on." = "共享的上下文必须固定在创建它的线程上（JSContext 的线程亲和性），因此共享线程是必需的，已强制开启并锁定。";
