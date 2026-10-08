@@ -166,20 +166,6 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             loaded = loadSpecifiers(named: serviceType) as? [PSSpecifier] ?? []
             all = loaded
         }
-
-        if let definition = CustomServiceStore.definition(id: serviceType) {
-            if let scriptRow = PSSpecifier.preferenceSpecifierNamed(
-                "Script".localized, target: nil, set: nil, get: nil,
-                detail: CustomServiceScriptController.self, cell: .linkCell, edit: nil
-            ) {
-                scriptRow.setProperty("DefaultService", forKey: "icon")
-                scriptRow.setProperty(
-                    String(format: "Defined by \"%@\"".localized, definition.name),
-                    forKey: "footerText"
-                )
-                all.insert(scriptRow, at: 0)
-            }
-        }
         for specifier in loaded {
             specifier.setProperty(serviceInstanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
             specifier.setProperty(serviceType, forKey: SpecifierRouting.PropertyKey.serviceType)
