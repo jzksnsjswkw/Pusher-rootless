@@ -43,22 +43,39 @@ public enum ServiceExporter {
         // work, and an import on another device has nothing to resolve it by.
         var definition: ServiceExport.ExportedDefinition?
         if let source = definitions[instance.type] {
-            let stored = CustomServiceStore.rawEntry(id: source.id).raw
+            var stored = CustomServiceStore.rawEntry(id: source.id).raw
+            stored.removeValue(forKey: PrefKey.instanceID)
+            stored.removeValue(forKey: PrefKey.instanceName)
+            stored.removeValue(forKey: PrefKey.script)
+            if let icon = stored[PrefKey.customIcon] as? String,
+               let image = ServiceIcon.image(fromBase64: icon) {
+                stored[PrefKey.customIcon] = ServiceIcon.storedValue(image)
+            }
             definition = ServiceExport.ExportedDefinition(
                 name: source.name,
                 script: source.script,
                 configFields: ConfigFields.declared(byDefinition: source.id).map(\.encoded),
-                defaults: stored.filter { ServiceExportFilter.shouldExportDefinitionKey($0.key) }
+                defaults: stored
             )
         }
 
         // Everything the instance holds that is configuration, minus identity
         // and per-app overrides (which are their own structure and are exported
         // part of `settings` only for the top level).
-        let settings = raw
+        var settings = raw
             .filter { ServiceExportFilter.shouldExportInstanceKey($0.key) }
             .filter { $0.key != PrefKey.appList && $0.key != PrefKey.appListIsBlacklist }
             .filter { $0.key != PrefKey.configValues }
+
+        // An icon written before the palette encoder existed is stored as 32-bit
+        // RGBA and is several times the size of the same picture now. Re-encoded
+        // here, on the way out: a document someone pastes into a message should
+        // carry the compact form, and rewriting what is already on disk for no
+        // reason the user asked for would be a worse trade.
+        if let stored = settings[PrefKey.customIcon] as? String,
+           let image = ServiceIcon.image(fromBase64: stored) {
+            settings[PrefKey.customIcon] = ServiceIcon.storedValue(image)
+        }
 
         // The declared settings' values, which are what the user typed into the
         // service's own fields.

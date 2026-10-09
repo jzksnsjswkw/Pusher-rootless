@@ -27,6 +27,7 @@ public class ServiceListController: PlainViewController {
 
     private var servicesTable: UITableView!
     private var addButton: UIBarButtonItem!
+    private var transferButton: UIBarButtonItem!
     /// The edit/done button, kept so toggling editing can swap the add button
     /// in beside it without rebuilding the bar.
     private var rightButton: UIBarButtonItem!
@@ -80,11 +81,17 @@ public class ServiceListController: PlainViewController {
         rightButton = UIBarButtonItem(
             title: "Edit".localized, style: .plain, target: self, action: #selector(toggleEditing(_:))
         )
+        // Import and export live behind this menu rather than on a page of their
+        // own: there is nothing to look at, only something to do.
+        transferButton = UIBarButtonItem(
+            image: UIImage(systemName: "ellipsis.circle"),
+            menu: transferMenu()
+        )
         navigationItem.title = "Instances".localized
-        // Both actions sit on the right, as on the Custom page: the left slot is
-        // the back button, and the add button must stay reachable in edit mode,
-        // when tapping a row renames rather than opens.
-        navigationItem.rightBarButtonItems = [addButton, rightButton]
+        // Actions sit on the right, as on the Services page: the left slot is the
+        // back button, and the add button must stay reachable in edit mode, when
+        // tapping a row renames rather than opens.
+        navigationItem.rightBarButtonItems = [addButton, rightButton, transferButton]
     }
 
     public override func viewWillAppear(_ animated: Bool) {
@@ -129,6 +136,38 @@ public class ServiceListController: PlainViewController {
     }
 
     // MARK: - Editing
+
+    /// Shows what an import added.
+    ///
+    /// The alert is presented over this page, so the list underneath has to be
+    /// rebuilt when the user dismisses it — otherwise the services that just
+    /// arrived would only appear on the next visit.
+    @objc public func reloadAfterTransfer() {
+        reloadData()
+    }
+
+    /// Import and export, as a menu.
+    ///
+    /// A menu rather than three bar buttons: these are rare actions, and the bar
+    /// already carries `+` and `Edit`. The menu is rebuilt when it opens, since
+    /// "Export" makes no sense with nothing configured.
+    private func transferMenu() -> UIMenu {
+        let export = UIAction(
+            title: "Export…".localized,
+            image: UIImage(systemName: "square.and.arrow.up")
+        ) { [weak self] _ in
+            guard let self else { return }
+            ServiceTransfer.offerExport(from: self)
+        }
+        let importAction = UIAction(
+            title: "Import…".localized,
+            image: UIImage(systemName: "square.and.arrow.down")
+        ) { [weak self] _ in
+            guard let self else { return }
+            ServiceTransfer.offerImport(from: self)
+        }
+        return UIMenu(title: "", children: [export, importAction])
+    }
 
     @objc private func toggleEditing(_ sender: UIBarButtonItem) {
         servicesTable.setEditing(!servicesTable.isEditing, animated: true)
