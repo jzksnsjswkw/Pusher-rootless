@@ -125,22 +125,45 @@ public enum ServiceIcon {
 
     // MARK: - Stored form
 
+    /// The icon redrawn at the size the app draws icons at.
+    ///
+    /// A display site must not depend on a bitmap's intrinsic size — a table
+    /// cell sizes its image view from the image, so an icon stored at any other
+    /// size would draw at that size and push the row's text out of line. An
+    /// icon stored before the size was settled is exactly that case, and this
+    /// heals it on the way out rather than asking the user to pick the icon
+    /// again. It costs one draw on a read that already decoded a PNG, and
+    /// returns the image untouched when it is already the right size.
+    ///
+    /// The redraw goes through ``normalize(_:to:)``, whose clip is the shape the
+    /// image already carries, so a conformed icon is identical to one stored at
+    /// the right size.
+    public static func conformed(_ image: UIImage) -> UIImage {
+        guard abs(image.size.width - pointSize) > 0.01
+            || abs(image.size.height - pointSize) > 0.01
+        else { return image }
+        return normalize(image, to: .standard) ?? image
+    }
+
     /// The logo of one instance, or `nil` when it has none.
     ///
     /// A definition's logo is the fallback, so a script's instances show the
     /// logo the script declares until one of them chooses its own.
     public static func logo(forInstanceID id: String) -> UIImage? {
         let stored = PrefsStore.instance(id)
-        if let own = image(from: stored) { return own }
+        if let own = image(from: stored) { return conformed(own) }
         guard let type = stored.nonEmptyString(PrefKey.instanceType),
               let definition = CustomServiceStore.definition(id: type)
         else { return nil }
-        return image(from: CustomServiceStore.rawEntry(id: definition.id))
+        return logo(forDefinitionID: definition.id)
     }
 
     /// The logo of one definition, or `nil` when it has none.
+    ///
+    /// Conformed, so a definition's logo draws at the same size on its row, in
+    /// the add-service list and beside its name as an instance's logo does.
     public static func logo(forDefinitionID id: String) -> UIImage? {
-        image(from: CustomServiceStore.rawEntry(id: id))
+        image(from: CustomServiceStore.rawEntry(id: id)).map(conformed)
     }
 
     /// The icon of one instance or definition, or `nil` when it has none and the
