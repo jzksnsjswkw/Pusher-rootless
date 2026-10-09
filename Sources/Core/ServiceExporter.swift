@@ -42,24 +42,16 @@ public enum ServiceExporter {
         let definitions = Dictionary(
             uniqueKeysWithValues: CustomServiceStore.definitions().map { ($0.id, $0) }
         )
-        let instances = ServiceInstanceStore.instances()
 
-        var instanceIDs = selection.instanceIDs
-        var serviceIDs = selection.serviceIDs
-
-        // Every script the chosen instances use, whether or not it was ticked.
-        for id in instanceIDs {
-            guard let instance = instances.first(where: { $0.id == id }),
-                  definitions[instance.type] != nil
-            else { continue }
-            if !serviceIDs.contains(instance.type) {
-                serviceIDs.append(instance.type)
-            }
+        // The ids given are honoured as given. An instance whose service is not
+        // also chosen is written without it, and the importer will find the
+        // service on the receiving device or say that it is missing — which is
+        // the point of the switch: a recipient who already has the service should
+        // not be sent a second copy of it.
+        let instanceIDs = selection.instanceIDs.filter { id in
+            ServiceInstanceStore.instances().contains { $0.id == id }
         }
-        // A built-in kind is not a user's service, so it has no script to carry.
-        instanceIDs = instanceIDs.filter { id in
-            instances.contains { $0.id == id }
-        }
+        let serviceIDs = selection.serviceIDs
 
         // In the order the Services page shows them, so the document reads the way
         // the page does rather than in the order ids happened to be collected.

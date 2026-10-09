@@ -73,7 +73,7 @@ enum ServiceTransfer {
                 return Item(
                     name: instance.name,
                     detail: script.map {
-                        String(format: "Uses the script \"%@\"".localized, $0.name)
+                        String(format: "Uses the service \"%@\"".localized, $0.name)
                     } ?? instance.descriptor.displayName,
                     icon: ServiceIcon.logo(forInstanceID: instance.id)
                         ?? ServiceArtwork.image(forType: instance.type),
@@ -88,8 +88,8 @@ enum ServiceTransfer {
                 return Item(
                     name: definition.name,
                     detail: count == 0
-                        ? "Not used by any service yet".localized
-                        : String(format: "Used by %d services".localized, count),
+                        ? "Not used by any instance yet".localized
+                        : String(format: "Used by %d instances".localized, count),
                     icon: ServiceIcon.logo(forDefinitionID: definition.id)
                         ?? ServiceArtwork.image(forType: definition.id),
                     isPreSelected: true
@@ -106,7 +106,7 @@ enum ServiceTransfer {
         guard !items.isEmpty else {
             present(controller, title: "Nothing to Export".localized,
                     message: scope == .services
-                        ? "There are no scripts to export yet.".localized
+                        ? "There are no services to export yet.".localized
                         : "There are no services to export yet.".localized)
             return
         }
@@ -121,27 +121,29 @@ enum ServiceTransfer {
         }
 
         let request = Request(
-            title: "Export Services".localized,
+            title: scope == .services
+                ? "Export Services".localized
+                : "Export Instances".localized,
             actionTitle: "Export".localized,
             footer: scope == .services
                 ? "The ones you choose are written to a file.".localized
-                : ("The ones you choose are written to a file. A service that uses "
-                    + "a script carries it, so it works on the other device.").localized,
+                : ("The ones you choose are written to a file. An instance that uses "
+                    + "a service is written with it, so it works on the other "
+                    + "device.").localized,
             companionLabel: companionLabel(scope: scope, forExport: true),
             companionIsOn: true,
             companionFooter: { isOn in
                 if scope == .services {
                     return isOn
-                        ? ("Each script's services are written too, so they work as "
+                        ? ("Each service's instances are written too, so they work as "
                             + "soon as the file is imported.").localized
-                        : "Only the scripts are written. Nothing will use them yet."
-                            .localized
+                        : "Only the services are written. Nothing uses them yet.".localized
                 }
                 return isOn
-                    ? ("The scripts your services use are written too, so they work "
+                    ? ("The services your instances use are written too, so they work "
                         + "on the other device.").localized
-                    : ("Only the services are written. Anything using a script will "
-                        + "need that script already on the other device.").localized
+                    : ("Only the instances are written. An instance using a service "
+                        + "needs that service to be on the other device already.").localized
             }
         ) { names, includeCompanion in
             deliver(names: names, includeCompanion: includeCompanion,
@@ -165,16 +167,19 @@ enum ServiceTransfer {
         var body = String(format: "%d services will be exported.".localized,
                           document.instances.count)
         if document.services.count > 0 {
-            body += " " + String(format: "%d scripts are included.".localized,
+            body += " " + String(format: "%d services are included.".localized,
                                  document.services.count)
         }
         if document.instances.isEmpty {
-            body = String(format: "%d scripts will be exported.".localized,
+            body = String(format: "%d services will be exported.".localized,
                           document.services.count)
         }
 
         let sheet = UIAlertController(
-            title: "Export Services".localized, message: body, preferredStyle: .alert
+            title: scope == .services
+                ? "Export Services".localized
+                : "Export Instances".localized,
+            message: body, preferredStyle: .alert
         )
         sheet.addAction(UIAlertAction(title: "Copy to Clipboard".localized, style: .default) {
             _ in
@@ -234,9 +239,9 @@ enum ServiceTransfer {
             let instanceIDs = ServiceInstanceStore.instances()
                 .filter { chosen.contains($0.name) }
                 .map(\.id)
-            // The scripts come along because an instance without its script could
-            // not send anything, and the exporter adds any a chosen instance uses
-            // even when this is empty.
+            // The services come only when asked for: an instance written without
+            // its service still imports, against a service the receiving device
+            // already has.
             let serviceIDs = includeCompanion
                 ? CustomServiceStore.definitions().map(\.id)
                 : []
@@ -280,7 +285,9 @@ enum ServiceTransfer {
     /// Offers the two ways a document can arrive, from one page.
     static func offerImport(from controller: UIViewController, scope: Scope = .instances) {
         let sheet = UIAlertController(
-            title: "Import Services".localized,
+            title: scope == .services
+                ? "Import Services".localized
+                : "Import Instances".localized,
             message: ("Paste a document, or choose a file. You will be shown what is "
                 + "in it before anything is added.").localized,
             preferredStyle: .alert
@@ -367,14 +374,14 @@ enum ServiceTransfer {
                 if scope == .services {
                     return isOn
                         ? "The services that use them are added too.".localized
-                        : ("Only the scripts are added. Nothing will use them until "
-                            + "you configure a service yourself.").localized
+                        : ("Only the services are added. Nothing uses them until you add "
+                            + "an instance yourself.").localized
                 }
                 return isOn
-                    ? ("The scripts the services use are added too, so they work "
+                    ? ("The services the instances use are added too, so they work "
                         + "straight away.").localized
-                    : ("Only the services are added. Anything using a script needs "
-                        + "that script to be here already.").localized
+                    : ("Only the instances are added. An instance using a service needs "
+                        + "that service to be here already.").localized
             }
         ) { names, includeCompanion in
             apply(document: document, names: names,
@@ -400,7 +407,7 @@ enum ServiceTransfer {
                     Item(
                         name: instance.name,
                         detail: instance.service.map {
-                            String(format: "Uses the script \"%@\"".localized, $0)
+                            String(format: "Uses the service \"%@\"".localized, $0)
                         } ?? (instance.type ?? ""),
                         icon: ServiceImporter.storedIcon(for: instance)
                             ?? instance.type.flatMap { ServiceArtwork.image(forType: $0) },
@@ -417,8 +424,8 @@ enum ServiceTransfer {
                     return Item(
                         name: service.name,
                         detail: fields == 0
-                            ? "Script".localized
-                            : String(format: "Script · %d settings".localized, fields),
+                            ? "Service".localized
+                            : String(format: "Service · %d settings".localized, fields),
                         icon: ServiceImporter.storedIcon(for: service)
                             ?? ServiceArtwork.image(forType: service.name),
                         isPreSelected: true
@@ -440,10 +447,12 @@ enum ServiceTransfer {
         var selection: ServiceExport
         switch scope {
         case .instances:
-            // An instance cannot be applied without its script, so the scripts
-            // are always brought along when they were not offered as rows.
+            // Services the document carries only travel when asked for. An
+            // instance that needs one resolves it against what is already here,
+            // and the importer reports it when it is nowhere to be found — which
+            // is exactly the case this switch exists for.
             selection = ServiceExport(
-                services: includeCompanion ? document.services : document.services,
+                services: includeCompanion ? document.services : [],
                 instances: document.instances.filter { chosen.contains($0.name) }
             )
         case .services:
@@ -489,7 +498,7 @@ enum ServiceTransfer {
                                 result.instances.joined(separator: ", ")))
         }
         if !result.services.isEmpty {
-            lines.append(String(format: "%d scripts were added: %@".localized,
+            lines.append(String(format: "%d services were added: %@".localized,
                                 result.services.count,
                                 result.services.joined(separator: ", ")))
         }
@@ -506,7 +515,7 @@ enum ServiceTransfer {
             case .alreadyPresent:
                 return String(format: "%@ (already here)".localized, entry.name)
             case .emptyScript:
-                return String(format: "%@ (the script is empty)".localized, entry.name)
+                return String(format: "%@ (the service is empty)".localized, entry.name)
             case .serviceMissing(let service):
                 return String(
                     format: "%@ (its service \"%@\" is not included)".localized,
@@ -568,12 +577,12 @@ enum ServiceTransfer {
         switch scope {
         case .instances:
             return forExport
-                ? "Include the scripts they use".localized
-                : "Also import the scripts".localized
+                ? "Include the services they use".localized
+                : "Also import the services".localized
         case .services:
             return forExport
-                ? "Include the services that use them".localized
-                : "Also import the services that use them".localized
+                ? "Include the instances that use them".localized
+                : "Also import the instances that use them".localized
         }
     }
 
