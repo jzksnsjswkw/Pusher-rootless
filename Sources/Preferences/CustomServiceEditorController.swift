@@ -116,6 +116,7 @@ public final class CustomServiceEditorController: ListController {
                     .fromOpaque(observer).takeUnretainedValue()
                 DispatchQueue.main.async {
                     controller.enforceScriptRuntimeDependency()
+                    controller.rebuildIfImageSizingChanged()
                 }
             },
             Pusher.prefsNotification as CFString,
@@ -137,6 +138,26 @@ public final class CustomServiceEditorController: ListController {
     /// thread affinity), so sharing the context forces its own thread and the
     /// thread switch is disabled with a footer saying why. Sharing a thread
     /// alone is fine: each run still gets a fresh context.
+    /// Whether the page currently shows the image-sizing rows. See
+    /// ``ServiceController/rebuildIfImageSizingChanged()`` for why: the rows are
+    /// how the image is scaled, so with it switched off they describe nothing,
+    /// and the switch's own Darwin notification is what rebuilds the page.
+    private var showsImageSizing: Bool?
+
+    private func rebuildIfImageSizingChanged() {
+        let shouldShow = ServiceSpecifierBuilders.includeImage(
+            stored: CustomServiceStore.rawEntry(id: definitionID),
+            fallback: Prefs(ServiceRegistry.service(named: definitionID).newInstancePrefs())
+        )
+        guard let previous = showsImageSizing else {
+            showsImageSizing = shouldShow
+            return
+        }
+        guard previous != shouldShow else { return }
+        showsImageSizing = shouldShow
+        installSpecifiers(buildSpecifiers())
+    }
+
     private func enforceScriptRuntimeDependency() {
         guard hasInstalledSpecifiers,
               let threadSpecifier = specifier(forID: Self.shareThreadIdentifier)
@@ -308,7 +329,9 @@ public final class CustomServiceEditorController: ListController {
     func buildSpecifiers() -> NSMutableArray {
         var all: [PSSpecifier] = []
 
-        // ── The identity ────────────────────────────────────────────────────
+        // ── The identity: what the type is called, and its logo ─────────────
+        // One group, because they answer one question — "which type is this?" —
+        // and a reader should not have to look in two places for it.
         let identityGroup = PSSpecifier.groupSpecifier(withName: "Service".localized)
         if let identityGroup { all.append(identityGroup) }
 
@@ -320,6 +343,12 @@ public final class CustomServiceEditorController: ListController {
         name?.identifier = Self.nameRowIdentifier
         name?.setProperty(true, forKey: "enabled")
         if let name { all.append(name) }
+
+        // The logo, directly under the name and in the same group: together they
+        // answer "which type is this?".
+        if let logoRow = ServiceSpecifierBuilders.definitionIconRow(definitionID: definitionID) {
+            all.append(logoRow)
+        }
 
         // ── The script ──────────────────────────────────────────────────────
         // The group head, the script row, then the guide: the guide sits under

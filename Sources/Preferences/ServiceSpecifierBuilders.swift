@@ -103,7 +103,10 @@ public final class ServiceSpecifierBuilders: NSObject {
             // The cells edit the definition, but the descriptor name they are
             // stamped with must be the definition's so the storage router and
             // the title lookups resolve it.
-            routingName: definitionID
+            routingName: definitionID,
+            // The definition is what the sizing rows are read from: its own
+            // object is the store, since a new instance inherits from it.
+            storedImage: CustomServiceStore.rawEntry(id: definitionID)
         )
         for specifier in built {
             specifier.setProperty(definitionID,
@@ -164,6 +167,19 @@ public final class ServiceSpecifierBuilders: NSObject {
 
     // MARK: - The service's own icon
 
+    /// Whether a service's image is switched on, read from the same place the
+    /// switch reads: the per-app override, then the instance, then the type's own
+    /// default. A row that only makes sense with the image on is shown from this,
+    /// so it must not answer differently from the switch beside it.
+    static func includeImage(stored: Prefs, fallback: Prefs?) -> Bool {
+        for source in [stored, fallback ?? Prefs()] {
+            if let value = source[PrefKey.includeImage] {
+                return Prefs([PrefKey.includeImage: value]).bool(PrefKey.includeImage)
+            }
+        }
+        return true
+    }
+
     /// The cell that opens the icon picker.
     ///
     /// Offered by every service whose payload carries an icon, and never when it
@@ -172,17 +188,24 @@ public final class ServiceSpecifierBuilders: NSObject {
     ///
     /// The row shows the current choice as its icon, so the list reads the same
     /// way the notification will.
-    private static func iconRow(
-        service: String, appID: String?, defaults: ServiceConfig?
-    ) -> [PSSpecifier] {
+    /// The logo row, for a service *instance*.
+    ///
+    /// Built by the page rather than by `payloadOptions`, because a logo
+    /// identifies the service: it belongs beside the name it labels, not among
+    /// the payload options. The row shows the current logo as its icon, so the
+    /// page reads the way the list row does.
+    static func iconRow(
+        service: String, instanceID: String, appID: String? = nil
+    ) -> PSSpecifier? {
         let descriptor = ServiceRegistry.service(named: service)
-        guard descriptor.supportsIcon else { return [] }
+        guard descriptor.supportsIcon else { return nil }
 
         guard let specifier = PSSpecifier.preferenceSpecifierNamed(
             "Icon".localized, target: nil, set: nil, get: nil,
             detail: ServiceIconController.self, cell: .linkCell, edit: nil
-        ) else { return [] }
+        ) else { return nil }
         specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.serviceType)
+        specifier.setProperty(instanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
         specifier.setProperty(appID != nil, forKey: SpecifierRouting.PropertyKey.isCustomApp)
         // Marks the row for the pages that intercept the tap: the picker needs to
         // know *which* store to write to, and a detail controller is built
@@ -191,7 +214,31 @@ public final class ServiceSpecifierBuilders: NSObject {
         if let appID {
             specifier.setProperty(appID, forKey: "customAppIDKey")
         }
-        return [specifier]
+        if let logo = appID == nil
+            ? ServiceIcon.logo(forInstanceID: instanceID)
+            : ServiceIcon.image(from: PrefsStore.customAppPrefs(service: instanceID, appID: appID!)) {
+            specifier.setProperty(logo, forKey: "iconImage")
+        }
+        return specifier
+    }
+
+    /// The logo row, for a service *definition*.
+    ///
+    /// A definition is not an instance: its logo is stored on the definitions
+    /// array, which the storage router reaches through `isDefinition`.
+    static func definitionIconRow(definitionID: String) -> PSSpecifier? {
+        guard let specifier = PSSpecifier.preferenceSpecifierNamed(
+            "Icon".localized, target: nil, set: nil, get: nil,
+            detail: ServiceIconController.self, cell: .linkCell, edit: nil
+        ) else { return nil }
+        specifier.setProperty(definitionID, forKey: SpecifierRouting.PropertyKey.instanceID)
+        specifier.setProperty(definitionID, forKey: SpecifierRouting.PropertyKey.serviceType)
+        specifier.setProperty(true, forKey: SpecifierRouting.PropertyKey.isIconRow)
+        specifier.setProperty(true, forKey: SpecifierRouting.PropertyKey.isDefinition)
+        if let logo = ServiceIcon.logo(forDefinitionID: definitionID) {
+            specifier.setProperty(logo, forKey: "iconImage")
+        }
+        return specifier
     }
 
     // MARK: - Payload options
@@ -206,7 +253,8 @@ public final class ServiceSpecifierBuilders: NSObject {
         service: String,
         appID: String?,
         defaults: ServiceConfig?,
-        routingName: String? = nil
+        routingName: String? = nil,
+        storedImage: Prefs? = nil
     ) -> [PSSpecifier] {
         let name = routingName ?? service
         let descriptor = ServiceRegistry.service(
@@ -221,24 +269,32 @@ public final class ServiceSpecifierBuilders: NSObject {
         let iconDefault = defaults?.raw.bool(PrefKey.includeIcon) ?? true
         let imageDefault = defaults?.raw.bool(PrefKey.includeImage) ?? true
 
-        // The icon itself comes first: it is what the icon switches below are
-        // about, and a row that opens a picker reads better above the switch
-        // that includes its result.
-        specifiers.append(contentsOf: iconRow(
-            service: routingName == nil ? service : JavaScriptService.serviceName,
-            appID: appID, defaults: defaults
-        ))
-
+        // The icon row is deliberately *not* built here: a logo identifies the
+        // service, so it belongs beside its name rather than among the payload
+        // options. The pages place it there (see the identity group each builds).
         if descriptor.supportsIcon {
             specifiers.append(toggle("Include Icon", service: name, appID: appID,
                                      key: PrefKey.includeIcon, defaultValue: iconDefault))
         }
         if descriptor.supportsImage {
+            // The sizing rows below belong to this switch: they are how the
+            // picture it includes is scaled, so with the image off they describe
+            // nothing and are not shown. The switch carries the group it should
+            // redraw, and the window reloads it — a preference change posts a
+            // Darwin notification, and that single reload is what keeps the rows
+            // in step with the switch.
             specifiers.append(toggle("Include Image", service: name, appID: appID,
                                      key: PrefKey.includeImage, defaultValue: imageDefault))
         }
 
-        if appID == nil, descriptor.supportsImage {
+        // The sizing rows follow the switch beside them: they are how the picture
+        // is scaled, so with the image off they describe nothing. Read from the
+        // stored values the switch itself writes, so the two cannot disagree.
+        let imageState = storedImage ?? appID.map {
+            PrefsStore.customAppPrefs(service: defaults?.name ?? "", appID: $0)
+        } ?? (defaults.map { PrefsStore.instance($0.name) } ?? Prefs())
+        if descriptor.supportsImage,
+           includeImage(stored: imageState, fallback: defaults?.raw) {
             specifiers.append(contentsOf: [
                 decimalField("Maximum Image Width (pixels)", service: name,
                              key: PrefKey.imageMaxWidth, defaultValue: Pusher.defaultMaxWidth),

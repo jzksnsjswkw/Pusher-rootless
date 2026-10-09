@@ -91,6 +91,8 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // cells were built; coming back from the app list with a changed
         // selection would otherwise keep showing the old number.
         refreshTitleCounts()
+
+        rebuildIfImageSizingChanged()
     }
 
     /// Recomputes the "(N total)" suffixes on the installed cells.
@@ -111,6 +113,33 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             // The title change is only visible after the row is redrawn.
             reloadSpecifier(specifier, animated: false)
         }
+    }
+
+    // MARK: - Rows that follow the image switch
+
+    /// Whether the page currently shows the image-sizing rows.
+    ///
+    /// Remembered so a rebuild happens only when the answer changes: the rows
+    /// are how the picture is scaled, so with the image switched off they
+    /// describe nothing and are not built at all. Rebuilding is what removes
+    /// them, and a switch tap posts a Darwin notification, so the change lands
+    /// as a rebuild through the `specifiers` getter.
+    private var showsImageSizing: Bool?
+
+    /// Rebuilds the page when "Include Image" has been switched, so the sizing
+    /// rows appear and disappear with it.
+    private func rebuildIfImageSizingChanged() {
+        let shouldShow = ServiceSpecifierBuilders.includeImage(
+            stored: PrefsStore.instance(serviceInstanceID),
+            fallback: Prefs(ServiceRegistry.service(named: serviceType).newInstancePrefs())
+        )
+        guard let previous = showsImageSizing else {
+            showsImageSizing = shouldShow
+            return
+        }
+        guard previous != shouldShow else { return }
+        showsImageSizing = shouldShow
+        installSpecifiers(buildSpecifiers())
     }
 
     // MARK: - Specifiers
@@ -245,6 +274,21 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         }
         SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .instance(id: serviceInstanceID))
 
+        // ── The logo, in the page's own identity group ───────────────────────
+        // Not among the payload options: a logo identifies the service, so it
+        // belongs beside the name it labels. For a service with a plist that is
+        // the plist's first group (the one holding Name and the type's fields);
+        // a script type's page is built in code, so it opens with a group of its
+        // own to hold it.
+        if let logoRow = ServiceSpecifierBuilders.iconRow(
+            service: serviceType, instanceID: serviceInstanceID
+        ) {
+            if let firstGroup = all.firstIndex(where: { $0.cellType == .groupCell }) {
+                all.insert(logoRow, at: firstGroup + 1)
+            } else if let group = PSSpecifier.groupSpecifier(withName: nil) {
+                all.insert(contentsOf: [group, logoRow], at: 0)
+            }
+        }
 
         // Shared cells (device/sound pickers, the payload options) come from the
         // type's own builder, looked up by name so a new service needs no change
