@@ -132,6 +132,12 @@ public final class PreferencesStorage: NSObject {
             appPrefs.removeValue(forKey: key)
         }
         PrefsStore.setCustomAppPrefs(appPrefs, service: id, appID: appID)
+
+        // An override page carries the same cells as the service page, so it has
+        // the same switch and the same rows following it — and this path returns
+        // before the instance write above ever runs, so without this the switch
+        // would do nothing here.
+        notifyChangeObserver(of: specifier, key: key, value: value)
     }
 
     private static func customAppValue(specifier: PSSpecifier, id: String) -> Any? {
