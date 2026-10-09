@@ -100,12 +100,6 @@ public final class CustomServiceEditorController: ListController {
         navigationItem.titleView = stack
     }
 
-    @objc private func showScriptingGuide() {
-        ScriptingGuide.present(
-            from: self, declaredFields: ConfigFields.declared(byDefinition: definitionID)
-        )
-    }
-
     /// Observes writes to the definition's defaults, so the thread switch can be
     /// locked while the context switch says "share".
     ///
@@ -402,17 +396,6 @@ public final class CustomServiceEditorController: ListController {
             all.append(configRow)
         }
 
-        // The guide, last in the group: a footer is not obviously tappable, and
-        // the entry point is what makes the AI workflow discoverable.
-        if let guideRow = PSSpecifier.preferenceSpecifierNamed(
-            "How to write a script".localized, target: self,
-            set: nil, get: nil, detail: nil, cell: .buttonCell, edit: nil
-        ) {
-            guideRow.buttonAction = #selector(showScriptingGuide)
-            guideRow.setProperty("DefaultService", forKey: "icon")
-            all.append(guideRow)
-        }
-
         scriptGroup?.setProperty(
             ("The script runs for every notification. Call push(req) to send one, "
                 + "call it more than once to send several, or not at all to skip "
@@ -608,10 +591,17 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
     public override func viewDidLoad() {
         super.viewDidLoad()
         navigationItem.title = "Script".localized
+        // The guide sits here rather than as a row on the page behind: the API is
+        // a thing a user consults *while* writing, so leaving the editor to read
+        // it would be the wrong shape — the same placement the hook editor uses.
         navigationItem.rightBarButtonItems = [
             UIBarButtonItem(
                 title: "Run".localized, style: .plain,
                 target: self, action: #selector(runScript)
+            ),
+            UIBarButtonItem(
+                title: "Guide".localized, style: .plain,
+                target: self, action: #selector(showScriptingGuide)
             ),
             UIBarButtonItem(
                 title: "Examples".localized, style: .plain,
@@ -1111,6 +1101,14 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         save()
+    }
+
+    /// The scripting guide, presented over the editor.
+    @objc private func showScriptingGuide() {
+        view.endEditing(true)
+        ScriptingGuide.present(
+            from: self, declaredFields: ConfigFields.declared(byDefinition: definitionID)
+        )
     }
 
     /// Writes the script back onto its definition, which is what makes an edit
