@@ -107,12 +107,18 @@ public final class CustomizeAppsController: PlainViewController, UITableViewData
     /// Seeds a new override from the service's current values.
     ///
     /// Only the fields the service actually reads are seeded, so an override
-    /// does not pin values the service ignores.
+    /// does not pin values the service ignores. Which fields those are comes
+    /// from the descriptor — its declared defaults and capabilities — rather
+    /// than from a list kept here, so an option that a type cannot carry is not
+    /// seeded and does not appear on the override page either.
     private func makeDefaultOverride() -> [String: Any] {
         var override: [String: Any] = [PrefKey.enabled: true]
-        // The descriptor owns the template, so a new override starts from the
-        // same defaults as the service it belongs to.
-        for (key, value) in ServiceRegistry.service(named: serviceType).newOverridePrefs() {
+        let descriptor = ServiceRegistry.service(named: serviceType)
+
+        // The per-app settings every service's override owns: the app list's
+        // siblings. These come from the instance's own values, so an override
+        // starts out behaving exactly like the service.
+        for (key, value) in descriptor.newOverridePrefs() {
             override[key] = value
         }
 
@@ -122,27 +128,32 @@ public final class CustomizeAppsController: PlainViewController, UITableViewData
             override[PrefKey.sounds] = serviceDefaults.array(PrefKey.sounds)
         case PushbulletService.serviceName:
             override[PrefKey.devices] = serviceDefaults.array(PrefKey.devices)
-        case IFTTTService.serviceName:
-            override[PrefKey.eventName] = serviceDefaults.string(PrefKey.eventName, default: "")
-            override[PrefKey.includeIcon] = serviceDefaults.bool(PrefKey.includeIcon)
-            override[PrefKey.curateData] = serviceDefaults.bool(PrefKey.curateData, default: true)
-        case PusherReceiverService.serviceName:
-            override[PrefKey.includeIcon] = serviceDefaults.bool(PrefKey.includeIcon, default: true)
-            override[PrefKey.includeImage] = serviceDefaults.bool(PrefKey.includeImage, default: true)
-            override[PrefKey.imageMaxWidth] = serviceDefaults[PrefKey.imageMaxWidth] ?? Pusher.defaultMaxWidth
-            override[PrefKey.imageMaxHeight] = serviceDefaults[PrefKey.imageMaxHeight] ?? Pusher.defaultMaxHeight
-            override[PrefKey.imageShrinkFactor] = serviceDefaults[PrefKey.imageShrinkFactor]
-                ?? Pusher.defaultShrinkFactor
         case WechatService.serviceName:
             override[PrefKey.touser] = serviceDefaults.string(PrefKey.touser, default: "")
+        case IFTTTService.serviceName:
+            override[PrefKey.eventName] = serviceDefaults.string(PrefKey.eventName, default: "")
         default:
-            guard !ServiceRegistry.isBuiltIn(serviceType) else { break }
+            break
+        }
+
+        // The payload options the *type* supports, seeded from this instance's
+        // own values. Ask the descriptor rather than assume: a service with no
+        // image field must not have one pinned here, or the override would carry
+        // a value nothing reads and the page would show a cell for it.
+        if descriptor.supportsIcon {
             override[PrefKey.includeIcon] = serviceDefaults.bool(PrefKey.includeIcon)
+        }
+        if descriptor.supportsImage {
             override[PrefKey.includeImage] = serviceDefaults.bool(PrefKey.includeImage)
-            override[PrefKey.imageMaxWidth] = serviceDefaults[PrefKey.imageMaxWidth] ?? Pusher.defaultMaxWidth
-            override[PrefKey.imageMaxHeight] = serviceDefaults[PrefKey.imageMaxHeight] ?? Pusher.defaultMaxHeight
-            override[PrefKey.imageShrinkFactor] = serviceDefaults[PrefKey.imageShrinkFactor]
-                ?? Pusher.defaultShrinkFactor
+            override[PrefKey.imageMaxWidth]
+                = serviceDefaults[PrefKey.imageMaxWidth] ?? Pusher.defaultMaxWidth
+            override[PrefKey.imageMaxHeight]
+                = serviceDefaults[PrefKey.imageMaxHeight] ?? Pusher.defaultMaxHeight
+            override[PrefKey.imageShrinkFactor]
+                = serviceDefaults[PrefKey.imageShrinkFactor] ?? Pusher.defaultShrinkFactor
+        }
+        // A webhook's own request controls, which its type carries.
+        if serviceType == CustomService.serviceName {
             override[PrefKey.curateData] = serviceDefaults.bool(PrefKey.curateData, default: true)
         }
         return override

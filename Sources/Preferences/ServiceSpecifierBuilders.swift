@@ -90,7 +90,32 @@ public final class ServiceSpecifierBuilders: NSObject {
             raw: Prefs(ServiceRegistry.service(named: service).defaultPrefs())
         )
         guard let built = builders[service]?(service, appID, defaults) else { return [] }
+        return route(built, service: service, instanceID: instanceID, appID: appID)
+    }
 
+    /// The payload options for an instance whose type the caller names.
+    ///
+    /// Used by a script instance, and distinct from naming the pseudo-service:
+    /// the switches offered must be the ones *that definition* declared, and a
+    /// definition is a type of its own — the script type's own capabilities
+    /// would offer an icon option to a script that has none.
+    func payloadOptions(
+        forType type: String, instanceID: String, appID: String?
+    ) -> [PSSpecifier] {
+        let descriptor = ServiceRegistry.service(named: type)
+        let defaults = ServiceConfig(
+            name: instanceID, type: type,
+            raw: Prefs(descriptor.newInstancePrefs())
+        )
+        let built = Self.payloadOptions(service: type, appID: appID, defaults: defaults)
+        return route(built, service: type, instanceID: instanceID, appID: appID)
+    }
+
+    /// Gives generated cells the instance they edit and the routing that stores
+    /// their value.
+    private func route(
+        _ built: [PSSpecifier], service: String, instanceID: String, appID: String?
+    ) -> [PSSpecifier] {
         for specifier in built {
             specifier.setProperty(instanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
             specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.serviceType)

@@ -116,7 +116,10 @@ public enum ServiceInstanceStore {
             type: type,
             name: name,
             isEnabled: true,
-            config: Prefs(descriptor.defaultPrefs())
+            // `newInstancePrefs`, not `defaultPrefs`: a definition-backed type
+            // starts from what the definition page declares, so the values a
+            // user set there are what a new instance actually carries.
+            config: Prefs(descriptor.newInstancePrefs())
         )
         var stored = rawInstances()
         stored.append(encoded(instance))

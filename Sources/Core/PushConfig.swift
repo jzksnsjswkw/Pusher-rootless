@@ -211,15 +211,11 @@ public enum ConfigLoader {
         for (key, value) in instance.config.raw {
             raw[key] = value
         }
-        // A script-defined instance also inherits its type's payload options,
-        // which live on the definition page. These come between the static
-        // defaults and the stored values, so the definition is the fallback and
-        // the instance the override.
-        if let definition = CustomServiceStore.definition(id: instance.type) {
-            for (key, value) in CustomServiceStore.definitionPrefs(definition) {
-                if raw[key] == nil { raw[key] = value }
-            }
-        }
+        // A definition-backed instance already inherits its definition's
+        // payload options, because the descriptor's `newInstancePrefs` includes
+        // them — see ``ServiceDescriptor/init(definition:)``. Nothing extra is
+        // layered here: doing it in one place is what keeps the definition from
+        // silently losing to the script type's own static defaults.
 
         let stored = instance.config
 

@@ -242,12 +242,12 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             all.append(contentsOf: appFilterSpecifiers())
 
             // A script service's page is built without a plist, so its payload
-            // options are asked for by name — the instance's own copy, which the
-            // definition seeded and which the user may change here (one script
-            // can serve two destinations that want different payloads).
-            all.append(contentsOf: ServiceSpecifierBuilders.shared.builders(
-                for: ServiceSpecifierBuilders.payloadOptionsKey,
-                instanceID: serviceInstanceID, appID: nil
+            // options are asked for by the type's own name: the switches offered
+            // are the ones *this definition* declared, which is what makes the
+            // definition's choices meaningful rather than a default a page can
+            // quietly contradict.
+            all.append(contentsOf: ServiceSpecifierBuilders.shared.payloadOptions(
+                forType: serviceType, instanceID: serviceInstanceID, appID: nil
             ))
         }
 

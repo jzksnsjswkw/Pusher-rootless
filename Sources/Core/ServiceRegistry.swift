@@ -31,14 +31,29 @@ public struct ServiceDescriptor {
         _ completion: @escaping (PushRequest?) -> Void
     ) -> Void
     let defaultPrefs: () -> [String: Any]
+
+    /// The settings a new instance of this type starts with.
+    ///
+    /// Normally ``defaultPrefs``. A definition-backed descriptor overrides it,
+    /// The settings a new instance of this type starts with.
+    ///
+    /// Normally ``defaultPrefs``. A definition-backed descriptor replaces it,
+    /// because the definition page's payload options are what a new instance must
+    /// inherit: the script type declares static defaults for the same keys, so
+    /// without this the definition's controls would store values that a new
+    /// instance never picks up — controls that look live and change nothing.
+    ///
+    /// A stored closure rather than a method: ``defaultPrefs`` is itself stored,
+    /// and only a stored property can be replaced per descriptor.
+    var newInstancePrefs: () -> [String: Any]
     let defaultCustomAppPrefs: () -> [String: Any]
     /// Whether this service's payload can carry an icon/image at all.
     ///
     /// Separate from the `shouldInclude…` settings below, which are only asked
     /// when the matching capability is true. The pages read these to decide
     /// whether to offer the switches at all.
-    let supportsIcon: Bool
-    let supportsImage: Bool
+    var supportsIcon: Bool
+    var supportsImage: Bool
     let shouldIncludeIcon: (ServiceConfig) -> Bool
     let shouldIncludeImage: (ServiceConfig) -> Bool
     let logImageDataProperties: [String]
@@ -66,6 +81,7 @@ public struct ServiceDescriptor {
             S.request(context: context, config: config, completion: completion)
         }
         defaultPrefs = { S.defaultPrefs() }
+        newInstancePrefs = defaultPrefs
         defaultCustomAppPrefs = { S.defaultCustomAppPrefs() }
         supportsIcon = S.supportsIcon
         supportsImage = S.supportsImage
@@ -88,13 +104,31 @@ public struct ServiceDescriptor {
             // id an instance stores — not to the JavaScript type's own name.
             registryName: definition.id
         )
-        // The descriptor is registered once and never rebuilt, so the flags
-        // borrowed from the script type are simply carried over rather than
-        // re-derived; see the `supportsIcon` assignment above.
-    }
+        // The definition owns the payload options, so an instance of it starts
+        // from what the definition page says rather than from the script type's
+        // own static defaults.
+        newInstancePrefs = { [definition] in
+            var prefs = JavaScriptService.defaultPrefs()
+            for (key, value) in CustomServiceStore.definitionPrefs(definition) {
+                prefs[key] = value
+            }
+            return prefs
+        }
 
-    /// The settings a new instance of this type starts with.
-    public func newInstancePrefs() -> [String: Any] { defaultPrefs() }
+        // A definition *declares* what its script's payload carries, so its own
+        // switches are the capability: a script that was written without an
+        // icon says so by leaving "Include Icon" off, and its instances then
+        // have no icon option to offer. This is what keeps the definition's
+        // switches from being a default that a page can silently contradict.
+        let declared = CustomServiceStore.definitionPrefs(definition)
+        let stored = Prefs(declared)
+        supportsIcon = stored.bool(
+            PrefKey.includeIcon, default: JavaScriptService.supportsIcon
+        )
+        supportsImage = stored.bool(
+            PrefKey.includeImage, default: JavaScriptService.supportsImage
+        )
+    }
 
     /// The settings a new per-app override of this type starts with.
     public func newOverridePrefs() -> [String: Any] { defaultCustomAppPrefs() }
