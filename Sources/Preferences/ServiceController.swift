@@ -43,7 +43,9 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
 
         // Through the setter so the identity check in the getter works.
         self.specifiers = buildSpecifiers()
-        observePreferenceChanges()
+        // Seed what the page was built with, so the first switch toggle has
+        // something to compare against.
+        showsImageSizing = isToggleOn(PrefKey.includeImage)
 
         guard let icon else { return }
         let label = UILabel()
@@ -93,7 +95,10 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // selection would otherwise keep showing the old number.
         refreshTitleCounts()
 
-        rebuildIfImageSizingChanged()
+        // The switch may have been toggled on a page this one pushed, and the
+        // page is rebuilt on every appearance anyway, so the bookkeeping is
+        // re-seeded rather than compared.
+        showsImageSizing = isToggleOn(PrefKey.includeImage)
     }
 
     /// Recomputes the "(N total)" suffixes on the installed cells.
@@ -123,30 +128,12 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     /// Remembered so a rebuild happens only when the answer changes: the rows
     /// are how the picture is scaled, so with the image switched off they
     /// describe nothing and are not built at all.
-    private var showsImageSizing: Bool?
-
-    /// Watches the switch that decides whether the page has sizing rows.
     ///
-    /// The switches write through `PreferencesStorage`, which has no reference
-    /// back to this controller, so the dependency is noticed where the write can
-    /// be seen: `PrefsStore` posts a **Darwin** notification
-    /// (`CFNotificationCenter`, which `NotificationCenter` cannot observe), and
-    /// that is what re-evaluates the page.
-    private func observePreferenceChanges() {
-        CFNotificationCenterAddObserver(
-            CFNotificationCenterGetDarwinNotifyCenter(),
-            Unmanaged.passUnretained(self).toOpaque(),
-            { _, observer, _, _, _ in
-                guard let observer else { return }
-                let controller = Unmanaged<ServiceController>
-                    .fromOpaque(observer).takeUnretainedValue()
-                DispatchQueue.main.async { controller.rebuildIfImageSizingChanged() }
-            },
-            Pusher.prefsNotification as CFString,
-            nil,
-            .coalesce
-        )
-    }
+    /// Seeded when the page loads, not left empty for the first comparison to
+    /// fill in. An unseeded value makes the *first* toggle only record the new
+    /// state and return, so the rows would not move until the page was entered
+    /// again — which is exactly what a "needs a return visit" report means.
+    private var showsImageSizing: Bool?
 
     deinit {
         CFNotificationCenterRemoveEveryObserver(
@@ -160,11 +147,21 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     /// The answer comes from the installed cell, not from storage: the toggle's
     /// own value is written by the framework's action, and reading the cell is
     /// what makes the rebuild follow the tap rather than a file write.
-    private func rebuildIfImageSizingChanged() {
-        guard let isOn = isToggleOn(PrefKey.includeImage) else {
-            // The row is not on this page (the type has no image at all).
-            return
-        }
+    /// Rebuilds the page when "Include Image" has been switched.
+    ///
+    /// Called by the storage layer the moment the value is stored, so the page
+    /// follows the tap rather than a file write; the switch names this
+    /// controller as its change observer when the row is built.
+    ///
+    /// - Parameters:
+    ///   - key: which setting changed.
+    ///   - value: what it changed to, taken from the write itself. Anything but
+    ///     a switch cell's boolean (a cleared field, say) reads as off.
+    @objc func cellDidChange(_ key: String, to value: Any?) {
+        guard key == PrefKey.includeImage else { return }
+        let isOn = (value as? NSNumber)?.boolValue ?? (value as? Bool) ?? false
+        // Seeded when the page loaded, so the first tap compares against what
+        // the page was actually built with.
         guard let previous = showsImageSizing else {
             showsImageSizing = isOn
             return
@@ -343,7 +340,8 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             // definition's choices meaningful rather than a default a page can
             // quietly contradict.
             all.append(contentsOf: ServiceSpecifierBuilders.shared.payloadOptions(
-                forType: serviceType, instanceID: serviceInstanceID, appID: nil
+                forType: serviceType, instanceID: serviceInstanceID, appID: nil,
+                pageObserver: self
             ))
         }
 

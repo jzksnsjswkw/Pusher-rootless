@@ -85,7 +85,8 @@ public final class ServiceSpecifierBuilders: NSObject {
     /// switches look live while the values shown (the type's defaults) never
     /// change.
     func payloadOptions(
-        forDefinition definitionID: String
+        forDefinition definitionID: String,
+        pageObserver: AnyObject? = nil
     ) -> [PSSpecifier] {
         let defaults = ServiceConfig(
             name: definitionID, type: definitionID,
@@ -106,7 +107,8 @@ public final class ServiceSpecifierBuilders: NSObject {
             routingName: definitionID,
             // The definition is what the sizing rows are read from: its own
             // object is the store, since a new instance inherits from it.
-            storedImage: CustomServiceStore.rawEntry(id: definitionID)
+            storedImage: CustomServiceStore.rawEntry(id: definitionID),
+            pageObserver: pageObserver
         )
         for specifier in built {
             specifier.setProperty(definitionID,
@@ -129,7 +131,8 @@ public final class ServiceSpecifierBuilders: NSObject {
     /// definition is a type of its own — the script type's own capabilities
     /// would offer an icon option to a script that has none.
     func payloadOptions(
-        forType type: String, instanceID: String, appID: String?
+        forType type: String, instanceID: String, appID: String?,
+        pageObserver: AnyObject? = nil
     ) -> [PSSpecifier] {
         let descriptor = ServiceRegistry.service(named: type)
         let defaults = ServiceConfig(
@@ -139,7 +142,9 @@ public final class ServiceSpecifierBuilders: NSObject {
         // `descriptor` here is the *definition's* descriptor, so its
         // capabilities are the ones the definition declared: a script written
         // without an icon offers its instances no icon option.
-        let built = Self.payloadOptions(service: type, appID: appID, defaults: defaults)
+        let built = Self.payloadOptions(
+            service: type, appID: appID, defaults: defaults, pageObserver: pageObserver
+        )
         return route(built, service: type, instanceID: instanceID, appID: appID)
     }
 
@@ -254,7 +259,8 @@ public final class ServiceSpecifierBuilders: NSObject {
         appID: String?,
         defaults: ServiceConfig?,
         routingName: String? = nil,
-        storedImage: Prefs? = nil
+        storedImage: Prefs? = nil,
+        pageObserver: AnyObject? = nil
     ) -> [PSSpecifier] {
         let name = routingName ?? service
         let descriptor = ServiceRegistry.service(
@@ -279,12 +285,11 @@ public final class ServiceSpecifierBuilders: NSObject {
         if descriptor.supportsImage {
             // The sizing rows below belong to this switch: they are how the
             // picture it includes is scaled, so with the image off they describe
-            // nothing and are not shown. The switch carries the group it should
-            // redraw, and the window reloads it — a preference change posts a
-            // Darwin notification, and that single reload is what keeps the rows
-            // in step with the switch.
+            // nothing and are not shown. The switch tells the page directly when
+            // it changes, which is what rebuilds the rows in the same visit.
             specifiers.append(toggle("Include Image", service: name, appID: appID,
-                                     key: PrefKey.includeImage, defaultValue: imageDefault))
+                                     key: PrefKey.includeImage, defaultValue: imageDefault,
+                                     changeObserver: pageObserver))
         }
 
         // The sizing rows follow the switch beside them: they are how the picture
@@ -507,7 +512,8 @@ public final class ServiceSpecifierBuilders: NSObject {
         service: String,
         appID: String?,
         key: String,
-        defaultValue: Bool
+        defaultValue: Bool,
+        changeObserver: AnyObject? = nil
     ) -> PSSpecifier {
         let specifier = PSSpecifier.preferenceSpecifierNamed(
             title.localized, target: PreferencesStorage.self,
@@ -518,6 +524,14 @@ public final class ServiceSpecifierBuilders: NSObject {
         configure(specifier, service: service, appID: appID, key: key)
         specifier.setProperty(true, forKey: "enabled")
         specifier.setProperty(defaultValue, forKey: SpecifierRouting.PropertyKey.defaultValue)
+        if let changeObserver {
+            // Non-retaining: the controller owns its cells, so a cell must not
+            // own the controller back.
+            specifier.setProperty(
+                NSValue(nonretainedObject: changeObserver),
+                forKey: SpecifierRouting.PropertyKey.changeObserver
+            )
+        }
         return specifier
     }
 

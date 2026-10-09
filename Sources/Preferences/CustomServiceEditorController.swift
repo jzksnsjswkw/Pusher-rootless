@@ -45,6 +45,8 @@ public final class CustomServiceEditorController: ListController {
         super.viewDidLoad()
         refreshTitle()
         installSpecifiers(buildSpecifiers())
+        // Seed what the page was built with, so the first toggle compares.
+        showsImageSizing = isToggleOn(PrefKey.includeImage)
         observePreferenceChanges()
         // The switches' locked state depends on the stored values, which a
         // previous visit may have left in the forced combination.
@@ -57,9 +59,12 @@ public final class CustomServiceEditorController: ListController {
 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        // The name, script or logo may have changed on the pages this one pushes.
+        // The name, script or logo may have changed on the pages this one pushes,
+        // and the page is rebuilt on every appearance, so the bookkeeping is
+        // re-seeded rather than compared.
         refreshTitle()
         table?.reloadData()
+        showsImageSizing = isToggleOn(PrefKey.includeImage)
     }
 
     /// Presents the scripting guide as a sheet.
@@ -116,7 +121,6 @@ public final class CustomServiceEditorController: ListController {
                     .fromOpaque(observer).takeUnretainedValue()
                 DispatchQueue.main.async {
                     controller.enforceScriptRuntimeDependency()
-                    controller.rebuildIfImageSizingChanged()
                 }
             },
             Pusher.prefsNotification as CFString,
@@ -138,16 +142,18 @@ public final class CustomServiceEditorController: ListController {
     /// thread affinity), so sharing the context forces its own thread and the
     /// thread switch is disabled with a footer saying why. Sharing a thread
     /// alone is fine: each run still gets a fresh context.
-    /// Whether the page currently shows the image-sizing rows. See
-    /// ``ServiceController/rebuildIfImageSizingChanged()`` for why: the rows are
-    /// how the image is scaled, so with it switched off they describe nothing,
-    /// and the switch's own Darwin notification is what rebuilds the page.
+    /// Whether the installed page shows the image-sizing rows.
+    ///
+    /// Seeded when the page is built, so the first switch toggle has something
+    /// to compare against: an unseeded value would swallow that first tap,
+    /// which reads as "the rows only move after a return visit".
     private var showsImageSizing: Bool?
 
-    private func rebuildIfImageSizingChanged() {
-        // From the cell, as on a service page: it carries the value the toggle
-        // just wrote, so the rebuild follows the tap rather than a file write.
-        guard let isOn = isToggleOn(PrefKey.includeImage) else { return }
+    /// Rebuilds the page when "Include Image" has been switched; see
+    /// ``ServiceController/cellDidChange(_:to:)``.
+    @objc func cellDidChange(_ key: String, to value: Any?) {
+        guard key == PrefKey.includeImage else { return }
+        let isOn = (value as? NSNumber)?.boolValue ?? (value as? Bool) ?? false
         guard let previous = showsImageSizing else {
             showsImageSizing = isOn
             return
@@ -396,7 +402,7 @@ public final class CustomServiceEditorController: ListController {
         // The payload options live on the definition, so a new instance inherits
         // them; these cells write to the definition's own object.
         all.append(contentsOf: ServiceSpecifierBuilders.shared.payloadOptions(
-            forDefinition: definitionID
+            forDefinition: definitionID, pageObserver: self
         ))
 
         // ── Advanced: how a run of this type executes ───────────────────────

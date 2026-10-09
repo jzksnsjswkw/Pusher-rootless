@@ -42,13 +42,39 @@ public final class PreferencesStorage: NSObject {
             return
         }
 
+        let stored: Any?
+        if let value, !isDefaultBool(key: key, value: value) {
+            stored = value
+        } else {
+            stored = nil
+        }
         PrefsStore.updateInstance(id) { object in
-            if let value, !isDefaultBool(key: key, value: value) {
-                object[key] = value
+            if let stored {
+                object[key] = stored
             } else {
                 object.removeValue(forKey: key)
             }
         }
+
+        // A cell that changes the page's *structure* says so, and the page is
+        // told here, with **the value just stored** rather than one it looks up
+        // again: this layer is the only place that knows it, and re-deriving it
+        // would mean reading a preference file that may not have caught up, or a
+        // cell the framework may not have updated yet.
+        notifyChangeObserver(of: specifier, key: key, value: stored)
+    }
+
+    /// Tells the controller a cell named, if any, what it just changed to.
+    private static func notifyChangeObserver(
+        of specifier: PSSpecifier, key: String, value: Any?
+    ) {
+        guard let boxed = specifier.property(
+            forKey: SpecifierRouting.PropertyKey.changeObserver
+        ) as? NSValue else { return }
+        let observer = boxed.nonretainedObjectValue as? NSObject
+        let selector = NSSelectorFromString("cellDidChange:to:")
+        guard let observer, observer.responds(to: selector) else { return }
+        _ = observer.perform(selector, with: key, with: value)
     }
 
     @objc(readValueForInstanceSpecifier:)
