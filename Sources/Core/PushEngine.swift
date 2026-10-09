@@ -176,9 +176,15 @@ public final class PushEngine: NSObject {
 
     /// Runs one of an instance's hooks, logging what it decided.
     ///
-    /// - Returns: the outcome, or `nil` when the hook is switched off or empty —
-    ///   which is the case the switch exists for: a disabled or cleared hook
-    ///   must cost nothing at all, so it is not even parsed.
+    /// - Returns: the outcome, or `nil` when the hook is **switched off or
+    ///   empty** — which is the case the switch exists for: a disabled or
+    ///   cleared hook must cost nothing at all, so it is not even parsed.
+    ///
+    ///   `nil` means "no hook ran", *not* "drop the notification". The two are
+    ///   easy to conflate because a hook that runs and calls nothing also drops
+    ///   the notification, but they are opposite decisions: an instance with its
+    ///   hooks switched off must forward exactly as it did before hooks
+    ///   existed.
     private func runHook(
         _ hook: HookConfig,
         phase: BulletinHookRunner.Phase,
@@ -280,30 +286,37 @@ public final class PushEngine: NSObject {
         let service = id
 
         var context = context
-
-        // A test push is explicitly requested by the user, so the per-app
-        // filters (which exist to suppress *unwanted* pushes) do not apply.
         var effectiveConfig = serviceConfig
-        if !context.isTest {
-            // ── The "received" hook ─────────────────────────────────────────
-            // First thing after the notification exists for this instance, so
-            // it sees everything the pipeline would otherwise forward — before
-            // the app list, the notification settings or the device conditions
-            // have had a say.
-            let received = runHook(
-                serviceConfig.receivedHook, phase: .received,
-                service: service, context: context, deviceState: deviceState
-            )
-            guard let received else { return }
+
+        // ── The "received" hook ─────────────────────────────────────────────
+        // First thing after the notification exists for this instance, so it
+        // sees everything the pipeline would otherwise forward — before the app
+        // list, the notification settings or the device conditions have had a
+        // say.
+        //
+        // Runs for a test push as well: the test button is how a user checks
+        // what this instance does with a notification, and a hook is part of
+        // that. Only the *filters* below are skipped for a test, because they
+        // exist to suppress unwanted pushes and this one was asked for.
+        var isForced = false
+        if let received = runHook(
+            serviceConfig.receivedHook, phase: .received,
+            service: service, context: context, deviceState: deviceState
+        ) {
             if received.isKept {
                 apply(received, to: &context, service: service)
+                isForced = received.isForced
             } else {
+                // The hook ran and chose silence: this notification is dropped
+                // for this instance, which is the decision it exists to make.
                 return
             }
+        }
 
+        if !context.isTest {
             // `keep({force: true})`: the hook has decided, so the filters that
             // exist to suppress unwanted pushes do not get to disagree.
-            if !received.isForced {
+            if !isForced {
             if let reason = PushFilter.appListReason(config: serviceConfig, appID: context.appID) {
                 PusherLog.debug("[S:\(service)] Blocked by app list: \(context.appID)")
                 PushLog.add(service: service, context: context, label: reason)
@@ -356,15 +369,15 @@ public final class PushEngine: NSObject {
         // the last place a hook can change what goes out — and, for a hook that
         // reads the message first (asking a model to classify an SMS, say), the
         // place where that reading is worth the wait.
-        let filtered = runHook(
+        if let filtered = runHook(
             serviceConfig.filteredHook, phase: .filtered,
             service: service, context: context, deviceState: deviceState
-        )
-        guard let filtered else { return }
-        if filtered.isKept {
-            apply(filtered, to: &context, service: service)
-        } else {
-            return
+        ) {
+            if filtered.isKept {
+                apply(filtered, to: &context, service: service)
+            } else {
+                return
+            }
         }
 
         // Build and send on a background queue: the filter decision above ran on
