@@ -1,25 +1,25 @@
 import UIKit
 
-/// A service's own logo: the picture that identifies it.
+/// A service's own logo: the picture that identifies it inside Pusher.
 ///
 /// Two services of the same type are otherwise indistinguishable — two rows
 /// reading "Bark" with the same red logo — and a service the user wrote has no
 /// artwork at all. A logo says which destination a row is, and it is the same
-/// picture everywhere the service appears: in the list, on its settings page,
-/// and (where the payload has a field for it) in the notification itself.
+/// picture everywhere the service appears: in the service list, on its settings
+/// page, and in the type list when adding one.
 ///
-/// It also fixes a second problem for notifications: a service often reaches an
-/// *account* rather than an app — a bot, a channel, a webhook — so the sending
-/// app's icon is the wrong picture twice over, being the app that happened to
-/// raise the notification rather than where the notification is going.
+/// It is Pusher's own artwork and has nothing to do with the app that raised the
+/// notification: the icon a notification carries is its sender's business, and
+/// this is not that. Where a payload has an `icon` field, what goes in it is
+/// described under ``image(from:)``.
 ///
 /// ## What is stored
 ///
 /// Always the rasterized, compressed result, as base64 PNG — one value, already
-/// the size it will be sent at, so nothing has to be re-rendered per
+/// the size it will be drawn at, so nothing has to be re-rendered per
 /// notification. The recipe that produced it (which symbol and tint, or that it
 /// came from the photo library) is stored beside it only so the picker can show
-/// what is selected; the base64 is what the payload uses.
+/// what is selected.
 ///
 /// ## Where it is stored
 ///
@@ -166,8 +166,9 @@ public enum ServiceIcon {
         image(from: CustomServiceStore.rawEntry(id: id)).map(conformed)
     }
 
-    /// The icon of one instance or definition, or `nil` when it has none and the
-    /// notification's own app icon should be used.
+    /// The logo of one instance or definition, or `nil` when it has none — in
+    /// which case a payload's `icon` field falls back to the attachment's image
+    /// or is left out, and the display sites fall back to the bundled artwork.
     public static func image(from prefs: Prefs) -> UIImage? {
         guard let base64 = prefs.string(PrefKey.customIcon), !base64.isEmpty else {
             return nil

@@ -323,9 +323,27 @@ public enum ConfigFields {
     /// this instance was given.
     public static func setValue(_ value: Any?, forKey key: String, onInstance id: String) {
         guard !key.isEmpty, !id.isEmpty else { return }
-        let isUnset = (value as? String)?.isEmpty ?? true
-            || (value as? Bool) == false
-            || value == nil
+
+        // Decided by the value's *type*, not by trying each type in turn.
+        //
+        // A switch and a text field both arrive as `Any`, and asking one of them
+        // the other's question gets a wrong answer rather than no answer: a
+        // boolean cast to `String` fails, and if that failure is read as "not a
+        // string, therefore empty" then *every* boolean looks unset — so turning
+        // a switch on stored nothing and it sprang back off. `NSNumber` first,
+        // because that is what a `PSSwitchCell` sends.
+        let isUnset: Bool
+        if let number = value as? NSNumber {
+            // Any number other than zero counts as on, which is how a switch
+            // reads its own stored value.
+            isUnset = number.doubleValue == 0
+        } else if let flag = value as? Bool {
+            isUnset = !flag
+        } else if let text = value as? String {
+            isUnset = text.isEmpty
+        } else {
+            isUnset = value == nil
+        }
 
         PrefsStore.updateInstance(id) { object in
             var values = (object[PrefKey.configValues] as? [String: Any]) ?? [:]

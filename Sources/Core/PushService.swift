@@ -128,13 +128,11 @@ public extension PushService {
         ]
 
         if shouldIncludeIcon(config: config) {
-            // The service's own icon wins over the sending app's.
-            //
-            // A service often reaches an account rather than an app — a bot, a
-            // channel, a webhook — so the app icon is the wrong picture twice
-            // over. When the user has picked one, it is already stored at its
-            // final size, so it travels verbatim; only the app icon has to be
-            // rendered, which is why the provider is consulted second.
+            // A service that the user gave a picture to sends that picture, so a
+            // receiver can tell the destination apart; otherwise the field
+            // carries the notification's own icon, which is what this field has
+            // always held. The user's picture is stored at its final size and
+            // travels verbatim, so only the fallback has to be rendered.
             if let own = ServiceIcon.image(from: config.raw) {
                 data["icon"] = ServiceIcon.storedValue(own)
             } else if let base64 = PushImage.base64(context.iconImage) {

@@ -387,3 +387,6 @@
 "Each one becomes a type you can add on the Instances page." = "每一个都会成为可在「实例」页添加的类型。";
 "Define a service by writing a script, then add it on the Instances page." = "编写脚本定义一个服务，然后在「实例」页添加它。";
 "The script runs for every notification. Call push(req) to send one, call it more than once to send several, or not at all to skip this notification.\nConfiguration declares the settings the script reads as pref.<name>; each service fills them in." = "脚本会针对每条通知运行。调用 push(req) 发送一条；调用多次可发送多条，不调用则跳过这条通知。\n「配置」声明脚本以 pref.<名称> 读取的设置项，由每个实例填写。";
+"This is Pusher's picture for the service: it identifies it in the service list, on its settings page and in the add list. It is not the sending app's icon." = "这是 Pusher 为服务设置的图标：用于在服务列表、设置页和添加列表中区分该服务。它与发送方应用的图标无关。";
+"Pusher's own artwork. Where a payload has an icon field, this is what it carries." = "Pusher 自己的图标。若推送载荷中有图标字段，携带的就是它。";
+"No Icon" = "不使用图标";

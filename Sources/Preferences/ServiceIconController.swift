@@ -129,10 +129,10 @@ public final class ServiceIconController: PSViewController {
 
     /// Writes the draft out.
     ///
-    /// All five keys together: a size change has to re-render the stored value,
-    /// so the recipe and the picture are always written as a set. Choosing "no
-    /// icon" removes all of them, which is what makes the notification fall back
-    /// to the sending app's icon.
+    /// All five keys together: the recipe and the picture are written as a set,
+    /// since the one cannot be read without the other. Choosing "no icon"
+    /// removes all of them, which is what restores the bundled artwork on the
+    /// pages and leaves the payload's `icon` to the notification's own image.
     private func persist(_ object: inout [String: Any]) {
         object.removeValue(forKey: PrefKey.customIcon)
         object.removeValue(forKey: PrefKey.customIconSymbol)
@@ -258,7 +258,7 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
         case .preview: return 1
         case .gallery: return 1
         case .tints: return showsTints ? 1 : 0
-        case .photo: return 2   // choose, and "use the app icon"
+        case .photo: return 2   // choose, and remove
         default: return 0
         }
     }
@@ -278,11 +278,12 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
         -> String? {
         switch Section(rawValue: section) {
         case .preview:
-            return ("This is the picture the service list, its settings page and "
-                + "the notification use.").localized
+            return ("This is Pusher's picture for the service: it identifies it in "
+                + "the service list, on its settings page and in the add list. It "
+                + "is not the sending app's icon.").localized
         case .gallery:
-            return ("Your own icon replaces the sending app's icon in the "
-                + "notification.").localized
+            return ("Pusher's own artwork. Where a payload has an icon field, this "
+                + "is what it carries.").localized
         default:
             return nil
         }
@@ -335,8 +336,8 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
                 configuration.image = UIImage(systemName: "photo.on.rectangle")
                 cell.accessoryType = .none
             } else {
-                configuration.text = "Use the App's Icon".localized
-                configuration.image = UIImage(systemName: "app.dashed")
+                configuration.text = "No Icon".localized
+                configuration.image = UIImage(systemName: "nosign")
                 cell.accessoryType = .none
             }
             cell.contentConfiguration = configuration
