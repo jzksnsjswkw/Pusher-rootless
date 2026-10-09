@@ -528,6 +528,11 @@ public final class ServiceSpecifierBuilders: NSObject {
         appID: String?,
         key: String
     ) {
+        // The cell's identity, which is what `specifier(forID:)` finds it by.
+        // A page reads its own cells back through this — to see what a switch is
+        // set to, to reload one row, to strip a count from a title — so a cell
+        // built without it is invisible to the page that built it.
+        specifier.identifier = key
         specifier.setProperty(appID != nil, forKey: SpecifierRouting.PropertyKey.isCustomApp)
         specifier.setProperty(key, forKey: SpecifierRouting.PropertyKey.key)
         // Per-app cells look the key up through this property as well; both are
