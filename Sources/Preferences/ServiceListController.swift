@@ -382,8 +382,14 @@ extension ServiceListController: UITableViewDataSource, UITableViewDelegate {
         forRowAt indexPath: IndexPath
     ) {
         guard editingStyle == .delete, let instance = instance(at: indexPath) else { return }
+        // `delete` reloads the table itself, so there is no row deletion here.
+        //
+        // Telling the table to delete the row as well is what crashed the edit
+        // mode: by then the table has already been reloaded against the new
+        // array, and `deleteRows` then removes a row the data source no longer
+        // has — an inconsistency UIKit asserts on. The swipe path never had this
+        // because it does not touch the table directly.
         delete(instance)
-        tableView.deleteRows(at: [indexPath], with: .left)
     }
 
     public func tableView(
