@@ -29,23 +29,33 @@ import UIKit
 /// override the icon the script declares.
 public enum ServiceIcon {
 
-    /// The one size an icon is stored at.
+    /// The one size an icon is stored at, in **points**.
     ///
-    /// Not a choice: an icon is drawn at a row's size (29 points) and, in a
-    /// payload, at about 58 — so the source only needs enough pixels for the
-    /// largest of those on the sharpest screen. 96 is that number with a little
-    /// room, and being a single size is what keeps a chosen logo the same object
-    /// as the bundled artwork rather than a differently-sized neighbour. It also
-    /// keeps the weight of a payload field that rides on every notification
-    /// predictable instead of a decision the user has to reason about.
-    public static let pixelSize = 96
+    /// 29 points: exactly what the service list and the page titles draw, and
+    /// what the bundled artwork is (`BuiltInService_*@3x.png` is 87 px at 3×).
+    /// Matching it in points as well as in shape is what makes a chosen logo and
+    /// a bundled one the same object on the page — a differently-sized image
+    /// sits at a different size in the row, because a table cell sizes its
+    /// image view from the image.
+    ///
+    /// The bitmap is therefore rendered at the screen's own scale, giving 87 px
+    /// on a 3× device. That is also ample for the payload's `icon` field, which
+    /// a receiver draws small.
+    public static let pointSize: CGFloat = 29
+
+    /// The pixel width a stored icon has on this device.
+    public static var pixelSize: Int {
+        Int((pointSize * UIScreen.main.scale).rounded())
+    }
 
     /// Kept as a type so call sites read the same as they did when the size was
     /// selectable; there is only one now.
     public enum Size {
         case standard
-        public var rawValue: Int { ServiceIcon.pixelSize }
-        public var label: String { "\(ServiceIcon.pixelSize) × \(ServiceIcon.pixelSize)" }
+        public var pointSize: CGFloat { ServiceIcon.pointSize }
+        public var label: String {
+            "\(Int(ServiceIcon.pointSize)) pt"
+        }
     }
 
     /// The built-in gallery, as SF Symbols.
@@ -205,9 +215,11 @@ public enum ServiceIcon {
         tint: UIColor?,
         size: Size
     ) -> UIImage? {
-        let side = CGFloat(size.rawValue)
+        let side = size.pointSize
         let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1     // the point size *is* the pixel size
+        // The screen's scale, not 1: the image must be 29 *points* at 3× so a
+        // table cell draws it at the size the bundled artwork is drawn.
+        format.scale = UIScreen.main.scale
         format.opaque = tint != nil
 
         let configuration = UIImage.SymbolConfiguration(
@@ -253,9 +265,9 @@ public enum ServiceIcon {
     /// overflow is cropped from the centre, which for a picture chosen as an
     /// identifier (a logo, a face, a mark) is where its subject is.
     public static func normalize(_ image: UIImage, to size: Size) -> UIImage? {
-        let side = CGFloat(size.rawValue)
+        let side = size.pointSize
         let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
+        format.scale = UIScreen.main.scale
         format.opaque = false
 
         let scale = max(side / image.size.width, side / image.size.height)
