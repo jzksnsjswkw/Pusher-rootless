@@ -314,9 +314,14 @@ public enum JavaScriptRunner {
         // The notification, marked non-writable so a script cannot replace it and
         // read stale fields back out of its own copy.
         context.setObject(bullet, forKeyedSubscript: "__bullet" as NSString)
+        // Configurable, because the property is redefined on every run — with a
+        // shared context, a non-configurable definition succeeds once and then
+        // throws for the rest of the context's life. Not writable, which is what
+        // the script needs: it can read `bullet` and cannot replace it with a
+        // copy of its own, so it cannot read stale fields back out.
         _ = context.evaluateScript(
             "Object.defineProperty(globalThis, 'bullet', "
-                + "{ value: __bullet, writable: false, configurable: false });"
+                + "{ value: __bullet, writable: false, configurable: true });"
                 + "delete globalThis.__bullet;"
         )
 
@@ -337,9 +342,16 @@ public enum JavaScriptRunner {
         context.setObject(onFulfilled, forKeyedSubscript: "__scriptFulfilled" as NSString)
         context.setObject(onRejected, forKeyedSubscript: "__scriptRejected" as NSString)
 
+        // The script's own scope is a block, not the global one: with a shared
+        // context, top-level `let`/`const` written straight into the global
+        // scope would be re-declared by the next run and throw from the
+        // temporal dead zone. A block gives each run its own bindings, which is
+        // also the semantics "a run's variables do not leak" promises.
         let wrapped = """
         (async function () {
+        {
         \(script)
+        }
         })().then(globalThis.__scriptFulfilled, globalThis.__scriptRejected);
         """
         _ = context.evaluateScript(wrapped)
@@ -755,9 +767,14 @@ private final class ScriptHost {
         // The host thread picks the work up from here; waiting is what makes the
         // caller's view synchronous, and the timeout is what stops a runaway
         // script from holding the caller forever.
+        //
+        // A *queue*, not a slot. Two notifications arriving at once — which is
+        // ordinary when a page of them lands together — would otherwise have the
+        // second overwrite the first, and the first caller would wait out its
+        // whole timeout on work nobody was going to run.
         box.finished = DispatchSemaphore(value: 0)
         lock.lock()
-        pending = box
+        pending.append(box)
         lock.unlock()
 
         let deadline = options.timeout > 0 ? options.timeout : 30
@@ -780,7 +797,7 @@ private final class ScriptHost {
         var finished = DispatchSemaphore(value: 0)
     }
 
-    private var pending: Box?
+    private var pending: [Box] = []
 
     private func startThreadIfNeeded() {
         lock.lock()
@@ -809,12 +826,15 @@ private final class ScriptHost {
 
     private func drainPending() {
         lock.lock()
-        let box = pending
-        pending = nil
+        let work = pending
+        pending.removeAll()
         lock.unlock()
 
-        guard let box else { return }
-        box.work?()
-        box.finished.signal()
+        // In arrival order: a shared context is sequential by nature, so the
+        // order the runs were requested is the order they should see state.
+        for box in work {
+            box.work?()
+            box.finished.signal()
+        }
     }
 }
