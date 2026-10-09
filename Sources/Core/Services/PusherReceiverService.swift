@@ -8,6 +8,10 @@ import Foundation
 /// name comes from the service configuration.
 public enum PusherReceiverService: PushService {
     public static let serviceName = "Pusher Receiver"
+
+    public static var supportsIcon: Bool { true }
+    public static var supportsImage: Bool { true }
+
     static let urlBase = "https://"
     static let urlTail = ".restdb.io/rest/notifications"
 

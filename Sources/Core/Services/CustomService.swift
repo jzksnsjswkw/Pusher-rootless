@@ -10,6 +10,10 @@ public enum CustomService: PushService {
     /// own user-chosen names; this identifies the *kind*.
     public static let serviceName = "Custom"
 
+    public static var supportsIcon: Bool { true }
+    public static var supportsImage: Bool { true }
+
+
     public static func url(eventName: String, dbName: String, serverURL: String) -> String {
         ""
     }

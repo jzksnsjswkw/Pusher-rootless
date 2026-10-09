@@ -64,6 +64,20 @@ public protocol PushService {
     /// further behaves exactly like the service.
     static func defaultCustomAppPrefs() -> [String: Any]
 
+    /// Whether this service's payload can carry the app icon at all.
+    ///
+    /// A *capability*, not a setting. A destination that has no field for an
+    /// icon (Feishu, Wechat) can never use one, so its pages must not offer the
+    /// switch: an option that changes nothing is worse than no option, because
+    /// the user reads it as a promise. ``shouldIncludeIcon`` is the setting, and
+    /// is only asked when this is true.
+    static var supportsIcon: Bool { get }
+
+    /// Whether this service's payload can carry the attachment image at all.
+    ///
+    /// See ``supportsIcon``.
+    static var supportsImage: Bool { get }
+
     /// Whether the app icon belongs in the shared data dict.
     static func shouldIncludeIcon(config: ServiceConfig) -> Bool
 
@@ -85,6 +99,8 @@ public extension PushService {
     /// A service whose overrides change nothing of their own.
     static func defaultCustomAppPrefs() -> [String: Any] { [:] }
 
+    static var supportsIcon: Bool { false }
+    static var supportsImage: Bool { false }
     static func shouldIncludeIcon(config: ServiceConfig) -> Bool { false }
     static func shouldIncludeImage(config: ServiceConfig) -> Bool { false }
     static var logImageDataProperties: [String] { Pusher.logImageDataProperties }

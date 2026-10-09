@@ -26,6 +26,10 @@ public enum JavaScriptService: PushService {
     /// kind.
     public static let serviceName = "JavaScript"
 
+    public static var supportsIcon: Bool { true }
+    public static var supportsImage: Bool { true }
+
+
     /// No endpoint can be derived, so overrides never differ by URL.
     public static func url(eventName: String, dbName: String, serverURL: String) -> String {
         ""

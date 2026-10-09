@@ -240,6 +240,15 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // the global app list.
         if isScriptType {
             all.append(contentsOf: appFilterSpecifiers())
+
+            // A script service's page is built without a plist, so its payload
+            // options are asked for by name — the instance's own copy, which the
+            // definition seeded and which the user may change here (one script
+            // can serve two destinations that want different payloads).
+            all.append(contentsOf: ServiceSpecifierBuilders.shared.builders(
+                for: ServiceSpecifierBuilders.payloadOptionsKey,
+                instanceID: serviceInstanceID, appID: nil
+            ))
         }
 
         // The instance's own hooks: they apply to this destination only, which
@@ -332,7 +341,11 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
                 toggle.setProperty(serviceInstanceID,
                                    forKey: SpecifierRouting.PropertyKey.instanceID)
                 toggle.setProperty(enabledKey, forKey: SpecifierRouting.PropertyKey.key)
-                toggle.setProperty(true, forKey: SpecifierRouting.PropertyKey.defaultValue)
+                // Off by default. A hook runs JavaScript per notification, so it
+                // is something the user turns on deliberately — an instance that
+                // has never been near the hook section must not be paying for
+                // one.
+                toggle.setProperty(false, forKey: SpecifierRouting.PropertyKey.defaultValue)
                 toggle.setProperty(true, forKey: "enabled")
                 specifiers.append(toggle)
             }

@@ -9,6 +9,10 @@ import Foundation
 /// the whole shared data dict JSON-serialized into value1.
 public enum IFTTTService: PushService {
     public static let serviceName = "IFTTT"
+
+    public static var supportsIcon: Bool { true }
+    public static var supportsImage: Bool { false }
+
     static let urlBase = "https://maker.ifttt.com/trigger/"
 
     /// The URL template, with both variable segments still in place. Used for

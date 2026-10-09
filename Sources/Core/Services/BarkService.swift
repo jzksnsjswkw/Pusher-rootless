@@ -6,6 +6,13 @@ import Foundation
 /// can be overridden per service or per app.
 public enum BarkService: PushService {
     public static let serviceName = "Bark"
+
+    // Bark builds its own body (`title` and `body`), and its API takes image
+    // *URLs* rather than Base64 data, so the shared payload's icon/image fields
+    // have nowhere to go. Bark's own `Image:` field is a separate, free-form URL.
+    public static var supportsIcon: Bool { false }
+    public static var supportsImage: Bool { false }
+
     static let defaultServer = "https://api.day.app"
 
     /// The URL up to and including the trailing slash; `request(context:config:)`

@@ -32,6 +32,13 @@ public struct ServiceDescriptor {
     ) -> Void
     let defaultPrefs: () -> [String: Any]
     let defaultCustomAppPrefs: () -> [String: Any]
+    /// Whether this service's payload can carry an icon/image at all.
+    ///
+    /// Separate from the `shouldInclude…` settings below, which are only asked
+    /// when the matching capability is true. The pages read these to decide
+    /// whether to offer the switches at all.
+    let supportsIcon: Bool
+    let supportsImage: Bool
     let shouldIncludeIcon: (ServiceConfig) -> Bool
     let shouldIncludeImage: (ServiceConfig) -> Bool
     let logImageDataProperties: [String]
@@ -60,6 +67,8 @@ public struct ServiceDescriptor {
         }
         defaultPrefs = { S.defaultPrefs() }
         defaultCustomAppPrefs = { S.defaultCustomAppPrefs() }
+        supportsIcon = S.supportsIcon
+        supportsImage = S.supportsImage
         shouldIncludeIcon = { S.shouldIncludeIcon(config: $0) }
         shouldIncludeImage = { S.shouldIncludeImage(config: $0) }
         logImageDataProperties = S.logImageDataProperties
@@ -79,6 +88,9 @@ public struct ServiceDescriptor {
             // id an instance stores — not to the JavaScript type's own name.
             registryName: definition.id
         )
+        // The descriptor is registered once and never rebuilt, so the flags
+        // borrowed from the script type are simply carried over rather than
+        // re-derived; see the `supportsIcon` assignment above.
     }
 
     /// The settings a new instance of this type starts with.
