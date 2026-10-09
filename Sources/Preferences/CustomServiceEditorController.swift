@@ -336,11 +336,9 @@ public final class CustomServiceEditorController: ListController {
         if let defaultsGroup { all.append(defaultsGroup) }
 
         // The payload options live on the definition, so a new instance inherits
-        // them; they are read from here by ``CustomServiceDefinition``'s
-        // descriptor, not from an instance.
-        all.append(contentsOf: ServiceSpecifierBuilders.shared.builders(
-            for: ServiceSpecifierBuilders.payloadOptionsKey,
-            instanceID: definitionID, appID: nil
+        // them; these cells write to the definition's own object.
+        all.append(contentsOf: ServiceSpecifierBuilders.shared.payloadOptions(
+            forDefinition: definitionID
         ))
 
         // ── Advanced: how a run of this type executes ───────────────────────

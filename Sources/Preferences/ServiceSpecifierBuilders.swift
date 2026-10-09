@@ -38,13 +38,6 @@ public final class ServiceSpecifierBuilders: NSObject {
         builders[service] = builder
     }
 
-    /// The builder key for the payload options a service shares.
-    ///
-    /// A definition page has no service of its own to ask, so it names this
-    /// builder directly; the script type's capabilities stand in for the
-    /// definition's, since a definition is a script.
-    static let payloadOptionsKey = "\u{1}payloadOptions"
-
     /// Registers every service that has extra cells.
     ///
     /// The webhook is registered too: it has no specifier plist of its own
@@ -52,7 +45,6 @@ public final class ServiceSpecifierBuilders: NSObject {
     /// other services'. A service without an entry (Feishu, for example)
     /// contributes nothing.
     private func registerAll() {
-        register(builder: Self.payloadOptions, forService: Self.payloadOptionsKey)
         register(builder: Self.webhook, forService: CustomService.serviceName)
         register(builder: Self.pushover, forService: PushoverService.serviceName)
         register(builder: Self.pushbullet, forService: PushbulletService.serviceName)
@@ -60,15 +52,6 @@ public final class ServiceSpecifierBuilders: NSObject {
         register(builder: Self.wechat, forService: WechatService.serviceName)
         register(builder: Self.bark, forService: BarkService.serviceName)
         register(builder: Self.pusherReceiver, forService: PusherReceiverService.serviceName)
-        // Services with no cells of their own still get the payload options when
-        // they can carry an icon or an image.
-        for name in [FeishuService.serviceName, WechatService.serviceName] {
-            if builders[name] == nil {
-                register(builder: { service, appID, defaults in
-                    Self.payloadOptions(service: service, appID: appID, defaults: defaults)
-                }, forService: name)
-            }
-        }
     }
 
     /// The cells to append to `service`'s page, ready to use.
@@ -93,6 +76,49 @@ public final class ServiceSpecifierBuilders: NSObject {
         return route(built, service: service, instanceID: instanceID, appID: appID)
     }
 
+    /// The payload options for a service *definition*.
+    ///
+    /// A definition's options are stored on the definition, not on an instance —
+    /// they are what a new instance of the type inherits — so the cells are
+    /// routed to the definitions array. Routed as an instance they would read
+    /// and write an instance that does not exist, which is what makes the
+    /// switches look live while the values shown (the type's defaults) never
+    /// change.
+    func payloadOptions(
+        forDefinition definitionID: String
+    ) -> [PSSpecifier] {
+        let defaults = ServiceConfig(
+            name: definitionID, type: definitionID,
+            raw: Prefs(ServiceRegistry.service(named: definitionID).newInstancePrefs())
+        )
+        // Both switches are always offered *here*, using the script type's
+        // capabilities rather than the definition's own declared ones. These two
+        // cells are the declaration: gating them on the value they store would
+        // make turning an option off hide the switch that turns it back on.
+        // The instance page is where a declaration is honored, and that is what
+        // `payloadOptions(forType:)` does.
+        let built = Self.payloadOptions(
+            service: JavaScriptService.serviceName,
+            appID: nil, defaults: defaults,
+            // The cells edit the definition, but the descriptor name they are
+            // stamped with must be the definition's so the storage router and
+            // the title lookups resolve it.
+            routingName: definitionID
+        )
+        for specifier in built {
+            specifier.setProperty(definitionID,
+                                  forKey: SpecifierRouting.PropertyKey.instanceID)
+            specifier.setProperty(definitionID,
+                                  forKey: SpecifierRouting.PropertyKey.serviceType)
+            // Which array the storage router writes to. Without it the write
+            // goes to an instance lookup by this id, finds nothing, and returns
+            // without saving — a switch that never moves.
+            specifier.setProperty(true, forKey: SpecifierRouting.PropertyKey.isDefinition)
+            SpecifierRouting.route(specifier, to: PreferencesStorage.self, scope: .instance(id: definitionID))
+        }
+        return built
+    }
+
     /// The payload options for an instance whose type the caller names.
     ///
     /// Used by a script instance, and distinct from naming the pseudo-service:
@@ -107,6 +133,9 @@ public final class ServiceSpecifierBuilders: NSObject {
             name: instanceID, type: type,
             raw: Prefs(descriptor.newInstancePrefs())
         )
+        // `descriptor` here is the *definition's* descriptor, so its
+        // capabilities are the ones the definition declared: a script written
+        // without an icon offers its instances no icon option.
         let built = Self.payloadOptions(service: type, appID: appID, defaults: defaults)
         return route(built, service: type, instanceID: instanceID, appID: appID)
     }
@@ -142,12 +171,14 @@ public final class ServiceSpecifierBuilders: NSObject {
     /// switch above it would already be absent, so they would be three numbers
     /// with nothing to size.
     private static func payloadOptions(
-        service: String, appID: String?, defaults: ServiceConfig?
+        service: String,
+        appID: String?,
+        defaults: ServiceConfig?,
+        routingName: String? = nil
     ) -> [PSSpecifier] {
-        // The definition page names the pseudo-service, so the capabilities come
-        // from the script type it stands for.
+        let name = routingName ?? service
         let descriptor = ServiceRegistry.service(
-            named: service == Self.payloadOptionsKey ? JavaScriptService.serviceName : service
+            named: routingName == nil ? service : JavaScriptService.serviceName
         )
         var specifiers: [PSSpecifier] = []
 
@@ -159,21 +190,21 @@ public final class ServiceSpecifierBuilders: NSObject {
         let imageDefault = defaults?.raw.bool(PrefKey.includeImage) ?? true
 
         if descriptor.supportsIcon {
-            specifiers.append(toggle("Include Icon", service: service, appID: appID,
+            specifiers.append(toggle("Include Icon", service: name, appID: appID,
                                      key: PrefKey.includeIcon, defaultValue: iconDefault))
         }
         if descriptor.supportsImage {
-            specifiers.append(toggle("Include Image", service: service, appID: appID,
+            specifiers.append(toggle("Include Image", service: name, appID: appID,
                                      key: PrefKey.includeImage, defaultValue: imageDefault))
         }
 
         if appID == nil, descriptor.supportsImage {
             specifiers.append(contentsOf: [
-                decimalField("Maximum Image Width (pixels)", service: service,
+                decimalField("Maximum Image Width (pixels)", service: name,
                              key: PrefKey.imageMaxWidth, defaultValue: Pusher.defaultMaxWidth),
-                decimalField("Maximum Image Height (pixels)", service: service,
+                decimalField("Maximum Image Height (pixels)", service: name,
                              key: PrefKey.imageMaxHeight, defaultValue: Pusher.defaultMaxHeight),
-                decimalField("Image Shrink Factor Upon Retry", service: service,
+                decimalField("Image Shrink Factor Upon Retry", service: name,
                              key: PrefKey.imageShrinkFactor,
                              defaultValue: Pusher.defaultShrinkFactor),
             ])
