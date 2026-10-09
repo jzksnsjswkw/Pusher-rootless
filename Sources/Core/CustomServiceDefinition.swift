@@ -86,16 +86,33 @@ public enum CustomServiceStore {
         }
     }
 
-    /// Writes one definition, adding it when it is new.
+    /// Writes one definition's identity and script, adding it when it is new.
+    ///
+    /// A **merge into** the stored object, not a replacement of it. A definition
+    /// carries far more than the four fields this struct names — its logo, its
+    /// payload options, its run options, the settings it declares — and those
+    /// live on the stored object alone. Replacing it with an encoding of the
+    /// struct would therefore delete everything the struct does not mention, and
+    /// the deletion would be invisible until someone opened the page that reads
+    /// them.
+    ///
+    /// The identity fields are still written unconditionally: this is how a
+    /// rename and a script edit are saved, and both are the struct's own values.
     public static func save(_ definition: CustomServiceDefinition, notify: Bool = true) {
         var stored = rawDefinitions()
-        let encoded = encode(definition)
+        var fields = encode(definition)
+        // A description is only overwritten when the struct carries one, so
+        // saving a script does not clear a description that arrived another way.
+        if definition.descriptionText.isEmpty {
+            fields.removeValue(forKey: PrefKey.serviceDescription)
+        }
+
         if let index = stored.firstIndex(where: {
             Prefs($0).nonEmptyString(PrefKey.instanceID) == definition.id
         }) {
-            stored[index] = encoded
+            for (key, value) in fields { stored[index][key] = value }
         } else {
-            stored.append(encoded)
+            stored.append(fields)
         }
         setDefinitions(stored, notify: notify)
     }
