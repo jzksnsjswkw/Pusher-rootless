@@ -572,9 +572,15 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         outputToSafeArea = outputView.bottomAnchor.constraint(
             equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12
         )
+        // Just under required, exactly like the editor's: the manual keyboard
+        // constant below is a required inequality, and a required equality here
+        // would contradict it whenever the keyboard is up — an unsatisfiable
+        // pair, and the pane would neither shrink nor sit where it should.
         outputToSafeArea.priority = UILayoutPriority(999)
+        // Same as the editor: the keyboard layout guide does not move inside
+        // Preferences' container, so the keyboard's height is tracked manually.
         outputWithinKeyboard = outputView.bottomAnchor.constraint(
-            lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -12
+            lessThanOrEqualTo: view.bottomAnchor, constant: -12
         )
 
         // The editor's bottom is *two* constraints, not one.
@@ -595,9 +601,21 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
             equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12
         )
         editorToSafeArea.priority = UILayoutPriority(999)
+        // Preferences detail controllers are nested inside containers that do
+        // not propagate the keyboard layout guide, so it never moves. The
+        // keyboard's height is tracked manually instead, and this constraint
+        // keeps the editor above it.
         editorWithinKeyboard = textView.bottomAnchor.constraint(
-            lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -12
+            lessThanOrEqualTo: view.bottomAnchor, constant: -12
         )
+        // UITextView's Auto Layout integration expands the view to fit its
+        // text: a tall script makes the view report a tall intrinsic size, and
+        // the solver uses that to stretch the frame — the view grows instead
+        // of scrolling. Lowering the vertical priorities breaks that feedback
+        // loop: the view no longer insists on being its content's height, and
+        // the page's own constraints decide the frame.
+        textView.setContentHuggingPriority(.defaultLow, for: .vertical)
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         editorAboveOutput = textView.bottomAnchor.constraint(
             equalTo: outputView.topAnchor, constant: -12
         )
@@ -616,10 +634,81 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         ])
         editorToSafeArea.isActive = true
         editorWithinKeyboard.isActive = true
+
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(keyboardWillChange(_:)),
+            name: UIResponder.keyboardWillShowNotification, object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(keyboardWillChange(_:)),
+            name: UIResponder.keyboardWillHideNotification, object: nil
+        )
+    }
+
+    /// Keeps the editor and the output pane above the keyboard by shrinking
+    /// their bottom constraints when it appears.
+    ///
+    /// Preferences detail controllers are nested inside containers that do not
+    /// propagate the keyboard layout guide, so it never moves. Tracking the
+    /// keyboard's frame from the notification is the only reliable way.
+    @objc private func keyboardWillChange(_ note: Notification) {
+        guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+              let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval
+        else { return }
+
+        let keyboardHeight: CGFloat
+        if note.name == UIResponder.keyboardWillShowNotification {
+            // The frame is in screen coordinates; the part below the view's
+            // bottom is what the editor must avoid.
+            let bottomInWindow = view.convert(view.bounds, to: nil).maxY
+            keyboardHeight = max(0, bottomInWindow - frame.minY)
+        } else {
+            keyboardHeight = 0
+        }
+
+        editorWithinKeyboard.constant = -12 - keyboardHeight
+        outputWithinKeyboard.constant = -12 - keyboardHeight
+        UIView.animate(withDuration: duration) {
+            self.view.layoutIfNeeded()
+        }
     }
 
     public override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+
+        // The text was assigned in viewDidLoad, when the view's width was still
+        // zero: every line wrapped at infinity, and the content size came out
+        // far too small. Now that the real width is known, the text must be
+        // re-laid out so the scroll view sees the true content height — and the
+        // line numbers, which are visual-line based, must be rebuilt against
+        // the same layout.
+        if textView.bounds.width > 0, textView.bounds.width != lastLayoutWidth {
+            lastLayoutWidth = textView.bounds.width
+            // The text container's width tracks the view's, but only after a
+            // layout pass. Setting text at width zero left it sized for that
+            // width: the container must be given the real width explicitly,
+            // or the text stays wrapped to nothing and the content size is
+            // wrong.
+            let inset = textView.textContainerInset
+            textView.textContainer.size = CGSize(
+                width: textView.bounds.width - inset.left - inset.right,
+                height: .greatestFiniteMagnitude
+            )
+            textView.layoutManager.ensureLayout(for: textView.textContainer)
+            gutterNeedsRebuild = true
+        }
+
+        // The scroll view's content size must be at least the text's laid-out
+        // height plus the container insets, or the bottom is unreachable. A
+        // text view with a fixed frame computes this itself, but only after it
+        // lays out — and with the priorities lowered above, it may not. Setting
+        // it directly removes the dependency.
+        let textHeight = textView.layoutManager.usedRect(for: textView.textContainer).height
+        let inset = textView.textContainerInset
+        let needed = textHeight + inset.top + inset.bottom
+        if textView.contentSize.height < needed {
+            textView.contentSize = CGSize(width: textView.bounds.width, height: needed)
+        }
 
         // The column is placed from the editor's frame, clipped to the part of
         // it the text view is actually showing.
@@ -631,6 +720,10 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         )
         updateGutter()
     }
+
+    /// The width the text was last laid out at, so a width change (rotation,
+    /// or the first real layout after viewDidLoad) triggers a re-wrap.
+    private var lastLayoutWidth: CGFloat = 0
 
     // MARK: - Line numbers
 
@@ -718,7 +811,6 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
 
     /// Scrolling only moves the number column — see ``updateGutter()``.
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
-    
         moveGutter()
     }
 
@@ -1044,6 +1136,8 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         let existing = textView.text ?? ""
         let separator = existing.isEmpty || existing.hasSuffix("\n") ? "" : "\n\n"
         textView.text = existing + separator + code.trimmingCharacters(in: .whitespacesAndNewlines)
+        gutterNeedsRebuild = true
+        updateGutter()
         save()
         textView.becomeFirstResponder()
     }
