@@ -309,11 +309,15 @@ public final class ServiceSpecifierBuilders: NSObject {
         // The sizing rows follow the switch beside them: they are how the picture
         // is scaled, so with the image off they describe nothing. Read from the
         // stored values the switch itself writes, so the two cannot disagree.
+        // On a definition page `storedImage` is the definition's own object and
+        // there is no second store to fall back to: the definition *is* where
+        // the value lives.
         let imageState = storedImage ?? appID.map {
             PrefsStore.customAppPrefs(service: defaults?.name ?? "", appID: $0)
         } ?? (defaults.map { PrefsStore.instance($0.name) } ?? Prefs())
+        let imageFallback = storedImage != nil ? nil : defaults?.raw
         if descriptor.supportsImage,
-           includeImage(stored: imageState, fallback: defaults?.raw) {
+           includeImage(stored: imageState, fallback: imageFallback) {
             specifiers.append(contentsOf: [
                 decimalField("Maximum Image Width (pixels)", service: name,
                              key: PrefKey.imageMaxWidth, defaultValue: Pusher.defaultMaxWidth),

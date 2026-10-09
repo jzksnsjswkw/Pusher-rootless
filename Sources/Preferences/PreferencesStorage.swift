@@ -27,10 +27,10 @@ public final class PreferencesStorage: NSObject {
 
         guard let key = specifier.string(SpecifierRouting.PropertyKey.key) else { return }
 
-        // A definition page's run-options edit the *definition* — the same
-        // object every instance of the type seeds from. Definitions live in
-        // their own array, so an instance lookup here would silently write to
-        // nothing and the switch would never save.
+        // A definition page's run-options and payload options edit the
+        // *definition* — the same object every instance of the type seeds from.
+        // Definitions live in their own array, so an instance lookup here would
+        // silently write to nothing and the switch would never save.
         if specifier.bool(SpecifierRouting.PropertyKey.isDefinition) {
             CustomServiceStore.update(id: id) { object in
                 if let value {
@@ -39,6 +39,10 @@ public final class PreferencesStorage: NSObject {
                     object.removeValue(forKey: key)
                 }
             }
+            // Told like any other write: a definition page carries the image
+            // switch too, and returning here without this is what left its
+            // sizing rows unable to follow it.
+            notifyChangeObserver(of: specifier, key: key, value: value)
             return
         }
 

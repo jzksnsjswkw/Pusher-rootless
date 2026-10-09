@@ -150,10 +150,14 @@ public final class CustomServiceEditorController: ListController {
     private var showsImageSizing: Bool?
 
     /// Records whether the page as built shows the image-sizing rows.
+    ///
+    /// The builder decides from the definition's own stored value, so the
+    /// bookkeeping reads the same store: if the two disagreed, the first toggle
+    /// would either rebuild nothing or rebuild needlessly.
     private func seedImageSizing() {
         showsImageSizing = ServiceSpecifierBuilders.includeImage(
             stored: CustomServiceStore.rawEntry(id: definitionID),
-            fallback: Prefs(ServiceRegistry.service(named: definitionID).newInstancePrefs())
+            fallback: nil
         )
     }
 
