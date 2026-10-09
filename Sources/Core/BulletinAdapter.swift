@@ -197,6 +197,20 @@ public final class BulletinAdapter: NSObject {
     /// check could never report Wi-Fi and "Wi-Fi Only" silently never matched.
     /// The registrar's own reachability answer is what the system itself uses:
     /// reachable over a non-cellular interface *is* being on Wi-Fi.
+    /// The device state for a hook, which may be running off the main thread.
+    ///
+    /// Reading the lock state goes through SpringBoard, so it happens on the
+    /// main thread either way. A hook that contains `fetch` must not run on the
+    /// main thread — that is the whole reason the pipeline hands runs to a
+    /// background queue — so the read is hopped back here rather than the hook
+    /// being pinned to the main thread.
+    public static func deviceStateForHooks() -> DeviceState {
+        if Thread.isMainThread { return currentDeviceState() }
+        var state = DeviceState()
+        DispatchQueue.main.sync { state = currentDeviceState() }
+        return state
+    }
+
     public static func currentDeviceState() -> DeviceState {
         var state = DeviceState()
         if let manager = Runtime.sharedInstance("SBLockScreenManager") {

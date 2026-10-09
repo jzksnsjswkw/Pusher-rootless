@@ -128,8 +128,22 @@ public final class PushEngine: NSObject {
             return
         }
 
-        for instance in config.enabledInstances {
-            send(to: instance, context: context, config: config)
+        // The per-instance work goes to a background queue as a whole, hooks
+        // included.
+        //
+        // A hook may `fetch` — that is what it is for — and `fetch` blocks the
+        // thread it runs on. Running the fan-out here would therefore block
+        // SpringBoard for as long as a hook's network call takes. The device
+        // state is read first, on this thread, so the SpringBoard access stays
+        // where it belongs.
+        let deviceState = BulletinAdapter.currentDeviceState()
+        let instances = config.enabledInstances
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            for instance in instances {
+                self.send(to: instance, context: context, config: config,
+                          deviceState: deviceState)
+            }
         }
     }
 
@@ -169,16 +183,16 @@ public final class PushEngine: NSObject {
         _ hook: HookConfig,
         phase: BulletinHookRunner.Phase,
         service: String,
-        context: BulletinContext
+        context: BulletinContext,
+        deviceState: DeviceState
     ) -> BulletinHookRunner.Outcome? {
         guard hook.shouldRun else { return nil }
 
-        let state = BulletinAdapter.currentDeviceState()
         let outcome = BulletinHookRunner.run(
             script: hook.script,
             phase: phase,
             context: context,
-            deviceState: state,
+            deviceState: deviceState,
             storage: HookStorage.values(forService: service, phase: phase)
         )
 
@@ -230,7 +244,19 @@ public final class PushEngine: NSObject {
     public func send(to id: String, context: BulletinContext, config: ConfigSnapshot? = nil) {
         let snapshot = config ?? currentConfig()
         guard let instance = snapshot.instance(id: id) else { return }
-        send(to: instance, context: context, config: snapshot)
+
+        // A test push arrives from the distributed-messaging callback, already
+        // off the main thread, so the device state is fetched the way a hook
+        // fetches it — hopped to the main thread for the SpringBoard part.
+        if Thread.isMainThread {
+            let state = BulletinAdapter.currentDeviceState()
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                self?.send(to: instance, context: context, config: snapshot, deviceState: state)
+            }
+        } else {
+            let state = BulletinAdapter.deviceStateForHooks()
+            send(to: instance, context: context, config: snapshot, deviceState: state)
+        }
     }
 
     /// Applies this instance's hooks and filters, then builds and sends its
@@ -240,7 +266,12 @@ public final class PushEngine: NSObject {
     /// copy: two instances of one script are independent destinations, so one
     /// instance's hook rewriting a title must not rewrite it for another. The
     /// caller's context is untouched.
-    private func send(to instance: ServiceInstance, context: BulletinContext, config: ConfigSnapshot) {
+    private func send(
+        to instance: ServiceInstance,
+        context: BulletinContext,
+        config: ConfigSnapshot,
+        deviceState: DeviceState
+    ) {
         let id = instance.id
         guard let serviceConfig = config.config(forID: id) else { return }
         let serviceType = instance.descriptor
@@ -261,7 +292,7 @@ public final class PushEngine: NSObject {
             // have had a say.
             let received = runHook(
                 serviceConfig.receivedHook, phase: .received,
-                service: service, context: context
+                service: service, context: context, deviceState: deviceState
             )
             guard let received else { return }
             if received.isKept {
@@ -304,11 +335,10 @@ public final class PushEngine: NSObject {
             PusherLog.debug("[S:\(service),A:\(context.appID)] SNS ok")
 
             PusherLog.debug("[S:\(service),A:\(context.appID)] Doing Device Conditions")
-            let state = BulletinAdapter.currentDeviceState()
             if let reason = PushFilter.deviceReason(
                 whenToPush: serviceConfig.whenToPush,
                 whatNetwork: serviceConfig.whatNetwork,
-                deviceState: state
+                deviceState: deviceState
             ) {
                 PusherLog.debug("[S:\(service),A:\(context.appID)] Device Conditions said no: \(reason)")
                 PushLog.add(service: service, context: context, label: reason)
@@ -328,7 +358,7 @@ public final class PushEngine: NSObject {
         // place where that reading is worth the wait.
         let filtered = runHook(
             serviceConfig.filteredHook, phase: .filtered,
-            service: service, context: context
+            service: service, context: context, deviceState: deviceState
         )
         guard let filtered else { return }
         if filtered.isKept {
@@ -345,32 +375,28 @@ public final class PushEngine: NSObject {
         // Everything used below is thread-safe: the context and config are
         // read-only value types, the log and the retry map lock internally, and
         // URLSession plus the Wechat token cache are safe from any queue.
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { return }
-            serviceType.buildRequestAsync(context, effectiveConfig) { request in
-                guard let request else {
-                    // The service could not build a request (Wechat's token
-                    // fetch, say); log the failure and skip the send.
-                    PusherLog.debug("[S:\(service),A:\(context.appName)] Failed to build request")
-                    if !context.isTest {
-                        PushLog.add(service: service, context: context, label: "Failed to build request")
-                    }
-                    return
-                }
-
-                // The service fully assembled the request; the framework sends
-                // it as-is.
-                RequestSender.shared.send(
-                    request,
-                    logString: "[S:\(service),A:\(context.appName)]",
-                    service: service,
-                    context: context
-                )
-                PusherLog.debug("[S:\(service),T:\(context.isTest),A:\(context.appName)] Pushed")
+        serviceType.buildRequestAsync(context, effectiveConfig) { request in
+            guard let request else {
+                // The service could not build a request (Wechat's token fetch,
+                // say); log the failure and skip the send.
+                PusherLog.debug("[S:\(service),A:\(context.appName)] Failed to build request")
                 if !context.isTest {
-                    PushLog.add(service: service, context: context, label: "Pushed")
+                    PushLog.add(service: service, context: context, label: "Failed to build request")
                 }
-                _ = self
+                return
+            }
+
+            // The service fully assembled the request; the framework sends it
+            // as-is.
+            RequestSender.shared.send(
+                request,
+                logString: "[S:\(service),A:\(context.appName)]",
+                service: service,
+                context: context
+            )
+            PusherLog.debug("[S:\(service),T:\(context.isTest),A:\(context.appName)] Pushed")
+            if !context.isTest {
+                PushLog.add(service: service, context: context, label: "Pushed")
             }
         }
     }

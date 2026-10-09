@@ -215,11 +215,6 @@ public enum JavaScriptRunner {
         storage: [String: String],
         timeout: TimeInterval
     ) -> BulletinHookRunner.Outcome {
-        var outcome = BulletinHookRunner.Outcome(
-            isKept: false, isForced: false, changes: .init(),
-            consoleOutput: [], storage: storage, failure: nil
-        )
-
         // Hooks always get their own context: sharing one would let one hook's
         // `let` collide with another's, and a hook runs at most twice per
         // notification, so there is nothing to save by sharing.

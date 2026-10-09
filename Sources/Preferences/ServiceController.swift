@@ -337,15 +337,22 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
                 specifiers.append(toggle)
             }
 
+            // A `linkCell` with a placeholder `detail:`, which is the pairing
+            // that makes the row usable: the framework greys out a link whose
+            // specifier names no detail class (it reads that as "nothing to
+            // open"). The class is never instantiated — the tap is handled
+            // below, before the framework's own push — it exists only to keep
+            // the row enabled and its chevron showing. The real phase travels on
+            // the specifier, because the framework builds a detail controller
+            // through `init(nibName:bundle:)` and cannot carry one.
             if let link = PSSpecifier.preferenceSpecifierNamed(
                 (isReceived ? "Edit Received Hook" : "Edit Filtered Hook").localized,
-                target: self, set: nil, get: nil, detail: nil, cell: .linkCell, edit: nil
+                target: self, set: nil, get: nil,
+                detail: HookEditorController.self, cell: .linkCell, edit: nil
             ) {
                 link.setProperty("script", forKey: "icon")
                 link.setProperty(serviceInstanceID,
                                  forKey: SpecifierRouting.PropertyKey.instanceID)
-                // Which hook to open. The engine's cell handler reads it, so one
-                // class serves both links.
                 link.setProperty(phase.rawValue, forKey: SpecifierRouting.PropertyKey.hookPhase)
                 specifiers.append(link)
             }
@@ -369,20 +376,21 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
 
     // MARK: - Rows
 
-    /// Opens a hook's editor.
+    /// Opens one hook's editor.
     ///
-    /// Handled here rather than by giving the specifier a `detail:` class: the
-    /// two hook links differ only by a phase, and the framework instantiates a
-    /// detail class through `init(nibName:bundle:)`, which cannot carry one. The
-    /// phase travels on the specifier instead, and this is where it is read.
+    /// Intercepted before `super` so the framework's own detail push — which
+    /// would build a phase-less `HookEditorController` — never happens. The
+    /// phase comes off the specifier, which is the only place it can travel: a
+    /// detail class is instantiated through `init(nibName:bundle:)` with no way
+    /// to pass one.
     public override func tableView(
         _ tableView: UITableView, didSelectRowAt indexPath: IndexPath
     ) {
         if let specifier = specifier(at: indexPath),
-           let phaseName = specifier.property(
+           let name = specifier.property(
                forKey: SpecifierRouting.PropertyKey.hookPhase
            ) as? String,
-           let phase = BulletinHookRunner.Phase(rawValue: phaseName) {
+           let phase = BulletinHookRunner.Phase(rawValue: name) {
             tableView.deselectRow(at: indexPath, animated: true)
             view.endEditing(true)
             push(HookEditorController(instanceID: serviceInstanceID, phase: phase))
