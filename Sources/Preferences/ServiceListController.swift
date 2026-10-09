@@ -157,14 +157,14 @@ public class ServiceListController: PlainViewController {
             image: UIImage(systemName: "square.and.arrow.up")
         ) { [weak self] _ in
             guard let self else { return }
-            ServiceTransfer.offerExport(from: self)
+            ServiceTransfer.offerExport(from: self, scope: .instances)
         }
         let importAction = UIAction(
             title: "Import…".localized,
             image: UIImage(systemName: "square.and.arrow.down")
         ) { [weak self] _ in
             guard let self else { return }
-            ServiceTransfer.offerImport(from: self)
+            ServiceTransfer.offerImport(from: self, scope: .instances)
         }
         return UIMenu(title: "", children: [export, importAction])
     }

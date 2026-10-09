@@ -1,4 +1,4 @@
-import Foundation
+import UIKit
 
 /// Puts an exported document back into this device's configuration.
 ///
@@ -18,11 +18,14 @@ public enum ServiceImporter {
         /// The names that had to be changed to avoid a collision, as
         /// `(imported, used)`.
         public var renamed: [(from: String, to: String)]
-        /// Services that were already present, by type and name, and skipped.
+        /// The names of the scripts that were added.
+        public var definitions: [String]
+        /// Services or scripts that were already present and skipped.
         public var skipped: [String]
 
         public var summary: String {
             var parts: [String] = []
+            if !definitions.isEmpty { parts.append("added \(definitions.count) scripts") }
             if !added.isEmpty { parts.append("added \(added.count)") }
             if !skipped.isEmpty { parts.append("skipped \(skipped.count) already here") }
             if !renamed.isEmpty { parts.append("renamed \(renamed.count) to avoid a clash") }
@@ -48,13 +51,42 @@ public enum ServiceImporter {
         _ document: ServiceExport,
         makeDefinition: (ServiceExport.ExportedDefinition) -> String?
     ) throws -> Result {
-        var result = Result(added: [], renamed: [], skipped: [])
+        var result = Result(added: [], renamed: [], definitions: [], skipped: [])
 
         // Definitions are created once per exported name, since two instances of
         // one script must end up referencing *one* definition rather than two
         // copies — otherwise editing the script later would only affect one of
         // them.
         var definitionsByKey: [String: String] = [:]
+
+        // The scripts the document carries on their own, first — so a service
+        // that also references one is resolved against it instead of making a
+        // second copy.
+        for definition in document.definitions {
+            let key = definition.name.lowercased()
+            guard definitionsByKey[key] == nil else { continue }
+
+            // One already here under the same name *and* the same script is the
+            // same definition, so importing it again would duplicate it. The
+            // script is compared as well as the name because a name is chosen
+            // freely, and two different scripts may well share one.
+            if let existing = CustomServiceStore.definitions().first(where: {
+                $0.name.lowercased() == key && $0.script == definition.script
+            }) {
+                definitionsByKey[key] = existing.id
+                result.skipped.append(definition.name)
+                continue
+            }
+
+            guard let created = makeDefinition(definition) else {
+                result.skipped.append(definition.name)
+                continue
+            }
+            definitionsByKey[key] = created
+            result.definitions.append(
+                CustomServiceStore.definition(id: created)?.name ?? definition.name
+            )
+        }
 
         for service in document.services {
             // An instance already here under the same type and name is the same
@@ -75,6 +107,12 @@ public enum ServiceImporter {
                 } else if let created = makeDefinition(definition) {
                     definitionsByKey[key] = created
                     resolvedType = created
+                    // Reported as well: a script the user gets without being told
+                    // is a script they will find on the Services page later and
+                    // not know where it came from.
+                    result.definitions.append(
+                        CustomServiceStore.definition(id: created)?.name ?? definition.name
+                    )
                 } else {
                     // A definition that could not be created leaves its instance
                     // with nothing to send through, so it is skipped rather than
@@ -97,7 +135,8 @@ public enum ServiceImporter {
             result.added.append(name)
         }
 
-        guard !result.added.isEmpty || !result.skipped.isEmpty else {
+        guard !result.added.isEmpty || !result.definitions.isEmpty || !result.skipped.isEmpty
+        else {
             throw ServiceImportError.malformed("The document has no services in it")
         }
         return result
@@ -129,6 +168,23 @@ public enum ServiceImporter {
         }
     }
 
+    /// The icon a document says a service carries, or `nil` when it carries none.
+    ///
+    /// Read from the document rather than from what is stored here: the preview
+    /// describes what is *in the file*, and showing this device's existing logo
+    /// would be describing the wrong thing. The bundled artwork, which lives in
+    /// the Preferences layer, is left to the caller to fall back to.
+    public static func storedIcon(for service: ServiceExport.ExportedService) -> UIImage? {
+        if let base64 = service.settings?[PrefKey.customIcon] as? String,
+           let image = ServiceIcon.image(fromBase64: base64) {
+            return image
+        }
+        if let base64 = service.definition?.defaults?[PrefKey.customIcon] as? String {
+            return ServiceIcon.image(fromBase64: base64)
+        }
+        return nil
+    }
+
     // MARK: - Definitions
 
     /// Creates a script type from an exported definition.
@@ -154,6 +210,14 @@ public enum ServiceImporter {
         CustomServiceStore.update(id: definition.id) { object in
             for (key, value) in defaults where ServiceExportFilter.shouldExportDefinitionKey(key) {
                 object[key] = value
+            }
+            // Written last and whole: the declarations are the field list the
+            // instance page and the script's `pref` are both built from, so a
+            // partial write of them would be worse than none.
+            if let fields = exported.configFields, !fields.isEmpty {
+                object[PrefKey.configFields] = fields
+            } else {
+                object.removeValue(forKey: PrefKey.configFields)
             }
         }
         return definition.id

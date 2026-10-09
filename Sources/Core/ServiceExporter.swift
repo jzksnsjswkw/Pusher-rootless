@@ -10,27 +10,69 @@ public enum ServiceExporter {
 
     // MARK: - Export
 
-    /// Builds the document for the given instances.
+    /// Builds the document for a selection.
     ///
-    /// - Parameter ids: which instances to export, in the order the lists show
-    ///   them, so the document reads in the order the user sees.
-    public static func document(instanceIDs ids: [String]) -> ServiceExport {
+    /// - Parameters:
+    ///   - instanceIDs: which configured services to include, in the order the
+    ///     list shows them, so the document reads in the order the user sees.
+    ///   - definitionIDs: which scripts to include **on their own**. A script
+    ///     referenced by an included instance travels with it regardless of this
+    ///     list — otherwise the instance would arrive with nothing to send
+    ///     through. This parameter is for the other case: moving a script to
+    ///     another device before anything uses it.
+    public static func document(
+        instanceIDs: [String], definitionIDs: [String] = []
+    ) -> ServiceExport {
         let definitions = Dictionary(
             uniqueKeysWithValues: CustomServiceStore.definitions().map { ($0.id, $0) }
         )
         var services: [ServiceExport.ExportedService] = []
 
-        for id in ids {
+        for id in instanceIDs {
             guard let instance = ServiceInstanceStore.instances().first(where: { $0.id == id })
             else { continue }
             services.append(export(instance: instance, definitions: definitions))
         }
-        return ServiceExport(services: services)
+
+        // Scripts picked on their own, minus any already travelling inside a
+        // service above: writing one twice would make the importer create two
+        // copies of it.
+        let carried = Set(services.compactMap { $0.definition?.sourceID })
+        let standalone = definitionIDs
+            .filter { !carried.contains($0) }
+            .compactMap { definitions[$0] }
+            .map { export(definition: $0) }
+
+        return ServiceExport(services: services, definitions: standalone)
     }
 
-    /// Builds the document for every instance.
-    public static func documentForAllInstances() -> ServiceExport {
-        document(instanceIDs: ServiceInstanceStore.instances().map(\.id))
+    /// Builds the document for everything configured.
+    public static func documentForEverything() -> ServiceExport {
+        document(
+            instanceIDs: ServiceInstanceStore.instances().map(\.id),
+            definitionIDs: CustomServiceStore.definitions().map(\.id)
+        )
+    }
+
+    /// One script, on its own.
+    static func export(
+        definition source: CustomServiceDefinition
+    ) -> ServiceExport.ExportedDefinition {
+        var stored = CustomServiceStore.rawEntry(id: source.id).raw
+        stored.removeValue(forKey: PrefKey.instanceID)
+        stored.removeValue(forKey: PrefKey.instanceName)
+        stored.removeValue(forKey: PrefKey.script)
+        if let icon = stored[PrefKey.customIcon] as? String,
+           let image = ServiceIcon.image(fromBase64: icon) {
+            stored[PrefKey.customIcon] = ServiceIcon.storedValue(image)
+        }
+        return ServiceExport.ExportedDefinition(
+            name: source.name,
+            script: source.script,
+            sourceID: source.id,
+            configFields: ConfigFields.declared(byDefinition: source.id).map(\.encoded),
+            defaults: stored
+        )
     }
 
     private static func export(
@@ -43,20 +85,7 @@ public enum ServiceExporter {
         // work, and an import on another device has nothing to resolve it by.
         var definition: ServiceExport.ExportedDefinition?
         if let source = definitions[instance.type] {
-            var stored = CustomServiceStore.rawEntry(id: source.id).raw
-            stored.removeValue(forKey: PrefKey.instanceID)
-            stored.removeValue(forKey: PrefKey.instanceName)
-            stored.removeValue(forKey: PrefKey.script)
-            if let icon = stored[PrefKey.customIcon] as? String,
-               let image = ServiceIcon.image(fromBase64: icon) {
-                stored[PrefKey.customIcon] = ServiceIcon.storedValue(image)
-            }
-            definition = ServiceExport.ExportedDefinition(
-                name: source.name,
-                script: source.script,
-                configFields: ConfigFields.declared(byDefinition: source.id).map(\.encoded),
-                defaults: stored
-            )
+            definition = export(definition: source)
         }
 
         // Everything the instance holds that is configuration, minus identity
@@ -124,6 +153,21 @@ public enum ServiceExporter {
             "exportedAt": document.exportedAt,
         ]
         object["services"] = document.services.map(encode(service:))
+        if !document.definitions.isEmpty {
+            object["definitions"] = document.definitions.map(encode(definition:))
+        }
+        return object
+    }
+
+    private static func encode(
+        definition: ServiceExport.ExportedDefinition
+    ) -> [String: Any] {
+        var object: [String: Any] = [
+            "name": definition.name,
+            "script": definition.script,
+        ]
+        if let fields = definition.configFields { object["configFields"] = fields }
+        if let defaults = definition.defaults { object["defaults"] = defaults }
         return object
     }
 
@@ -134,13 +178,7 @@ public enum ServiceExporter {
         ]
         if let type = service.type { object["type"] = type }
         if let definition = service.definition {
-            var encoded: [String: Any] = [
-                "name": definition.name,
-                "script": definition.script,
-            ]
-            if let fields = definition.configFields { encoded["configFields"] = fields }
-            if let defaults = definition.defaults { encoded["defaults"] = defaults }
-            object["definition"] = encoded
+            object["definition"] = encode(definition: definition)
         }
         if let settings = service.settings { object["settings"] = settings }
         if let values = service.values { object["values"] = values }
@@ -187,19 +225,37 @@ public enum ServiceExporter {
             throw ServiceImportError.tooNew(version, ServiceExport.currentVersion)
         }
 
-        guard let rawServices = root["services"] as? [[String: Any]] else {
-            throw ServiceImportError.malformed("The document has no services in it")
-        }
+        let rawServices = root["services"] as? [[String: Any]] ?? []
         let services = rawServices.compactMap(decode(service:))
-        guard !services.isEmpty else {
+        let definitions = (root["definitions"] as? [[String: Any]] ?? [])
+            .compactMap(decode(definition:))
+
+        guard !services.isEmpty || !definitions.isEmpty else {
             throw ServiceImportError.malformed("The document has no usable services in it")
         }
 
-        var document = ServiceExport(services: services)
+        var document = ServiceExport(services: services, definitions: definitions)
         document.version = (root["version"] as? Int) ?? ServiceExport.currentVersion
         document.kind = (root["kind"] as? String) ?? ServiceExport.documentKind
         document.exportedAt = (root["exportedAt"] as? String) ?? ""
         return document
+    }
+
+    /// Reads one standalone definition.
+    private static func decode(
+        definition raw: [String: Any]
+    ) -> ServiceExport.ExportedDefinition? {
+        guard let script = raw["script"] as? String,
+              let name = (raw["name"] as? String)?
+                  .trimmingCharacters(in: .whitespacesAndNewlines),
+              !name.isEmpty
+        else { return nil }
+        return ServiceExport.ExportedDefinition(
+            name: name,
+            script: script,
+            configFields: raw["configFields"] as? [[String: Any]],
+            defaults: raw["defaults"] as? [String: Any]
+        )
     }
 
     /// Reads one service, or `nil` when it lacks what it needs to be one.

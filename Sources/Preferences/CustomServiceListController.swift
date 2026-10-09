@@ -12,8 +12,12 @@ import Preferences
 /// different questions: a definition says *how* to send somewhere, an instance
 /// says *where* and *whether to*. Keeping them apart is what makes one script
 /// worth writing for several destinations.
+///
+/// Import and export are both reachable from here and from the Instances page,
+/// with the scope deciding what is offered: a page of scripts should not ask
+/// whether the user also wants to move their Pushover account.
 @objc(NSPCustomServiceListController)
-public final class CustomServiceListController: PlainViewController {
+public final class CustomServiceListController: PlainViewController, ServiceTransferHost {
     private static let cellIdentifier = "CustomServiceCell"
 
     private var definitions: [CustomServiceDefinition] = []
@@ -34,11 +38,29 @@ public final class CustomServiceListController: PlainViewController {
         navigationItem.title = "Services".localized
         // Both actions sit on the right: the left slot is the back button, and
         // taking it traps the user on this page.
+        let transfer = UIBarButtonItem(
+            image: UIImage(systemName: "ellipsis.circle"),
+            menu: UIMenu(title: "", children: [
+                UIAction(title: "Export…".localized,
+                         image: UIImage(systemName: "square.and.arrow.up")) {
+                    [weak self] _ in
+                    guard let self else { return }
+                    ServiceTransfer.offerExport(from: self, scope: .services)
+                },
+                UIAction(title: "Import…".localized,
+                         image: UIImage(systemName: "square.and.arrow.down")) {
+                    [weak self] _ in
+                    guard let self else { return }
+                    ServiceTransfer.offerImport(from: self, scope: .services)
+                },
+            ])
+        )
         navigationItem.rightBarButtonItems = [
             UIBarButtonItem(barButtonSystemItem: .add, target: self,
                             action: #selector(addDefinition)),
             UIBarButtonItem(title: "Edit".localized, style: .plain, target: self,
                             action: #selector(toggleEditing(_:))),
+            transfer,
         ]
     }
 
@@ -46,6 +68,11 @@ public final class CustomServiceListController: PlainViewController {
         super.viewWillAppear(animated)
         Theme.setActiveTintColor(nil)
         tintToPusherColor()
+        reloadData()
+    }
+
+    /// Shows what an import added; see ``ServiceTransferHost``.
+    @objc public func reloadAfterTransfer() {
         reloadData()
     }
 

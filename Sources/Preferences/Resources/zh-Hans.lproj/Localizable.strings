@@ -417,3 +417,15 @@
 "This is a \"%@\" file, not a Pusher services export." = "这是「%@」文件，不是 Pusher 服务导出文件。";
 "This export was made by a newer version of Pusher (format %d); this one reads up to %d." = "此导出由更新版本的 Pusher 生成（格式 %d），当前版本最多支持 %d。";
 "Nothing was added: this device already has %@." = "未添加任何内容：本机已有 %@。";
+"There are no scripts to export yet." = "还没有可导出的脚本。";
+"The ones you choose are written to a file." = "你选择的内容会写入文件。";
+"Script · not used by any service" = "脚本 · 未被任何服务使用";
+"Script · used by %d services" = "脚本 · 被 %d 个服务使用";
+"Service · uses a script" = "服务 · 使用脚本";
+"%d scripts will be exported on their own." = "将单独导出 %d 个脚本。";
+"%d of the services are scripts, which are included." = "其中 %d 个服务是脚本，会一并包含。";
+"%d scripts were added: %@" = "已添加 %d 个脚本：%@";
+"The document has no services in it." = "文档中没有服务。";
+"Paste a document, or choose a file. You will be shown what is in it before anything is added." = "粘贴文档或选择文件。添加之前会先显示其中的内容。";
+"Import" = "导入";
+"Export" = "导出";

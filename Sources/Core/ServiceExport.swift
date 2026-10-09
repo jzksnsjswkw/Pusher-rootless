@@ -20,14 +20,32 @@ public struct ServiceExport {
     public var version: Int
     public var kind: String
     public var exportedAt: String
+
+    /// The configured destinations.
     public var services: [ExportedService]
 
-    public init(services: [ExportedService]) {
+    /// Scripts that are being moved on their own, with no destination yet.
+    ///
+    /// A separate array rather than an instance-shaped entry, because that is what
+    /// the user picked: a service definition is a thing in its own right — it
+    /// appears on its own page, can be written before anything uses it, and can
+    /// outlive every instance that referenced it. Folding it into `services`
+    /// would mean importing it as a destination nobody asked for.
+    public var definitions: [ExportedDefinition]
+
+    public init(
+        services: [ExportedService],
+        definitions: [ExportedDefinition] = []
+    ) {
         self.version = Self.currentVersion
         self.kind = Self.documentKind
         self.exportedAt = ISO8601DateFormatter().string(from: Date())
         self.services = services
+        self.definitions = definitions
     }
+
+    /// How many things the document carries, for a one-line description.
+    public var count: Int { services.count + definitions.count }
 
     public static let documentKind = "com.noahsaso.pusher.services"
 
@@ -87,6 +105,10 @@ public struct ServiceExport {
     public struct ExportedDefinition {
         public var name: String
         public var script: String
+        /// The source definition's id, used only while building a document so one
+        /// script referenced by several instances is written once. Never read on
+        /// import: a new device gives the definition its own id.
+        public var sourceID: String?
         /// The settings it declares, so the importer can recreate the fields an
         /// instance's ``ExportedService/values`` are keyed by.
         public var configFields: [[String: Any]]?
@@ -96,11 +118,13 @@ public struct ServiceExport {
         public init(
             name: String,
             script: String,
+            sourceID: String? = nil,
             configFields: [[String: Any]]? = nil,
             defaults: [String: Any]? = nil
         ) {
             self.name = name
             self.script = script
+            self.sourceID = sourceID
             self.configFields = configFields
             self.defaults = defaults
         }
