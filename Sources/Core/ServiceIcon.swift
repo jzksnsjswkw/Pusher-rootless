@@ -44,8 +44,23 @@ public enum ServiceIcon {
     public static let pointSize: CGFloat = 29
 
     /// The pixel width a stored icon has on this device.
-    public static var pixelSize: Int {
-        Int((pointSize * UIScreen.main.scale).rounded())
+    ///
+    /// **Not** `pointSize × UIScreen.main.scale`. The icon leaves this device —
+    /// in a notification payload, and in an export that someone pastes into a
+    /// message — and a bitmap sized for this screen would be re-encoded on
+    /// another, so the size that gets stored has to be the same everywhere or an
+    /// exported icon means something different than it did here.
+    ///
+    /// 58 px is what a 29-point icon is drawn at on this device (2×) and is
+    /// ample for the payload field, which a receiver draws small. It is also the
+    /// reference sizes' own scale: the bundled artwork is 87 px at @3x, which is
+    /// the same picture at the same *point* size, so a chosen icon and a bundled
+    /// one draw identically.
+    public static let pixelSize = 58
+
+    /// The scale to render at, so the point size comes out as ``pixelSize``.
+    static var renderScale: CGFloat {
+        CGFloat(pixelSize) / pointSize
     }
 
     /// Kept as a type so call sites read the same as they did when the size was
@@ -241,9 +256,8 @@ public enum ServiceIcon {
     ) -> UIImage? {
         let side = size.pointSize
         let format = UIGraphicsImageRendererFormat.default()
-        // The screen's scale, not 1: the image must be 29 *points* at 3× so a
-        // table cell draws it at the size the bundled artwork is drawn.
-        format.scale = UIScreen.main.scale
+        // So the bitmap comes out ``pixelSize`` across whatever this screen is.
+        format.scale = renderScale
         format.opaque = tint != nil
 
         let configuration = UIImage.SymbolConfiguration(
@@ -291,7 +305,7 @@ public enum ServiceIcon {
     public static func normalize(_ image: UIImage, to size: Size) -> UIImage? {
         let side = size.pointSize
         let format = UIGraphicsImageRendererFormat.default()
-        format.scale = UIScreen.main.scale
+        format.scale = renderScale
         format.opaque = false
 
         let scale = max(side / image.size.width, side / image.size.height)
@@ -309,12 +323,19 @@ public enum ServiceIcon {
         }
     }
 
-    /// The value stored for an icon: bare base64 PNG, wrapped for legibility.
+    /// The value stored for an icon: base64 PNG, wrapped for legibility.
     ///
     /// Wrapped at 76 columns, the width the base64 line length was chosen for
     /// decades ago; a preference file a person may open is worth keeping
     /// readable, and the newlines cost nothing at decode time.
+    ///
+    /// Quantized to a palette first. An icon is a 58-pixel picture that gets
+    /// drawn small, so its *colour precision* is worth far less than its size:
+    /// dropping to 64 colours cuts the stored value about fourfold with nothing
+    /// a person can see at 29 points, and the value travels on every
+    /// notification and inside every export.
     public static func storedValue(_ image: UIImage) -> String {
-        image.pngData()?.base64EncodedString(options: .lineLength76Characters) ?? ""
+        (IconPalette.encode(image) ?? image.pngData() ?? Data())
+            .base64EncodedString(options: .lineLength76Characters)
     }
 }

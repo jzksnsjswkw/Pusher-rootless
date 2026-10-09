@@ -35,6 +35,9 @@ Pusher_FILES = $(shell find Sources/Core Sources/Shared -name '*.swift') \
 Pusher_SWIFT_BRIDGING_HEADER = Sources/Hooks/Pusher-Bridging-Header.h
 Pusher_CFLAGS = -fobjc-arc
 Pusher_FRAMEWORKS = UIKit Foundation SystemConfiguration
+# zlib: the icon encoder writes a palette PNG by hand (see IconPalette), and
+# that needs a deflate pass; libz is in the shared cache, so this adds no file.
+Pusher_LIBRARIES = z
 Pusher_PRIVATE_FRAMEWORKS = AppSupport BulletinBoard
 
 include $(THEOS_MAKE_PATH)/tweak.mk

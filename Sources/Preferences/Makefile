@@ -15,6 +15,7 @@ Pusher_SWIFT_BRIDGING_HEADER = PusherBundle-Bridging-Header.h
 Pusher_INSTALL_PATH = /Library/PreferenceBundles
 Pusher_EXTRA_FRAMEWORKS = AltList
 Pusher_FRAMEWORKS = UIKit Foundation SystemConfiguration MobileCoreServices
+Pusher_LIBRARIES = z
 Pusher_PRIVATE_FRAMEWORKS = Preferences AppSupport
 Pusher_CFLAGS = -fobjc-arc
 ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
