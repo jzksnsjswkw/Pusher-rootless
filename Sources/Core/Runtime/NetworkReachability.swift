@@ -21,23 +21,31 @@ import SystemConfiguration
 ///   associated-but-unreachable.
 public enum NetworkReachability {
 
+    /// The device's current network, as a script sees it.
+    ///
+    /// One query answers all three of "offline", "on Wi-Fi" and "on cellular",
+    /// so the two consumers — the "What Network" filter and a hook's `device`
+    /// object — cannot disagree about what the device is doing.
+    public static func current() -> DeviceState.Network {
+        if let flags = internetReachabilityFlags() {
+            guard flags.contains(.reachable) else {
+                // Associated but not routable (a captive portal) still counts as
+                // a Wi-Fi connection for a hook's purposes, matching the filter's
+                // fallback below.
+                return hasWiFiAddress() ? .wifi : .none
+            }
+            return flags.contains(.isWWAN) ? .cellular : .wifi
+        }
+        return hasWiFiAddress() ? .wifi : .none
+    }
+
     /// Whether the device currently has a non-cellular network connection.
     ///
     /// Returns `false` when the device is offline, and `false` when the only
     /// usable route is cellular — which is what makes "Wi-Fi Only" and
     /// "Cellular Only" distinguishable without a SpringBoard dependency.
     public static func isOnWiFi() -> Bool {
-        if let flags = internetReachabilityFlags() {
-            // Reachable and not marked as cellular: a Wi-Fi (or wired) route.
-            let reachable = flags.contains(.reachable)
-            let cellular = flags.contains(.isWWAN)
-            return reachable && !cellular
-        }
-
-        // Reachability could not be created (it should not happen, but a
-        // sandboxed or partially initialised process can refuse it): fall back
-        // to asking the Wi-Fi interface for an address directly.
-        return hasWiFiAddress()
+        current() == .wifi
     }
 
     /// The reachability flags for the general internet, or `nil` when the

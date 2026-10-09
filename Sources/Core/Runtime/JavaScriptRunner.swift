@@ -193,6 +193,161 @@ public enum JavaScriptRunner {
     /// The one host used for shared-context runs.
     private static let host = ScriptHost()
 
+    // MARK: - Hooks
+
+    /// Runs a hook: a script whose contract is `keep()`, not `push()`.
+    ///
+    /// Shares everything with the service-script path — the same `fetch`, the
+    /// same `localStorage`, the same threading and timeout rules — so a hook and
+    /// a service script behave identically apart from what they are allowed to
+    /// do. It is a separate entry point because the *decision* travels a
+    /// different way: a hook reports whether to keep the notification and what
+    /// it changed, and never produces a request.
+    ///
+    /// Deliberately no `push` is installed: a hook that could send would be a
+    /// service, and the distinction (services send, hooks decide) is the whole
+    /// reason the two exist side by side.
+    static func runHook(
+        script: String,
+        phase: String,
+        bullet: [String: Any],
+        device: [String: Any],
+        storage: [String: String],
+        timeout: TimeInterval
+    ) -> BulletinHookRunner.Outcome {
+        var outcome = BulletinHookRunner.Outcome(
+            isKept: false, isForced: false, changes: .init(),
+            consoleOutput: [], storage: storage, failure: nil
+        )
+
+        // Hooks always get their own context: sharing one would let one hook's
+        // `let` collide with another's, and a hook runs at most twice per
+        // notification, so there is nothing to save by sharing.
+        guard let context = JSContext() else {
+            return BulletinHookRunner.Outcome.failing(
+                "Could not create a JavaScript context", storage: storage
+            )
+        }
+
+        var kept = false
+        var forced = false
+        var decided = false
+        var changes = BulletinHookRunner.BulletChanges()
+        var consoleLines: [String] = []
+        var store = storage
+        var failure: JavaScriptRunner.Failure?
+
+        context.exceptionHandler = { _, exception in
+            failure = failure ?? .script(describe(exception))
+        }
+
+        installConsole(into: context) { consoleLines.append($0) }
+
+        // `keep(options)`: how a hook says "carry on". Options travel as an
+        // object so a second one can be added without changing the call.
+        let keep: @convention(block) (JSValue?) -> Void = { value in
+            kept = true
+            decided = true
+            guard let object = value?.toObject() as? [String: Any] else { return }
+            if let force = object["force"] as? Bool, force { forced = true }
+        }
+        context.setObject(keep, forKeyedSubscript: "keep" as NSString)
+
+        installStorage(
+            into: context,
+            read: { store[$0] },
+            write: { store[$0] = $1 },
+            remove: { store.removeValue(forKey: $0) },
+            clear: { store.removeAll() },
+            count: { Int32(store.count) }
+        )
+        installFetch(into: context, options: .init(
+            timeout: timeout, maximumResponseBytes: Pusher.defaultMaxResponseBytes
+        ), perform: { ScriptHTTP.perform($0) })
+        installFetchObserver(into: context)
+
+        // `bullet` is writable here — editing it is one of the two things a hook
+        // is for — but the *property* is not, so a hook cannot replace the object
+        // and lose the fields it did not set. `device` is frozen outright: a hook
+        // must not be able to tell the filters a state the device is not in.
+        context.setObject(bullet, forKeyedSubscript: "__bullet" as NSString)
+        context.setObject(device, forKeyedSubscript: "__device" as NSString)
+        // `device` is made read-only field by field. `Object.freeze` on an object
+        // a host handed in does not take in JavaScriptCore — the assignment
+        // succeeds and the hook reads back what it wrote — so each property is
+        // defined explicitly instead. A hook must not be able to tell the
+        // filters that the device is in a state it is not.
+        _ = context.evaluateScript("""
+        var __makeReadOnly = function (target) {
+            var frozen = {};
+            Object.keys(target).forEach(function (key) {
+                frozen[key] = target[key];
+                Object.defineProperty(frozen, key, { writable: false, configurable: false });
+            });
+            return frozen;
+        };
+        Object.defineProperty(globalThis, 'bullet', { value: __bullet, writable: false, configurable: true });
+        Object.defineProperty(globalThis, 'device', { value: __makeReadOnly(__device), writable: false, configurable: true });
+        delete globalThis.__bullet;
+        delete globalThis.__device;
+        delete globalThis.__makeReadOnly;
+        """)
+
+        let onFulfilled: @convention(block) (JSValue?) -> Void = { _ in }
+        let onRejected: @convention(block) (JSValue?) -> Void = { value in
+            failure = failure ?? .script(describe(value))
+        }
+        context.setObject(onFulfilled, forKeyedSubscript: "__hookFulfilled" as NSString)
+        context.setObject(onRejected, forKeyedSubscript: "__hookRejected" as NSString)
+
+        // The body is a block, so a hook's top-level `let`/`const` belong to the
+        // run and cannot collide with a previous one.
+        _ = context.evaluateScript("""
+        (async function () {
+        {
+        \(script)
+        }
+        })().then(globalThis.__hookFulfilled, globalThis.__hookRejected);
+        """)
+        _ = context.evaluateScript("1")
+
+        // Read the bullet back: the hook's whole point is that it may have
+        // changed it, and `keep()` is what decides whether it did so usefully.
+        if kept, let edited = context.objectForKeyedSubscript("bullet")?.toObject()
+            as? [String: Any] {
+            changes.title = stringField(edited, "title", original: bullet)
+            changes.subtitle = stringField(edited, "subtitle", original: bullet)
+            changes.message = stringField(edited, "message", original: bullet)
+        }
+
+        // A hook that broke before reaching a decision must not decide.
+        //
+        // "Did not call keep()" means "drop this notification", which is right
+        // for a hook that ran and chose silence — but a hook that threw on line
+        // one never chose anything, and treating that as a drop would let one
+        // typo silently stop every push from that instance. Failing open is the
+        // only safe reading: the notification keeps moving and the log says why.
+        if failure != nil, !decided {
+            kept = true
+            changes = BulletinHookRunner.BulletChanges()
+        }
+
+        return BulletinHookRunner.Outcome(
+            isKept: kept, isForced: forced, changes: changes,
+            consoleOutput: consoleLines, storage: store, failure: failure
+        )
+    }
+
+    /// A bullet field the hook left in place, or `nil` when it changed nothing.
+    private static func stringField(
+        _ edited: [String: Any], _ name: String, original: [String: Any]
+    ) -> String? {
+        guard let value = edited[name] as? String,
+              let before = original[name] as? String
+        else { return nil }
+        return value == before ? nil : value
+    }
+
     /// Collects a run's result across the thread hop.
     private final class ResultBox: @unchecked Sendable {
         var value: Outcome?

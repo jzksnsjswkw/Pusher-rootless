@@ -61,7 +61,38 @@ public struct DeviceState {
     /// SpringBoard Wi-Fi property, which no longer exists on iOS 16.
     public var isOnWiFi = false
 
+    /// The network the device is actually using, when there is one.
+    ///
+    /// ``isOnWiFi`` answers the *filter's* question ("is this Wi-Fi rather than
+    /// cellular"); this answers the script's ("is there a network at all, and
+    /// which kind"). Both come from the same reachability query, so they cannot
+    /// disagree.
+    public var network: Network = .none
+
+    /// Whether the device has any usable route at all — Wi-Fi or cellular.
+    public var isOnline: Bool { network != .none }
+
+    /// What the device's network is, as a script sees it.
+    public enum Network: String {
+        case none = "none"
+        case wifi = "wifi"
+        case cellular = "cellular"
+    }
+
     public init() {}
+
+    /// The state as a script's `device` object: a plain dictionary, so it
+    /// crosses into JavaScript by value and a script cannot change what the
+    /// filters see.
+    public var scriptValue: [String: Any] {
+        [
+            "locked": isLocked,
+            "wifi": network == .wifi,
+            "cellular": network == .cellular,
+            "online": isOnline,
+            "network": network.rawValue,
+        ]
+    }
 }
 
 /// One bulletin reduced to plain values: the pipeline's data model.

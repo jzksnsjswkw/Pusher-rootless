@@ -242,6 +242,10 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             all.append(contentsOf: appFilterSpecifiers())
         }
 
+        // The instance's own hooks: they apply to this destination only, which
+        // is why they live on the instance rather than on the type.
+        all.append(contentsOf: hookSpecifiers())
+
         // Device conditions, the SNS page and the log page are shared by every
         // instance; they close out the page.
         all.append(contentsOf: globalTailSpecifiers())
@@ -291,6 +295,64 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     }
 
     /// The "Send Test Notification" button.
+    /// The two JavaScript hooks of this instance.
+    ///
+    /// Each is a switch plus a link to its editor. The switch is separate from
+    /// the link because the two answer different questions — "does this run?"
+    /// and "what does it say?" — and because an abandoned hook has to be
+    /// switchable off without deleting its source, which is what keeps it from
+    /// costing anything per notification.
+    ///
+    /// Built as code rather than from a plist: the cell is generic (a switch and
+    /// a button), so there is nothing per-service to declare.
+    func hookSpecifiers() -> [PSSpecifier] {
+        var specifiers: [PSSpecifier] = []
+        if let group = PSSpecifier.groupSpecifier(withName: "JavaScript Hooks".localized) {
+            group.setProperty(
+                ("Runs for every notification this service would receive. A hook "
+                    + "cannot send anything: it decides whether to continue "
+                    + "(keep) and may rewrite the notification's text.").localized,
+                forKey: "footerText"
+            )
+            specifiers.append(group)
+        }
+
+        for phase in [BulletinHookRunner.Phase.received, BulletinHookRunner.Phase.filtered] {
+            let isReceived = phase == .received
+            let enabledKey = isReceived ? PrefKey.hookReceivedEnabled : PrefKey.hookFilteredEnabled
+
+            if let toggle = PSSpecifier.preferenceSpecifierNamed(
+                (isReceived ? "On Receiving" : "After Filtering").localized,
+                target: PreferencesStorage.self,
+                set: #selector(PreferencesStorage.setValue(_:forInstanceSpecifier:)),
+                get: #selector(PreferencesStorage.readValue(forInstanceSpecifier:)),
+                detail: nil, cell: .switchCell, edit: nil
+            ) {
+                toggle.identifier = enabledKey
+                toggle.setProperty(serviceInstanceID,
+                                   forKey: SpecifierRouting.PropertyKey.instanceID)
+                toggle.setProperty(enabledKey, forKey: SpecifierRouting.PropertyKey.key)
+                toggle.setProperty(true, forKey: SpecifierRouting.PropertyKey.defaultValue)
+                toggle.setProperty(true, forKey: "enabled")
+                specifiers.append(toggle)
+            }
+
+            if let link = PSSpecifier.preferenceSpecifierNamed(
+                (isReceived ? "Edit Received Hook" : "Edit Filtered Hook").localized,
+                target: self, set: nil, get: nil, detail: nil, cell: .linkCell, edit: nil
+            ) {
+                link.setProperty("script", forKey: "icon")
+                link.setProperty(serviceInstanceID,
+                                 forKey: SpecifierRouting.PropertyKey.instanceID)
+                // Which hook to open. The engine's cell handler reads it, so one
+                // class serves both links.
+                link.setProperty(phase.rawValue, forKey: SpecifierRouting.PropertyKey.hookPhase)
+                specifiers.append(link)
+            }
+        }
+        return specifiers
+    }
+
     func testPushSection() -> [PSSpecifier] {
         guard let group = PSSpecifier.emptyGroup() else { return [] }
         guard let button = PSSpecifier.preferenceSpecifierNamed(
@@ -303,6 +365,30 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         button.buttonAction = #selector(sendTestNotification(_:))
         button.setProperty(true, forKey: "enabled")
         return [group, button]
+    }
+
+    // MARK: - Rows
+
+    /// Opens a hook's editor.
+    ///
+    /// Handled here rather than by giving the specifier a `detail:` class: the
+    /// two hook links differ only by a phase, and the framework instantiates a
+    /// detail class through `init(nibName:bundle:)`, which cannot carry one. The
+    /// phase travels on the specifier instead, and this is where it is read.
+    public override func tableView(
+        _ tableView: UITableView, didSelectRowAt indexPath: IndexPath
+    ) {
+        if let specifier = specifier(at: indexPath),
+           let phaseName = specifier.property(
+               forKey: SpecifierRouting.PropertyKey.hookPhase
+           ) as? String,
+           let phase = BulletinHookRunner.Phase(rawValue: phaseName) {
+            tableView.deselectRow(at: indexPath, animated: true)
+            view.endEditing(true)
+            push(HookEditorController(instanceID: serviceInstanceID, phase: phase))
+            return
+        }
+        super.tableView(tableView, didSelectRowAt: indexPath)
     }
 
     // MARK: - Actions

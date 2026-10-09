@@ -122,9 +122,6 @@ public final class PushEngine: NSObject {
             return
         }
 
-        // SEAM: the "received a notification" hook runs here — after the
-        // global gates have passed and before any per-instance filter, so a
-        // script sees every notification the pipeline would otherwise forward.
 
         guard !config.enabledInstances.isEmpty else {
             PusherLog.debug("No services enabled!")
@@ -161,6 +158,71 @@ public final class PushEngine: NSObject {
         return false
     }
 
+    // MARK: - Instance hooks
+
+    /// Runs one of an instance's hooks, logging what it decided.
+    ///
+    /// - Returns: the outcome, or `nil` when the hook is switched off or empty —
+    ///   which is the case the switch exists for: a disabled or cleared hook
+    ///   must cost nothing at all, so it is not even parsed.
+    private func runHook(
+        _ hook: HookConfig,
+        phase: BulletinHookRunner.Phase,
+        service: String,
+        context: BulletinContext
+    ) -> BulletinHookRunner.Outcome? {
+        guard hook.shouldRun else { return nil }
+
+        let state = BulletinAdapter.currentDeviceState()
+        let outcome = BulletinHookRunner.run(
+            script: hook.script,
+            phase: phase,
+            context: context,
+            deviceState: state,
+            storage: HookStorage.values(forService: service, phase: phase)
+        )
+
+        if !outcome.storage.isEmpty {
+            HookStorage.setValues(outcome.storage, forService: service, phase: phase)
+        }
+        for line in outcome.consoleOutput {
+            PushLog.add(service: service, context: context,
+                        label: "Hook (\(phase.rawValue))", object: line, dontTruncate: true)
+        }
+        if let failure = outcome.failure {
+            // A hook that cannot run must not decide: it either kept the
+            // notification (the runner's `failing` outcome) or, when the script
+            // threw after calling keep, its edits stand. Either way the
+            // notification keeps moving, and the reason is in the log.
+            PushLog.add(service: service, context: context,
+                        label: "Hook (\(phase.rawValue)) failed",
+                        object: failure.message, dontTruncate: true)
+        }
+
+        if !outcome.isKept {
+            PushLog.add(service: service, context: context,
+                        label: "Hook (\(phase.rawValue)) dropped the notification")
+        } else if outcome.isForced {
+            PushLog.add(service: service, context: context,
+                        label: "Hook (\(phase.rawValue)) forced the push past the filters")
+        }
+        return outcome
+    }
+
+    /// Applies a hook's edits and logs them, so the log shows what actually went
+    /// out rather than what arrived.
+    private func apply(
+        _ outcome: BulletinHookRunner.Outcome,
+        to context: inout BulletinContext,
+        service: String
+    ) {
+        guard outcome.hasChanges else { return }
+        let changed = outcome.changes.apply(to: &context)
+        for field in changed {
+            PushLog.add(service: service, context: context, label: "Hook changed \(field)")
+        }
+    }
+
     // MARK: - Per-service pipeline
 
     /// Applies the filters and then builds and sends the request for one
@@ -171,8 +233,13 @@ public final class PushEngine: NSObject {
         send(to: instance, context: context, config: snapshot)
     }
 
-    /// Applies the app-list / SNS / device-condition filters and then builds and
-    /// sends the request for one instance.
+    /// Applies this instance's hooks and filters, then builds and sends its
+    /// request.
+    ///
+    /// The context is taken **by value**, and every hook edit stays in this
+    /// copy: two instances of one script are independent destinations, so one
+    /// instance's hook rewriting a title must not rewrite it for another. The
+    /// caller's context is untouched.
     private func send(to instance: ServiceInstance, context: BulletinContext, config: ConfigSnapshot) {
         let id = instance.id
         guard let serviceConfig = config.config(forID: id) else { return }
@@ -181,10 +248,31 @@ public final class PushEngine: NSObject {
         // separate logs.
         let service = id
 
+        var context = context
+
         // A test push is explicitly requested by the user, so the per-app
         // filters (which exist to suppress *unwanted* pushes) do not apply.
         var effectiveConfig = serviceConfig
         if !context.isTest {
+            // ── The "received" hook ─────────────────────────────────────────
+            // First thing after the notification exists for this instance, so
+            // it sees everything the pipeline would otherwise forward — before
+            // the app list, the notification settings or the device conditions
+            // have had a say.
+            let received = runHook(
+                serviceConfig.receivedHook, phase: .received,
+                service: service, context: context
+            )
+            guard let received else { return }
+            if received.isKept {
+                apply(received, to: &context, service: service)
+            } else {
+                return
+            }
+
+            // `keep({force: true})`: the hook has decided, so the filters that
+            // exist to suppress unwanted pushes do not get to disagree.
+            if !received.isForced {
             if let reason = PushFilter.appListReason(config: serviceConfig, appID: context.appID) {
                 PusherLog.debug("[S:\(service)] Blocked by app list: \(context.appID)")
                 PushLog.add(service: service, context: context, label: reason)
@@ -227,13 +315,27 @@ public final class PushEngine: NSObject {
                 return
             }
             PusherLog.debug("[S:\(service),A:\(context.appID)] Device Conditions ok")
+            }   // end: not forced
 
             // Per-app overrides replace the instance-wide prefs for this app.
             effectiveConfig = serviceConfig.effective(forAppID: context.appID)
         }
 
-        // SEAM: the "passed the filters" hook runs here — every gate above has
-        // already said yes, and nothing has been sent yet.
+        // ── The "filtered" hook ─────────────────────────────────────────────
+        // Every gate above has said yes and nothing has been sent yet. This is
+        // the last place a hook can change what goes out — and, for a hook that
+        // reads the message first (asking a model to classify an SMS, say), the
+        // place where that reading is worth the wait.
+        let filtered = runHook(
+            serviceConfig.filteredHook, phase: .filtered,
+            service: service, context: context
+        )
+        guard let filtered else { return }
+        if filtered.isKept {
+            apply(filtered, to: &context, service: service)
+        } else {
+            return
+        }
 
         // Build and send on a background queue: the filter decision above ran on
         // the main thread where the SpringBoard objects live, but building the

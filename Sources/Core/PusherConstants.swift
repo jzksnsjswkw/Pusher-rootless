@@ -150,6 +150,22 @@ public enum PrefKey {
     public static let scriptTimeout = "scriptTimeout"
     /// Largest response body `fetch` accepts, in bytes.
     public static let scriptMaxResponseBytes = "scriptMaxResponseBytes"
+
+    // MARK: Instance hooks
+
+    // Two optional hooks per instance, each with its own switch. The switch is
+    // what keeps an abandoned experiment free: an empty or disabled hook is
+    // never executed, so it cannot cost anything on every notification.
+    /// Whether the "received" hook runs.
+    public static let hookReceivedEnabled = "hookReceivedEnabled"
+    /// Its source.
+    public static let hookReceivedScript = "hookReceivedScript"
+    /// Whether the "filtered" hook runs.
+    public static let hookFilteredEnabled = "hookFilteredEnabled"
+    /// Its source.
+    public static let hookFilteredScript = "hookFilteredScript"
+    /// Each hook's `localStorage`, kept per instance *and per hook*.
+    public static let hookStorage = "hookStorage"
     public static let curateData = "curateData"
     public static let imageMaxWidth = "imageMaxWidth"
     public static let imageMaxHeight = "imageMaxHeight"

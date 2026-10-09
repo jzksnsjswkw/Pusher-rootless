@@ -100,6 +100,9 @@ public enum SpecifierRouting {
         /// A non-retaining back-reference to the list controller, for cells that
         /// need to reload themselves.
         static let listReference = "psListRef"
+        /// Which of an instance's two hooks a link cell opens — the engine's
+        /// cell handler reads it, so one handler serves both links.
+        static let hookPhase = "hookPhase"
     }
 }
 

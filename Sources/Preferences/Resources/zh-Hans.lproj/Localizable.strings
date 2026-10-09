@@ -346,3 +346,9 @@ bullet.image  — 通知附件图片的 base64";
 "The script runs fresh for every notification. A top-level let or const belongs to that run alone and is gone by the next one — that is what keeps one notification's data out of another's.
 localStorage is the way to carry a value across notifications: it is kept per service, so two services of the same type do not share it." = "每条通知都会重新运行脚本。顶层声明的 let 或 const 只属于这一次运行，下一条通知时就已消失——这正是让通知之间数据互不串扰的原因。
 要跨通知保留数值请使用 localStorage：它按服务隔离，因此同一类型的两个服务不会共享它。";
+"JavaScript Hooks" = "JavaScript 钩子";
+"Runs for every notification this service would receive. A hook cannot send anything: it decides whether to continue (keep) and may rewrite the notification's text." = "该服务本会收到的每条通知都会运行。钩子无法发送任何内容：它决定是否继续（keep），并可以改写通知文本。";
+"On Receiving" = "收到通知时";
+"After Filtering" = "筛选之后";
+"Edit Received Hook" = "编辑「收到通知时」钩子";
+"Edit Filtered Hook" = "编辑「筛选之后」钩子";

@@ -7,6 +7,27 @@ import Foundation
 /// read them directly. The typed accessors below are the only way the send path
 /// reads an instance, which keeps the "guard the plist type" policy in one
 /// place.
+/// One instance hook: a switch and a source.
+///
+/// Both have to be present for the hook to run. The switch alone is not enough
+/// (an enabled hook with no source would run an empty script for nothing) and
+/// the source alone is not enough either (a user who cleared the text expects the
+/// hook to stop, not to keep running whatever was there).
+public struct HookConfig {
+    public let isEnabled: Bool
+    public let script: String
+
+    /// Whether this hook should be executed at all.
+    public var shouldRun: Bool {
+        isEnabled && !script.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    public init(isEnabled: Bool, script: String) {
+        self.isEnabled = isEnabled
+        self.script = script
+    }
+}
+
 public struct ServiceConfig {
     /// The instance's id, which is also its log key.
     public let name: String
@@ -49,6 +70,24 @@ public struct ServiceConfig {
     /// Defaults to "any network" when unset.
     public var whatNetwork: WhatNetwork {
         WhatNetwork(rawValue: raw.resolvedInt(PrefKey.whatNetwork, default: WhatNetwork.any.rawValue)) ?? .any
+    }
+
+    // MARK: - Instance hooks
+
+    /// The "received" hook: runs as soon as a notification arrives.
+    public var receivedHook: HookConfig {
+        HookConfig(
+            isEnabled: raw.bool(PrefKey.hookReceivedEnabled),
+            script: raw.string(PrefKey.hookReceivedScript) ?? ""
+        )
+    }
+
+    /// The "filtered" hook: runs after every filter has passed.
+    public var filteredHook: HookConfig {
+        HookConfig(
+            isEnabled: raw.bool(PrefKey.hookFilteredEnabled),
+            script: raw.string(PrefKey.hookFilteredScript) ?? ""
+        )
     }
 
     // MARK: - Per-app overrides

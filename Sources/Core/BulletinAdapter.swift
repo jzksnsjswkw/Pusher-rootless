@@ -202,7 +202,8 @@ public final class BulletinAdapter: NSObject {
         if let manager = Runtime.sharedInstance("SBLockScreenManager") {
             state.isLocked = Runtime.sendBool(manager, "isUILocked")
         }
-        state.isOnWiFi = NetworkReachability.isOnWiFi()
+        state.network = NetworkReachability.current()
+        state.isOnWiFi = state.network == .wifi
         return state
     }
 
