@@ -46,7 +46,7 @@ public final class CustomServiceEditorController: ListController {
         refreshTitle()
         installSpecifiers(buildSpecifiers())
         // Seed what the page was built with, so the first toggle compares.
-        showsImageSizing = isToggleOn(PrefKey.includeImage)
+        seedImageSizing()
         observePreferenceChanges()
         // The switches' locked state depends on the stored values, which a
         // previous visit may have left in the forced combination.
@@ -64,7 +64,7 @@ public final class CustomServiceEditorController: ListController {
         // re-seeded rather than compared.
         refreshTitle()
         table?.reloadData()
-        showsImageSizing = isToggleOn(PrefKey.includeImage)
+        seedImageSizing()
     }
 
     /// Presents the scripting guide as a sheet.
@@ -148,6 +148,14 @@ public final class CustomServiceEditorController: ListController {
     /// to compare against: an unseeded value would swallow that first tap,
     /// which reads as "the rows only move after a return visit".
     private var showsImageSizing: Bool?
+
+    /// Records whether the page as built shows the image-sizing rows.
+    private func seedImageSizing() {
+        showsImageSizing = ServiceSpecifierBuilders.includeImage(
+            stored: CustomServiceStore.rawEntry(id: definitionID),
+            fallback: Prefs(ServiceRegistry.service(named: definitionID).newInstancePrefs())
+        )
+    }
 
     /// Rebuilds the page when "Include Image" has been switched; see
     /// ``ServiceController/cellDidChange(_:to:)``.

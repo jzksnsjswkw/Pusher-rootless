@@ -43,9 +43,11 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
 
         // Through the setter so the identity check in the getter works.
         self.specifiers = buildSpecifiers()
-        // Seed what the page was built with, so the first switch toggle has
-        // something to compare against.
-        showsImageSizing = isToggleOn(PrefKey.includeImage)
+        // Seed what the page was built with, so the first toggle has something
+        // to compare against. The judgement is the builder's own, read from the
+        // same store, so seeding cannot disagree with the rows that were built —
+        // unlike asking the cell, which may not be findable yet.
+        seedImageSizing()
 
         guard let icon else { return }
         let label = UILabel()
@@ -95,10 +97,9 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // selection would otherwise keep showing the old number.
         refreshTitleCounts()
 
-        // The switch may have been toggled on a page this one pushed, and the
-        // page is rebuilt on every appearance anyway, so the bookkeeping is
-        // re-seeded rather than compared.
-        showsImageSizing = isToggleOn(PrefKey.includeImage)
+        // Re-seeded rather than compared: the page is rebuilt on every
+        // appearance, so whatever was toggled elsewhere is already reflected.
+        seedImageSizing()
     }
 
     /// Recomputes the "(N total)" suffixes on the installed cells.
@@ -142,11 +143,14 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         )
     }
 
-    /// Rebuilds the page when "Include Image" has been switched.
-    ///
-    /// The answer comes from the installed cell, not from storage: the toggle's
-    /// own value is written by the framework's action, and reading the cell is
-    /// what makes the rebuild follow the tap rather than a file write.
+    /// Records whether the page as built shows the image-sizing rows.
+    private func seedImageSizing() {
+        showsImageSizing = ServiceSpecifierBuilders.includeImage(
+            stored: PrefsStore.instance(serviceInstanceID),
+            fallback: Prefs(ServiceRegistry.service(named: serviceType).newInstancePrefs())
+        )
+    }
+
     /// Rebuilds the page when "Include Image" has been switched.
     ///
     /// Called by the storage layer the moment the value is stored, so the page
