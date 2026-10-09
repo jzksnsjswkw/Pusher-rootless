@@ -58,7 +58,11 @@ enum ScriptingGuide {
                 + "- localStorage.getItem/setItem/removeItem/clear — persists "
                 + "per service.\n"
                 + "- console.log/info/warn/error — shown in the editor's Run "
-                + "output").localized + "\n\n"
+                + "output.\n"
+                + "- Each notification is a separate run: variables declared at "
+                + "the top level of the script do not survive to the next one. "
+                + "To keep a value across notifications, put it in "
+                + "localStorage.").localized + "\n\n"
             + "Rules:".localized + "\n"
             + ("- Call push() to forward the notification; without it, nothing "
                 + "is sent.\n"
@@ -177,6 +181,15 @@ enum ScriptingGuide {
             + "bullet.icon and bullet.image are base64 PNG data (strings), "
             + "present when the notification has them."
         ).localized)
+
+        section("Where variables live".localized,
+                ("The script runs fresh for every notification. A top-level "
+                    + "let or const belongs to that run alone and is gone by the "
+                    + "next one — that is what keeps one notification's data out "
+                    + "of another's.\n"
+                    + "localStorage is the way to carry a value across "
+                    + "notifications: it is kept per service, so two services of "
+                    + "the same type do not share it.").localized)
 
         section("Other functions".localized, (
             "fetch(url, init) — real HTTP, like the browser's fetch. Returns "

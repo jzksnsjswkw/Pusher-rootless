@@ -342,3 +342,7 @@ bullet.image  — 通知附件图片的 base64";
 "A minute early, so a token cannot expire mid-flight." = "提前一分钟过期，避免令牌在飞行途中失效。";
 "bullet.icon   — base64 PNG of the app icon" = "bullet.icon   — 应用图标的 base64 PNG";
 "bullet.image  — base64 of the notification's attachment" = "bullet.image  — 通知附件图片的 base64";
+"Where variables live" = "变量存在哪里";
+"The script runs fresh for every notification. A top-level let or const belongs to that run alone and is gone by the next one — that is what keeps one notification's data out of another's.
+localStorage is the way to carry a value across notifications: it is kept per service, so two services of the same type do not share it." = "每条通知都会重新运行脚本。顶层声明的 let 或 const 只属于这一次运行，下一条通知时就已消失——这正是让通知之间数据互不串扰的原因。
+要跨通知保留数值请使用 localStorage：它按服务隔离，因此同一类型的两个服务不会共享它。";
