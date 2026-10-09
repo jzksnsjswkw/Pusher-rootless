@@ -1,194 +1,185 @@
-import UIKit
+import Foundation
 
 /// Puts an exported document back into this device's configuration.
 ///
 /// The import is *additive*: it never overwrites or deletes what is already
 /// here. That is the only defensible default for a file a user may have been
-/// given, or may have exported from this very device — an import that replaced
-/// an existing service would be indistinguishable from a loss, and one that
-/// silently merged two services' settings would leave a configuration nobody
-/// chose. A name that is taken becomes "Name 2", which is visible immediately and
-/// reversible by renaming.
+/// given, or may have exported from this very device — an import that replaced an
+/// existing service would be indistinguishable from a loss, and one that silently
+/// merged two services' settings would leave a configuration nobody chose. A name
+/// that is taken becomes "Name 2", which is visible immediately and reversible by
+/// renaming.
 public enum ServiceImporter {
 
     /// What an import did, so the page can say it.
     public struct Result {
-        /// The names of the services that were added, in order.
-        public var added: [String]
+        /// The names of the services — the scripts — that were added.
+        public var services: [String]
+        /// The names of the instances that were added.
+        public var instances: [String]
         /// The names that had to be changed to avoid a collision, as
         /// `(imported, used)`.
         public var renamed: [(from: String, to: String)]
-        /// The names of the scripts that were added.
-        public var definitions: [String]
-        /// Services or scripts that were already present and skipped.
-        public var skipped: [String]
+        /// Entries that were not added, with the reason. Structured rather than
+        /// as text, because this is the Core layer and has no string table — the
+        /// page that shows the reason is the one that can word it.
+        public var skipped: [Skipped]
 
-        public var summary: String {
-            var parts: [String] = []
-            if !definitions.isEmpty { parts.append("added \(definitions.count) scripts") }
-            if !added.isEmpty { parts.append("added \(added.count)") }
-            if !skipped.isEmpty { parts.append("skipped \(skipped.count) already here") }
-            if !renamed.isEmpty { parts.append("renamed \(renamed.count) to avoid a clash") }
-            return parts.isEmpty ? "nothing to do" : parts.joined(separator: ", ")
+        public var added: [String] { services + instances }
+
+        /// Whether anything was written.
+        public var isEmpty: Bool { services.isEmpty && instances.isEmpty }
+    }
+
+    /// One entry the import left out.
+    public struct Skipped {
+        public enum Reason {
+            /// The same entry is already configured here.
+            case alreadyPresent
+            /// A script with no body, which could never send anything.
+            case emptyScript
+            /// An instance whose service is neither in the document nor here.
+            case serviceMissing(String)
+        }
+
+        public let name: String
+        public let reason: Reason
+
+        public init(name: String, reason: Reason) {
+            self.name = name
+            self.reason = reason
         }
     }
 
     // MARK: - Applying
 
-    /// Adds every service in the document.
-    ///
-    /// - Parameter makeDefinition: creates a script type from an exported
-    ///   definition and returns its new id. Injected so the Core layer does not
-    ///   have to know how definitions are stored; the default does the obvious
-    ///   thing.
+    /// Adds everything in the document.
     public static func apply(_ document: ServiceExport) throws -> Result {
-        try apply(document, makeDefinition: createDefinition)
-    }
+        var result = Result(services: [], instances: [], renamed: [], skipped: [])
 
-    /// Same, with the definition factory injected, so the Core layer can be
-    /// exercised without touching stored definitions.
-    static func apply(
-        _ document: ServiceExport,
-        makeDefinition: (ServiceExport.ExportedDefinition) -> String?
-    ) throws -> Result {
-        var result = Result(added: [], renamed: [], definitions: [], skipped: [])
-
-        // Definitions are created once per exported name, since two instances of
-        // one script must end up referencing *one* definition rather than two
-        // copies — otherwise editing the script later would only affect one of
-        // them.
-        var definitionsByKey: [String: String] = [:]
-
-        // The scripts the document carries on their own, first — so a service
-        // that also references one is resolved against it instead of making a
-        // second copy.
-        for definition in document.definitions {
-            let key = definition.name.lowercased()
-            guard definitionsByKey[key] == nil else { continue }
-
-            // One already here under the same name *and* the same script is the
-            // same definition, so importing it again would duplicate it. The
-            // script is compared as well as the name because a name is chosen
-            // freely, and two different scripts may well share one.
-            if let existing = CustomServiceStore.definitions().first(where: {
-                $0.name.lowercased() == key && $0.script == definition.script
-            }) {
-                definitionsByKey[key] = existing.id
-                result.skipped.append(definition.name)
-                continue
-            }
-
-            guard let created = makeDefinition(definition) else {
-                result.skipped.append(definition.name)
-                continue
-            }
-            definitionsByKey[key] = created
-            result.definitions.append(
-                CustomServiceStore.definition(id: created)?.name ?? definition.name
-            )
-        }
+        // By name, since that is how an instance refers to its script in the
+        // document. The scripts go first: an instance is resolved against this
+        // map, so a document that carries both arrives with the instance already
+        // pointing at its script.
+        var definitionsByName: [String: String] = [:]
 
         for service in document.services {
-            // An instance already here under the same type and name is the same
-            // service, so importing it again would be a duplicate rather than a
-            // restore. Compared by type *and* name because two Pushovers are
-            // normally two destinations.
-            let typeKey = service.definition.map { "script:\($0.name)" } ?? (service.type ?? "")
-            if isAlreadyPresent(typeKey: typeKey, name: service.name, definition: service.definition) {
-                result.skipped.append(service.name)
+            let key = service.name.lowercased()
+
+            // One already here under the same name *and* the same script is the
+            // same service, so importing it again would duplicate it. The script
+            // is compared as well as the name because a name is chosen freely and
+            // two different scripts may well share one.
+            if let existing = CustomServiceStore.definitions().first(where: {
+                $0.name.lowercased() == key && $0.script == service.script
+            }) {
+                definitionsByName[key] = existing.id
+                result.skipped.append(Skipped(name: service.name, reason: .alreadyPresent))
                 continue
             }
 
-            var resolvedType = service.type ?? ServiceRegistry.customServiceName
-            if let definition = service.definition {
-                let key = definition.name.lowercased()
-                if let existing = definitionsByKey[key] {
-                    resolvedType = existing
-                } else if let created = makeDefinition(definition) {
-                    definitionsByKey[key] = created
-                    resolvedType = created
-                    // Reported as well: a script the user gets without being told
-                    // is a script they will find on the Services page later and
-                    // not know where it came from.
-                    result.definitions.append(
-                        CustomServiceStore.definition(id: created)?.name ?? definition.name
-                    )
-                } else {
-                    // A definition that could not be created leaves its instance
-                    // with nothing to send through, so it is skipped rather than
-                    // imported as a webhook with no URL.
-                    result.skipped.append(service.name)
-                    continue
-                }
+            if let created = create(service) {
+                definitionsByName[key] = created
+                result.services.append(CustomServiceStore.definition(id: created)?.name
+                    ?? service.name)
+            } else {
+                result.skipped.append(Skipped(name: service.name, reason: .emptyScript))
             }
-
-            // A name that is taken is changed rather than refused: the user
-            // asked for this service to be here, and a suffix is what the add
-            // flow does in the same situation.
-            let name = uniqueInstanceName(service.name)
-
-            let instance = ServiceInstanceStore.add(type: resolvedType, name: name)
-            apply(service, to: instance.id)
-            if name != service.name {
-                result.renamed.append((from: service.name, to: name))
-            }
-            result.added.append(name)
         }
 
-        guard !result.added.isEmpty || !result.definitions.isEmpty || !result.skipped.isEmpty
-        else {
+        // A script already on this device by name, for a document that carries
+        // instances but not their scripts — the case where "include services" was
+        // turned off on export because the recipient already has them.
+        func resolve(_ name: String) -> String? {
+            if let known = definitionsByName[name.lowercased()] { return known }
+            return CustomServiceStore.definitions()
+                .first { $0.name.lowercased() == name.lowercased() }?
+                .id
+        }
+
+        for instance in document.instances {
+            let type: String
+            if let serviceName = instance.service {
+                guard let resolved = resolve(serviceName) else {
+                    // The document names a script it does not carry and this
+                    // device does not have, so the instance has nothing to send
+                    // through. Skipped with the reason rather than imported as a
+                    // webhook with no URL.
+                    result.skipped.append(Skipped(
+                        name: instance.name, reason: .serviceMissing(serviceName)
+                    ))
+                    continue
+                }
+                type = resolved
+            } else if let builtIn = instance.type {
+                type = builtIn
+            } else {
+                continue
+            }
+
+            // Compared by the kind it uses *and* its name: two Pushovers are
+            // normally two destinations, but the same Pushover under the same
+            // name is the same one.
+            if isAlreadyPresent(type: type, name: instance.name) {
+                result.skipped.append(Skipped(name: instance.name, reason: .alreadyPresent))
+                continue
+            }
+
+            // A name that is taken is changed rather than refused: the user asked
+            // for this instance to be here, and a suffix is what the add flow does
+            // in the same situation.
+            let name = uniqueInstanceName(instance.name)
+            let created = ServiceInstanceStore.add(type: type, name: name)
+            write(instance, to: created.id)
+            if name != instance.name {
+                result.renamed.append((from: instance.name, to: name))
+            }
+            result.instances.append(name)
+        }
+
+        guard !result.isEmpty || !result.skipped.isEmpty else {
             throw ServiceImportError.malformed("The document has no services in it")
         }
         return result
     }
 
-    /// Writes one service's settings onto the instance that was just created.
-    private static func apply(_ service: ServiceExport.ExportedService, to id: String) {
+    /// Writes one instance's settings onto the instance that was just created.
+    private static func write(_ instance: ServiceExport.ExportedInstance, to id: String) {
         PrefsStore.updateInstance(id) { object in
             // The instance was created with the type's defaults; the document's
-            // own values are layered on top, so a field the document does not
+            // own values are layered on top, so a setting the document does not
             // mention keeps what the type would have given it.
-            if let settings = service.settings {
-                for (key, value) in settings where ServiceExportFilter.shouldExportInstanceKey(key) {
+            if let settings = instance.settings {
+                for (key, value) in settings
+                where ServiceExportFilter.shouldExportInstanceKey(key) {
                     object[key] = value
                 }
             }
-            if let appList = service.appList, !appList.isEmpty {
+            if let appList = instance.appList, !appList.isEmpty {
                 object[PrefKey.appList] = appList
-                object[PrefKey.appListIsBlacklist] = service.appListIsBlacklist ?? true
-            } else if service.appListIsBlacklist != nil {
-                object[PrefKey.appListIsBlacklist] = service.appListIsBlacklist
+                object[PrefKey.appListIsBlacklist] = instance.appListIsBlacklist ?? true
+            } else if instance.appListIsBlacklist != nil {
+                object[PrefKey.appListIsBlacklist] = instance.appListIsBlacklist
             }
-            // The declared settings' values, in the instance's own namespace, so
-            // a document cannot reach a framework key through them.
-            if let values = service.values, !values.isEmpty {
+            // The declared settings' values, in the instance's own namespace, so a
+            // document cannot reach a framework key through them.
+            if let values = instance.values, !values.isEmpty {
                 object[PrefKey.configValues] = values
             }
-            object[PrefKey.serviceEnabled] = service.enabled
+            object[PrefKey.serviceEnabled] = instance.enabled
         }
     }
 
-    /// The icon a document says a service carries, or `nil` when it carries none.
+    // MARK: - Creating a script
+
+    /// Creates a script from an exported service, returning its new id.
     ///
-    /// Read from the document rather than from what is stored here: the preview
-    /// describes what is *in the file*, and showing this device's existing logo
-    /// would be describing the wrong thing. The bundled artwork, which lives in
-    /// the Preferences layer, is left to the caller to fall back to.
-    public static func storedIcon(for service: ServiceExport.ExportedService) -> UIImage? {
-        if let base64 = service.settings?[PrefKey.customIcon] as? String,
-           let image = ServiceIcon.image(fromBase64: base64) {
-            return image
-        }
-        if let base64 = service.definition?.defaults?[PrefKey.customIcon] as? String {
-            return ServiceIcon.image(fromBase64: base64)
-        }
-        return nil
-    }
+    /// - Returns: `nil` when the script has nothing in it, since a service with
+    ///   no body could never send anything.
+    private static func create(_ exported: ServiceExport.ExportedService) -> String? {
+        guard !exported.script.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
 
-    // MARK: - Definitions
-
-    /// Creates a script type from an exported definition.
-    private static func createDefinition(_ exported: ServiceExport.ExportedDefinition) -> String? {
         let definition = CustomServiceDefinition(
             id: CustomServiceDefinition.makeID(),
             name: CustomServiceStore.uniqueName(basedOn: exported.name),
@@ -198,17 +189,12 @@ public enum ServiceImporter {
 
         var defaults = exported.defaults ?? [:]
         // The identity and script belong to the definition that was just made,
-        // not to whatever the document carried, so they cannot be overwritten by
-        // a hand-edited file.
-        defaults.removeValue(forKey: PrefKey.instanceID)
-        defaults.removeValue(forKey: PrefKey.instanceName)
-        defaults.removeValue(forKey: PrefKey.script)
-        if let fields = exported.configFields {
-            defaults[PrefKey.configFields] = fields
-        }
+        // not to whatever the document carried, so a hand-edited file cannot
+        // overwrite them.
+        for key in ServiceExportFilter.serviceKeys { defaults.removeValue(forKey: key) }
 
         CustomServiceStore.update(id: definition.id) { object in
-            for (key, value) in defaults where ServiceExportFilter.shouldExportDefinitionKey(key) {
+            for (key, value) in defaults where ServiceExportFilter.shouldExportServiceKey(key) {
                 object[key] = value
             }
             // Written last and whole: the declarations are the field list the
@@ -223,32 +209,12 @@ public enum ServiceImporter {
         return definition.id
     }
 
-    /// Whether this service is already configured here, so the import can skip
-    /// it instead of adding a duplicate.
-    private static func isAlreadyPresent(
-        typeKey: String,
-        name: String,
-        definition: ServiceExport.ExportedDefinition?
-    ) -> Bool {
-        let instances = ServiceInstanceStore.instances()
+    /// Whether an instance of this kind is already configured here under this
+    /// name, so the import can skip it instead of adding a duplicate.
+    private static func isAlreadyPresent(type: String, name: String) -> Bool {
         let folded = name.lowercased()
-
-        if let definition {
-            // A script: the same *script* under the same name is the same
-            // service, whatever its type id is here — which is the point, since
-            // the id is per-device and a re-import would otherwise duplicate.
-            let byName = CustomServiceStore.definitions().first {
-                $0.name.lowercased() == definition.name.lowercased()
-                    && $0.script == definition.script
-            }
-            guard let byName else { return false }
-            return instances.contains {
-                $0.type == byName.id && $0.name.lowercased() == folded
-            }
-        }
-
-        return instances.contains {
-            $0.type == typeKey && $0.name.lowercased() == folded
+        return ServiceInstanceStore.instances().contains {
+            $0.type == type && $0.name.lowercased() == folded
         }
     }
 
@@ -258,5 +224,34 @@ public enum ServiceImporter {
         var index = 2
         while !ServiceInstanceStore.isNameAvailable("\(name) \(index)") { index += 1 }
         return "\(name) \(index)"
+    }
+
+    // MARK: - Preview
+
+    /// The icon a document says a service carries, or `nil` when it carries none.
+    ///
+    /// Read from the document rather than from what is stored here: a preview
+    /// describes what is *in the file*, and showing this device's existing logo
+    /// would be describing the wrong thing. The bundled artwork, which lives in
+    /// the Preferences layer, is left to the caller to fall back to.
+    public static func storedIcon(for service: ServiceExport.ExportedService) -> UIImage? {
+        guard let base64 = service.defaults?[PrefKey.customIcon] as? String else { return nil }
+        return ServiceIcon.image(fromBase64: base64)
+    }
+
+    /// The same, for an instance.
+    public static func storedIcon(for instance: ServiceExport.ExportedInstance) -> UIImage? {
+        guard let base64 = instance.settings?[PrefKey.customIcon] as? String else { return nil }
+        return ServiceIcon.image(fromBase64: base64)
+    }
+
+    /// Whether this device already has the script an instance refers to by name.
+    ///
+    /// The import preview uses this to say so up front: an instance whose script
+    /// is neither in the document nor on this device cannot be imported, and
+    /// finding that out after ticking it would be a poor way to learn it.
+    public static func hasService(named name: String) -> Bool {
+        let folded = name.lowercased()
+        return CustomServiceStore.definitions().contains { $0.name.lowercased() == folded }
     }
 }

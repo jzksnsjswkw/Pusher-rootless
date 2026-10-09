@@ -8,122 +8,139 @@ import Foundation
 /// which it is free to, being the app's own business — only the codec changes.
 public enum ServiceExporter {
 
-    // MARK: - Export
+    // MARK: - What to include
+
+    /// Which parts of the configuration a document should carry.
+    ///
+    /// Both flags rather than one, because the two are genuinely separable
+    /// intentions: "send my destinations to a friend who already has the script"
+    /// and "send my script to a friend who will configure it themselves" are both
+    /// ordinary things to want, and neither implies the other.
+    public struct Selection {
+        /// The configured destinations chosen.
+        public var instanceIDs: [String]
+        /// The scripts chosen.
+        public var serviceIDs: [String]
+
+        public init(instanceIDs: [String] = [], serviceIDs: [String] = []) {
+            self.instanceIDs = instanceIDs
+            self.serviceIDs = serviceIDs
+        }
+
+        public var isEmpty: Bool { instanceIDs.isEmpty && serviceIDs.isEmpty }
+    }
 
     /// Builds the document for a selection.
     ///
-    /// - Parameters:
-    ///   - instanceIDs: which configured services to include, in the order the
-    ///     list shows them, so the document reads in the order the user sees.
-    ///   - definitionIDs: which scripts to include **on their own**. A script
-    ///     referenced by an included instance travels with it regardless of this
-    ///     list — otherwise the instance would arrive with nothing to send
-    ///     through. This parameter is for the other case: moving a script to
-    ///     another device before anything uses it.
-    public static func document(
-        instanceIDs: [String], definitionIDs: [String] = []
-    ) -> ServiceExport {
+    /// The set of scripts is the chosen ones **plus any a chosen instance uses**.
+    /// An instance without its script has nothing to send through, so carrying
+    /// one and not the other would produce a document that cannot be used — and a
+    /// document is written to be used. Only the *scripts* are ever added this way;
+    /// an instance is never added because a script was chosen, since a script has
+    /// no destinations of its own.
+    public static func document(selection: Selection) -> ServiceExport {
         let definitions = Dictionary(
             uniqueKeysWithValues: CustomServiceStore.definitions().map { ($0.id, $0) }
         )
-        var services: [ServiceExport.ExportedService] = []
+        let instances = ServiceInstanceStore.instances()
 
+        var instanceIDs = selection.instanceIDs
+        var serviceIDs = selection.serviceIDs
+
+        // Every script the chosen instances use, whether or not it was ticked.
         for id in instanceIDs {
-            guard let instance = ServiceInstanceStore.instances().first(where: { $0.id == id })
+            guard let instance = instances.first(where: { $0.id == id }),
+                  definitions[instance.type] != nil
             else { continue }
-            services.append(export(instance: instance, definitions: definitions))
+            if !serviceIDs.contains(instance.type) {
+                serviceIDs.append(instance.type)
+            }
+        }
+        // A built-in kind is not a user's service, so it has no script to carry.
+        instanceIDs = instanceIDs.filter { id in
+            instances.contains { $0.id == id }
         }
 
-        // Scripts picked on their own, minus any already travelling inside a
-        // service above: writing one twice would make the importer create two
-        // copies of it.
-        let carried = Set(services.compactMap { $0.definition?.sourceID })
-        let standalone = definitionIDs
-            .filter { !carried.contains($0) }
-            .compactMap { definitions[$0] }
-            .map { export(definition: $0) }
+        // In the order the Services page shows them, so the document reads the way
+        // the page does rather than in the order ids happened to be collected.
+        let orderedServices = CustomServiceStore.definitions()
+            .filter { serviceIDs.contains($0.id) }
+            .map { export(service: $0) }
 
-        return ServiceExport(services: services, definitions: standalone)
+        let orderedInstances = ServiceInstanceStore.instances()
+            .filter { instanceIDs.contains($0.id) }
+            .map { export(instance: $0, definitions: definitions) }
+
+        return ServiceExport(services: orderedServices, instances: orderedInstances)
     }
 
-    /// Builds the document for everything configured.
+    /// Everything configured, both kinds.
     public static func documentForEverything() -> ServiceExport {
-        document(
+        document(selection: Selection(
             instanceIDs: ServiceInstanceStore.instances().map(\.id),
-            definitionIDs: CustomServiceStore.definitions().map(\.id)
-        )
+            serviceIDs: CustomServiceStore.definitions().map(\.id)
+        ))
     }
 
-    /// One script, on its own.
-    static func export(
-        definition source: CustomServiceDefinition
-    ) -> ServiceExport.ExportedDefinition {
+    // MARK: - One service
+
+    /// A script, carried whole.
+    static func export(service source: CustomServiceDefinition) -> ServiceExport.ExportedService {
         var stored = CustomServiceStore.rawEntry(id: source.id).raw
-        stored.removeValue(forKey: PrefKey.instanceID)
-        stored.removeValue(forKey: PrefKey.instanceName)
-        stored.removeValue(forKey: PrefKey.script)
+        for key in ServiceExportFilter.serviceKeys { stored.removeValue(forKey: key) }
+        // An icon written before the palette encoder existed is 32-bit RGBA and
+        // several times the size of the same picture now. Re-encoded here, on the
+        // way out: a document someone pastes into a message should carry the
+        // compact form.
         if let icon = stored[PrefKey.customIcon] as? String,
            let image = ServiceIcon.image(fromBase64: icon) {
             stored[PrefKey.customIcon] = ServiceIcon.storedValue(image)
         }
-        return ServiceExport.ExportedDefinition(
+
+        return ServiceExport.ExportedService(
             name: source.name,
             script: source.script,
-            sourceID: source.id,
             configFields: ConfigFields.declared(byDefinition: source.id).map(\.encoded),
             defaults: stored
         )
     }
 
+    // MARK: - One instance
+
     private static func export(
         instance: ServiceInstance,
         definitions: [String: CustomServiceDefinition]
-    ) -> ServiceExport.ExportedService {
-        let raw = instance.config.raw
+    ) -> ServiceExport.ExportedInstance {
+        let prefs = Prefs(instance.config.raw)
+        let script = definitions[instance.type]
 
-        // A script service travels with its script: the type is a user's own
-        // work, and an import on another device has nothing to resolve it by.
-        var definition: ServiceExport.ExportedDefinition?
-        if let source = definitions[instance.type] {
-            definition = export(definition: source)
-        }
-
-        // Everything the instance holds that is configuration, minus identity
-        // and per-app overrides (which are their own structure and are exported
-        // part of `settings` only for the top level).
-        var settings = raw
+        // Everything the instance holds that is configuration. The app list and
+        // the declared settings' values are lifted out below into their own
+        // fields, so they are excluded here rather than written twice.
+        var settings = instance.config.raw
             .filter { ServiceExportFilter.shouldExportInstanceKey($0.key) }
             .filter { $0.key != PrefKey.appList && $0.key != PrefKey.appListIsBlacklist }
             .filter { $0.key != PrefKey.configValues }
 
-        // An icon written before the palette encoder existed is stored as 32-bit
-        // RGBA and is several times the size of the same picture now. Re-encoded
-        // here, on the way out: a document someone pastes into a message should
-        // carry the compact form, and rewriting what is already on disk for no
-        // reason the user asked for would be a worse trade.
         if let stored = settings[PrefKey.customIcon] as? String,
            let image = ServiceIcon.image(fromBase64: stored) {
             settings[PrefKey.customIcon] = ServiceIcon.storedValue(image)
         }
 
-        // The declared settings' values, which are what the user typed into the
-        // service's own fields.
-        let values = Prefs(raw).dict(PrefKey.configValues)?.raw
+        let values = prefs.dict(PrefKey.configValues)?.raw
+        let appList = prefs.array(PrefKey.appList).compactMap { $0 as? String }
 
-        // The app list is lifted out because it is the one setting that is a list
-        // of identifiers rather than a scalar, and keeping it at the top level
-        // makes the document readable.
-        let appList = Prefs(raw).array(PrefKey.appList).compactMap { $0 as? String }
-
-        return ServiceExport.ExportedService(
+        return ServiceExport.ExportedInstance(
             name: instance.name,
-            type: definition == nil ? instance.type : nil,
-            definition: definition,
+            // A script instance is named by its script rather than by its type,
+            // which is a per-device id and means nothing on the far side.
+            type: script == nil ? instance.type : nil,
+            service: script?.name,
             enabled: instance.isEnabled,
             settings: settings.isEmpty ? nil : settings,
             values: (values?.isEmpty == false) ? values : nil,
             appList: appList.isEmpty ? nil : appList,
-            appListIsBlacklist: raw[PrefKey.appListIsBlacklist] as? Bool
+            appListIsBlacklist: instance.config.raw[PrefKey.appListIsBlacklist] as? Bool
         )
     }
 
@@ -131,9 +148,9 @@ public enum ServiceExporter {
 
     /// The document as pretty-printed JSON text.
     ///
-    /// Sorted keys and newlines: the file is meant to be readable, and in
-    /// practice someone will look at it — to check what a secret contains before
-    /// sending it to a friend, or to fix a script by hand.
+    /// Sorted keys and newlines: the file is meant to be readable, and in practice
+    /// someone will look at it — to check what a secret contains before sending it
+    /// to a friend, or to fix a script by hand.
     public static func json(from document: ServiceExport) throws -> String {
         let object = encode(document)
         let data = try JSONSerialization.data(
@@ -151,39 +168,34 @@ public enum ServiceExporter {
             "version": document.version,
             "kind": document.kind,
             "exportedAt": document.exportedAt,
+            "services": document.services.map(encode(service:)),
+            "instances": document.instances.map(encode(instance:)),
         ]
-        object["services"] = document.services.map(encode(service:))
-        if !document.definitions.isEmpty {
-            object["definitions"] = document.definitions.map(encode(definition:))
-        }
-        return object
-    }
-
-    private static func encode(
-        definition: ServiceExport.ExportedDefinition
-    ) -> [String: Any] {
-        var object: [String: Any] = [
-            "name": definition.name,
-            "script": definition.script,
-        ]
-        if let fields = definition.configFields { object["configFields"] = fields }
-        if let defaults = definition.defaults { object["defaults"] = defaults }
+        object["exportedAt"] = document.exportedAt
         return object
     }
 
     private static func encode(service: ServiceExport.ExportedService) -> [String: Any] {
         var object: [String: Any] = [
             "name": service.name,
-            "enabled": service.enabled,
+            "script": service.script,
         ]
-        if let type = service.type { object["type"] = type }
-        if let definition = service.definition {
-            object["definition"] = encode(definition: definition)
-        }
-        if let settings = service.settings { object["settings"] = settings }
-        if let values = service.values { object["values"] = values }
-        if let appList = service.appList { object["appList"] = appList }
-        if let isBlacklist = service.appListIsBlacklist {
+        if let fields = service.configFields { object["configFields"] = fields }
+        if let defaults = service.defaults { object["defaults"] = defaults }
+        return object
+    }
+
+    private static func encode(instance: ServiceExport.ExportedInstance) -> [String: Any] {
+        var object: [String: Any] = [
+            "name": instance.name,
+            "enabled": instance.enabled,
+        ]
+        if let type = instance.type { object["type"] = type }
+        if let service = instance.service { object["service"] = service }
+        if let settings = instance.settings { object["settings"] = settings }
+        if let values = instance.values { object["values"] = values }
+        if let appList = instance.appList { object["appList"] = appList }
+        if let isBlacklist = instance.appListIsBlacklist {
             object["appListIsBlacklist"] = isBlacklist
         }
         return object
@@ -210,11 +222,6 @@ public enum ServiceExporter {
             )
         }
         guard let root = object as? [String: Any] else {
-            // A bare array of services is accepted: it is what someone editing
-            // the file by hand most plausibly produces.
-            if let services = object as? [[String: Any]] {
-                return ServiceExport(services: services.compactMap(decode(service:)))
-            }
             throw ServiceImportError.malformed("The document is not a JSON object")
         }
 
@@ -225,32 +232,35 @@ public enum ServiceExporter {
             throw ServiceImportError.tooNew(version, ServiceExport.currentVersion)
         }
 
-        let rawServices = root["services"] as? [[String: Any]] ?? []
-        let services = rawServices.compactMap(decode(service:))
-        let definitions = (root["definitions"] as? [[String: Any]] ?? [])
-            .compactMap(decode(definition:))
+        let services = (root["services"] as? [[String: Any]] ?? [])
+            .compactMap(decode(service:))
+        let instances = (root["instances"] as? [[String: Any]] ?? [])
+            .compactMap(decode(instance:))
 
-        guard !services.isEmpty || !definitions.isEmpty else {
+        guard !services.isEmpty || !instances.isEmpty else {
             throw ServiceImportError.malformed("The document has no usable services in it")
         }
 
-        var document = ServiceExport(services: services, definitions: definitions)
+        var document = ServiceExport(services: services, instances: instances)
         document.version = (root["version"] as? Int) ?? ServiceExport.currentVersion
         document.kind = (root["kind"] as? String) ?? ServiceExport.documentKind
         document.exportedAt = (root["exportedAt"] as? String) ?? ""
         return document
     }
 
-    /// Reads one standalone definition.
-    private static func decode(
-        definition raw: [String: Any]
-    ) -> ServiceExport.ExportedDefinition? {
-        guard let script = raw["script"] as? String,
-              let name = (raw["name"] as? String)?
-                  .trimmingCharacters(in: .whitespacesAndNewlines),
-              !name.isEmpty
+    /// Reads one script, or `nil` when it lacks what it needs to be one.
+    ///
+    /// Forgiving on purpose: a hand-edited file may have dropped an optional
+    /// field, and refusing the whole document because one entry is incomplete
+    /// would make the format unpleasant to work with. A script needs a name — an
+    /// instance refers to it by name — and a body.
+    private static func decode(service raw: [String: Any]) -> ServiceExport.ExportedService? {
+        guard let name = (raw["name"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty,
+            let script = raw["script"] as? String
         else { return nil }
-        return ServiceExport.ExportedDefinition(
+
+        return ServiceExport.ExportedService(
             name: name,
             script: script,
             configFields: raw["configFields"] as? [[String: Any]],
@@ -258,35 +268,26 @@ public enum ServiceExporter {
         )
     }
 
-    /// Reads one service, or `nil` when it lacks what it needs to be one.
+    /// Reads one instance, or `nil` when it lacks what it needs to be one.
     ///
-    /// Forgiving on purpose: a hand-edited file may have dropped an optional
-    /// field, and refusing the whole document because one entry is incomplete
-    /// would make the format unpleasant to work with. A service with no name and
-    /// no type is the only thing that cannot be used.
-    private static func decode(service raw: [String: Any]) -> ServiceExport.ExportedService? {
-        let name = (raw["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let type = (raw["type"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// An instance needs a name and something to send through: either a built-in
+    /// type or the name of a script the document carries.
+    private static func decode(instance raw: [String: Any]) -> ServiceExport.ExportedInstance? {
+        guard let name = (raw["name"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty
+        else { return nil }
 
-        var definition: ServiceExport.ExportedDefinition?
-        if let rawDefinition = raw["definition"] as? [String: Any] {
-            let script = rawDefinition["script"] as? String ?? ""
-            let definitionName = (rawDefinition["name"] as? String) ?? type ?? "Service"
-            definition = ServiceExport.ExportedDefinition(
-                name: definitionName,
-                script: script,
-                configFields: rawDefinition["configFields"] as? [[String: Any]],
-                defaults: rawDefinition["defaults"] as? [String: Any]
-            )
-        }
+        let type = (raw["type"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let service = (raw["service"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard let resolvedName = name, !resolvedName.isEmpty else { return nil }
-        guard (type?.isEmpty == false) || definition != nil else { return nil }
+        guard (type?.isEmpty == false) || (service?.isEmpty == false) else { return nil }
 
-        return ServiceExport.ExportedService(
-            name: resolvedName,
+        return ServiceExport.ExportedInstance(
+            name: name,
             type: type?.isEmpty == true ? nil : type,
-            definition: definition,
+            service: service?.isEmpty == true ? nil : service,
             enabled: (raw["enabled"] as? NSNumber)?.boolValue
                 ?? (raw["enabled"] as? Bool) ?? true,
             settings: raw["settings"] as? [String: Any],
@@ -303,8 +304,8 @@ public enum ServiceImportError: LocalizedError {
     case malformed(String)
     case notAnExport(String)
     case tooNew(Int, Int)
-    /// Every service in the document already exists here, by type and name.
-    case nothingToAdd([String])
+    /// An instance refers to a script the document does not carry.
+    case missingService(String, String)
 
     public var errorDescription: String? {
         switch self {
@@ -315,13 +316,9 @@ public enum ServiceImportError: LocalizedError {
         case .tooNew(let version, let supported):
             return "This export was made by a newer version of Pusher "
                 + "(format \(version)); this one reads up to \(supported)."
-        case .nothingToAdd(let names):
-            return "Nothing was added: this device already has "
-                + names.joined(separator: ", ") + "."
+        case .missingService(let instance, let service):
+            return "\"\(instance)\" uses a service called \"\(service)\", which the "
+                + "document does not include."
         }
     }
-
-    /// The Core layer has no string table, so pages word these themselves; this
-    /// is the English text a page falls back to.
-    public var englishDescription: String { errorDescription ?? "Import failed" }
 }

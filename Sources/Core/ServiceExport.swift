@@ -1,89 +1,127 @@
 import Foundation
 
-/// The portable form of a service: what travels to another device.
+/// The portable form of a configuration: two arrays, read and written by hand.
 ///
-/// Plain JSON, and plain *data* — a definition's declared settings, an
-/// instance's filled-in values, a script's source. Nothing that is only true of
-/// one device goes in: no instance identifiers, no logs, no local storage, no
-/// cached tokens. Those are the parts that would make importing on a second
-/// phone produce a service that is subtly the first phone's.
+/// ## Why two arrays
 ///
-/// The shape is meant to be read and edited by hand, since that is most of the
-/// point of exporting something as JSON: an array of objects with obvious key
-/// names, pretty-printed, rather than an opaque blob.
+/// A *service* here is a script the user wrote — a new kind of destination — and
+/// an *instance* is one configured use of a kind. They are different things with
+/// different lifetimes: a script can be written before anything uses it and can
+/// outlive every instance that did, and one script normally has several instances.
+/// So they travel as separate lists, and an instance refers to its script by
+/// name:
+///
+/// ```json
+/// {
+///   "services":  [ { "name": "My Bark", "script": "push({ url })" } ],
+///   "instances": [ { "name": "Phone",  "service": "My Bark", "values": { … } } ]
+/// }
+/// ```
+///
+/// A single script therefore appears exactly once no matter how many instances
+/// use it, and the file reads the way the two pages are laid out.
+///
+/// ## What does not travel
+///
+/// Nothing that is only true of one device: no instance identifiers, no logs, no
+/// a script's `localStorage`, no cached tokens. Those are the parts that would
+/// make a configuration imported on a second phone be subtly the first phone's —
+/// claiming the old one's history, or sending with a credential nobody typed
+/// there.
 public struct ServiceExport {
 
-    /// The document format's version, so a future change can be recognised
-    /// rather than misread. Refused when it is newer than this build understands.
+    /// The document format's version, so a future change can be recognised rather
+    /// than misread. Refused when it is newer than this build understands.
     public static let currentVersion = 1
 
     public var version: Int
     public var kind: String
     public var exportedAt: String
 
-    /// The configured destinations.
+    /// The scripts: the kinds of destination the user defined.
     public var services: [ExportedService]
 
-    /// Scripts that are being moved on their own, with no destination yet.
-    ///
-    /// A separate array rather than an instance-shaped entry, because that is what
-    /// the user picked: a service definition is a thing in its own right — it
-    /// appears on its own page, can be written before anything uses it, and can
-    /// outlive every instance that referenced it. Folding it into `services`
-    /// would mean importing it as a destination nobody asked for.
-    public var definitions: [ExportedDefinition]
+    /// The configured destinations.
+    public var instances: [ExportedInstance]
 
-    public init(
-        services: [ExportedService],
-        definitions: [ExportedDefinition] = []
-    ) {
+    public init(services: [ExportedService] = [], instances: [ExportedInstance] = []) {
         self.version = Self.currentVersion
         self.kind = Self.documentKind
         self.exportedAt = ISO8601DateFormatter().string(from: Date())
         self.services = services
-        self.definitions = definitions
+        self.instances = instances
     }
-
-    /// How many things the document carries, for a one-line description.
-    public var count: Int { services.count + definitions.count }
 
     public static let documentKind = "com.noahsaso.pusher.services"
 
-    // MARK: - One exported service
+    /// How many things the document carries, for a one-line description.
+    public var count: Int { services.count + instances.count }
 
-    /// One service: the type if the user wrote it, the configured destination,
-    /// and that destination's filled-in settings.
+    // MARK: - A script
+
+    /// One service: the user's own kind of destination, carried whole.
     public struct ExportedService {
-        /// The service's own name, which is what the user recognises it by.
+        /// What the user calls it. An instance refers to its script by this name,
+        /// which is also why the name is required: a script with no name could
+        /// not be referred to.
         public var name: String
 
-        /// The type it is, for a built-in service (`"Pushover"`, `"Bark"`, …).
-        /// `nil` for a script the user wrote, which travels in ``definition``.
+        public var script: String
+
+        /// The settings it declares, so an instance's ``ExportedInstance/values``
+        /// have something to be keyed by on the far side.
+        public var configFields: [[String: Any]]?
+
+        /// Its own payload and run options, which its instances inherit.
+        public var defaults: [String: Any]?
+
+        public init(
+            name: String,
+            script: String,
+            configFields: [[String: Any]]? = nil,
+            defaults: [String: Any]? = nil
+        ) {
+            self.name = name
+            self.script = script
+            self.configFields = configFields
+            self.defaults = defaults
+        }
+    }
+
+    // MARK: - An instance
+
+    /// One configured destination.
+    public struct ExportedInstance {
+        /// What the user calls it.
+        public var name: String
+
+        /// The built-in kind, for an instance of one (`"Pushover"`, `"Bark"`, …).
+        /// `nil` when the instance uses a script.
         public var type: String?
 
-        /// The script service this instance uses, when it uses one.
-        public var definition: ExportedDefinition?
+        /// The name of the script this instance uses, matching a ``ExportedService``
+        /// by name. `nil` for a built-in kind.
+        public var service: String?
 
-        /// Whether the instance was switched on here.
+        /// Whether it was switched on here.
         public var enabled: Bool
 
-        /// The non-secret settings of a built-in service as its descriptor
-        /// normalizes them, so importing restores what the page shows.
+        /// The rest of its settings, keyed as the app stores them.
         public var settings: [String: Any]?
 
-        /// The values this instance filled into its service's declared settings,
-        /// keyed by the setting's name.
+        /// The values it filled into its service's declared settings, keyed by
+        /// the setting's name.
         public var values: [String: Any]?
 
-        /// The apps this instance's filter applies to, and which direction it
-        /// reads in, when the user set one.
+        /// The apps its filter applies to, and which direction it reads in, when
+        /// the user set one.
         public var appList: [String]?
         public var appListIsBlacklist: Bool?
 
         public init(
             name: String,
             type: String? = nil,
-            definition: ExportedDefinition? = nil,
+            service: String? = nil,
             enabled: Bool = true,
             settings: [String: Any]? = nil,
             values: [String: Any]? = nil,
@@ -92,7 +130,7 @@ public struct ServiceExport {
         ) {
             self.name = name
             self.type = type
-            self.definition = definition
+            self.service = service
             self.enabled = enabled
             self.settings = settings
             self.values = values
@@ -100,45 +138,16 @@ public struct ServiceExport {
             self.appListIsBlacklist = appListIsBlacklist
         }
     }
-
-    /// A script the user wrote, carried whole.
-    public struct ExportedDefinition {
-        public var name: String
-        public var script: String
-        /// The source definition's id, used only while building a document so one
-        /// script referenced by several instances is written once. Never read on
-        /// import: a new device gives the definition its own id.
-        public var sourceID: String?
-        /// The settings it declares, so the importer can recreate the fields an
-        /// instance's ``ExportedService/values`` are keyed by.
-        public var configFields: [[String: Any]]?
-        /// Its own payload options and run options, which its instances inherit.
-        public var defaults: [String: Any]?
-
-        public init(
-            name: String,
-            script: String,
-            sourceID: String? = nil,
-            configFields: [[String: Any]]? = nil,
-            defaults: [String: Any]? = nil
-        ) {
-            self.name = name
-            self.script = script
-            self.sourceID = sourceID
-            self.configFields = configFields
-            self.defaults = defaults
-        }
-    }
 }
 
 // MARK: - Fields that belong to the device
 
-/// The keys that describe *this* device rather than the service.
+/// The keys that describe *this* device rather than the configuration.
 ///
 /// Dropped on export and ignored on import, because they are state rather than
-/// configuration. Importing a container's id or a log would make the new service
+/// settings. Importing a container's id or a log would make the new instance
 /// claim the old one's history; importing a cached WeChat token would make it
-/// send with a credential the user did not type here; importing a service's
+/// send with a credential the user did not type here; importing a script's
 /// `localStorage` would carry one device's memory of a conversation into
 /// another's.
 public enum ServiceExportFilter {
@@ -164,10 +173,16 @@ public enum ServiceExportFilter {
         return !instanceKeySuffixes.contains { key.hasSuffix($0) }
     }
 
-    /// The definition keys that are this device's, filtered the same way.
-    static let definitionKeys: Set<String> = []
+    /// Keys that never travel on a script: its own identity, which is per-device,
+    /// and the settings it declares, which are written as their own field.
+    static let serviceKeys: Set<String> = [
+        PrefKey.instanceID,
+        PrefKey.instanceName,
+        PrefKey.script,
+        PrefKey.configFields,
+    ]
 
-    public static func shouldExportDefinitionKey(_ key: String) -> Bool {
-        !definitionKeys.contains(key)
+    public static func shouldExportServiceKey(_ key: String) -> Bool {
+        !serviceKeys.contains(key)
     }
 }

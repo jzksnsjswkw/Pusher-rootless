@@ -3,139 +3,104 @@ import UniformTypeIdentifiers
 
 /// One selectable row: something that can travel.
 struct Item {
-        public enum Kind {
-            /// A configured destination.
-            case instance
-            /// A script, on its own.
-            case definition
-        }
-
-        public let kind: Kind
-        /// The id the item has here.
-        public let id: String
-        public let name: String
-        /// A second line: the type, or what the script is used by.
-        public let detail: String
-        public let icon: UIImage?
-        /// Whether this one starts out selected.
-        ///
-        /// Scripts are only pre-selected when they are not already travelling
-        /// inside an instance — see ``ServiceExporter/document(instanceIDs:definitionIDs:)``
-        /// — because a script carried by a selected instance needs no entry of
-        /// its own and one here would be a duplicate on the far side.
-        public let isPreSelected: Bool
-
-        public init(
-            kind: Kind, id: String, name: String, detail: String,
-            icon: UIImage?, isPreSelected: Bool
-        ) {
-            self.kind = kind
-            self.id = id
-            self.name = name
-            self.detail = detail
-            self.icon = icon
-            self.isPreSelected = isPreSelected
-        }
+    /// The name it has, which is also how it is identified here: a name is
+    /// unique within each kind, and nothing is stored until the import runs,
+    /// so there is no id to use.
+    let name: String
+    /// A second line: the kind, or the script an instance uses.
+    let detail: String
+    let icon: UIImage?
+    /// Whether its row is ticked to begin with.
+    let isPreSelected: Bool
 }
 
 
 /// Choosing what to move, and moving it.
 ///
-/// A picker rather than "everything", because both lists carry things a user may
+/// A picker rather than "everything", because a list carries things a user may
 /// deliberately want to leave behind: an instance holding a credential they are
 /// not sending anywhere, a script half-written, a test service. Exporting all of
 /// it and asking the recipient to delete the extras is a worse trade than one
 /// screen of checkboxes.
 ///
 /// The document is plain JSON, deliberately: it is meant to survive being pasted
-/// into a message, hand-edited, or read by a person deciding whether to send it
-/// to someone. That is also why export offers the clipboard as well as a file —
-/// the common case is sending a service to a friend over a chat app.
+/// into a message, hand-edited, or read by a person deciding whether to send it to
+/// someone. That is also why export offers the clipboard as well as a file — the
+/// common case is sending a service to a friend over a chat app.
 enum ServiceTransfer {
 
-    /// Which page the sheet was opened from, and therefore what it offers.
+    /// Which page the sheet was opened from, and therefore what it lists.
     ///
-    /// The two lists are separate pages precisely because they are different
-    /// kinds of thing, so a transfer started from one should not ask about the
-    /// other — importing a script from the Instances page would leave the user
-    /// wondering where it went.
+    /// The two pages are separate because they are different kinds of thing, so a
+    /// transfer started from one lists that one — and the *other* kind is a
+    /// switch at the bottom rather than a set of rows mixed in, because it is a
+    /// different decision: "and the scripts too", not "which scripts".
     enum Scope {
-        /// Configured destinations, with the scripts they use.
+        /// Configured destinations, with an option to carry their scripts.
         case instances
-        /// Scripts, alone.
+        /// Scripts, with an option to carry their destinations.
         case services
     }
 
-    // MARK: - What is on offer
-
-    /// Everything that can be exported, in the order the page shows it.
+    /// What a picker was asked, and what it produced.
     ///
-    /// - Parameter scope: what the page that opened this is about. See ``Scope``.
-    static func items(scope: Scope = .instances) -> [Item] {
-        let instances = ServiceInstanceStore.instances()
-        let definitions = CustomServiceStore.definitions()
+    /// One type for both directions, because the two sheets differ only in their
+    /// labels and what happens to the answer.
+    private struct Request {
+        var title: String
+        var actionTitle: String
+        var footer: String
+        /// The label of the switch that also carries the other kind, or `nil`
+        /// when there is nothing else to carry.
+        var companionLabel: String?
+        /// Whether that switch starts on.
+        var companionIsOn: Bool
+        /// What the switch's footer says; it depends on the state, since what
+        /// happens when it is on and off is exactly what a user needs told.
+        var companionFooter: (Bool) -> String
+        var onConfirm: ([String], Bool) -> Void
+    }
 
-        if scope == .services {
-            // Only scripts, and each as its own entry: this page is about the
-            // scripts themselves, so a script used by five services is still one
-            // thing to move.
-            return definitions.map { definition in
+    // MARK: - Items
+
+    /// The rows for one page, in the order the page shows them.
+    static func items(scope: Scope) -> [Item] {
+        switch scope {
+        case .instances:
+            let definitions = CustomServiceStore.definitions()
+            return ServiceInstanceStore.instances().map { instance in
+                let script = definitions.first { $0.id == instance.type }
+                return Item(
+                    name: instance.name,
+                    detail: script.map {
+                        String(format: "Uses the script \"%@\"".localized, $0.name)
+                    } ?? instance.descriptor.displayName,
+                    icon: ServiceIcon.logo(forInstanceID: instance.id)
+                        ?? ServiceArtwork.image(forType: instance.type),
+                    isPreSelected: true
+                )
+            }
+
+        case .services:
+            let instances = ServiceInstanceStore.instances()
+            return CustomServiceStore.definitions().map { definition in
                 let count = instances.filter { $0.type == definition.id }.count
                 return Item(
-                    kind: .definition,
-                    id: definition.id,
                     name: definition.name,
                     detail: count == 0
-                        ? "Script · not used by any service".localized
-                        : String(format: "Script · used by %d services".localized, count),
+                        ? "Not used by any service yet".localized
+                        : String(format: "Used by %d services".localized, count),
                     icon: ServiceIcon.logo(forDefinitionID: definition.id)
                         ?? ServiceArtwork.image(forType: definition.id),
                     isPreSelected: true
                 )
             }
         }
-
-        var items: [Item] = instances.map { instance in
-            let usage = definitions.first { $0.id == instance.type }
-            return Item(
-                kind: .instance,
-                id: instance.id,
-                name: instance.name,
-                detail: usage.map { "\(instance.descriptor.displayName) · script: \($0.name)" }
-                    ?? instance.descriptor.displayName,
-                icon: ServiceIcon.logo(forInstanceID: instance.id)
-                    ?? ServiceArtwork.image(forType: instance.type),
-                isPreSelected: true
-            )
-        }
-
-        // A script referenced by an instance above travels with it, so it is not
-        // offered as a separate choice; one nothing uses is, since moving a
-        // half-written script to another device is a real intention.
-        let referenced = Set(instances.map(\.type))
-        let usedBy = { (id: String) -> Int in
-            instances.filter { $0.type == id }.count
-        }
-        items += definitions.map { definition in
-            let count = usedBy(definition.id)
-            return Item(
-                kind: .definition,
-                id: definition.id,
-                name: definition.name,
-                detail: count == 0
-                    ? "Script · not used by any service".localized
-                    : String(format: "Script · used by %d services".localized, count),
-                icon: ServiceIcon.logo(forDefinitionID: definition.id)
-                    ?? ServiceArtwork.image(forType: definition.id),
-                isPreSelected: !referenced.contains(definition.id)
-            )
-        }
-        return items
     }
 
     // MARK: - Export
 
-    /// Offers to export a selection from one page.
+    /// Offers to export from one page.
     static func offerExport(from controller: UIViewController, scope: Scope = .instances) {
         let items = items(scope: scope)
         guard !items.isEmpty else {
@@ -146,56 +111,66 @@ enum ServiceTransfer {
             return
         }
 
-        // One thing configured and nothing else to consider: asking which ones
-        // would be a screen with a single row on it.
-        if items.count == 1 {
-            deliver(items: items, from: controller)
+        // One thing and nothing else to consider: asking which ones would be a
+        // screen with a single row on it.
+        let companionAvailable = companionCount(scope: scope) > 0
+        if items.count == 1, !companionAvailable {
+            deliver(names: [items[0].name], includeCompanion: false,
+                    scope: scope, from: controller)
             return
         }
 
-        let picker = TransferPickerController(
-            title: scope == .services
-                ? "Export Services".localized
-                : "Export Services".localized,
-            items: items,
+        let request = Request(
+            title: "Export Services".localized,
             actionTitle: "Export".localized,
             footer: scope == .services
                 ? "The ones you choose are written to a file.".localized
-                : ("The ones you choose are written to a file. A script used by "
-                    + "a chosen service is included with it.").localized
-        ) { chosen in
-            deliver(items: chosen, from: controller)
+                : ("The ones you choose are written to a file. A service that uses "
+                    + "a script carries it, so it works on the other device.").localized,
+            companionLabel: companionLabel(scope: scope, forExport: true),
+            companionIsOn: true,
+            companionFooter: { isOn in
+                if scope == .services {
+                    return isOn
+                        ? ("Each script's services are written too, so they work as "
+                            + "soon as the file is imported.").localized
+                        : "Only the scripts are written. Nothing will use them yet."
+                            .localized
+                }
+                return isOn
+                    ? ("The scripts your services use are written too, so they work "
+                        + "on the other device.").localized
+                    : ("Only the services are written. Anything using a script will "
+                        + "need that script already on the other device.").localized
+            }
+        ) { names, includeCompanion in
+            deliver(names: names, includeCompanion: includeCompanion,
+                    scope: scope, from: controller)
         }
-        present(controller, UINavigationController(rootViewController: picker))
+
+        presentPicker(request, items: items, from: controller)
     }
 
-    /// Builds the document for the chosen items and asks where to put it.
-    private static func deliver(items: [Item], from controller: UIViewController) {
-        let document = ServiceExporter.document(
-            instanceIDs: items.filter { $0.kind == .instance }.map(\.id),
-            definitionIDs: items.filter { $0.kind == .definition }.map(\.id)
-        )
+    /// Builds the document for a selection and asks where to put it.
+    private static func deliver(
+        names: [String], includeCompanion: Bool, scope: Scope, from controller: UIViewController
+    ) {
+        let document = document(names: names, includeCompanion: includeCompanion, scope: scope)
         guard document.count > 0 else {
             present(controller, title: "Nothing to Export".localized,
                     message: "Nothing was selected.".localized)
             return
         }
 
-        var body = String(
-            format: "%d services will be exported.".localized, document.services.count
-        )
-        if !document.definitions.isEmpty {
-            body += " " + String(
-                format: "%d scripts will be exported on their own.".localized,
-                document.definitions.count
-            )
+        var body = String(format: "%d services will be exported.".localized,
+                          document.instances.count)
+        if document.services.count > 0 {
+            body += " " + String(format: "%d scripts are included.".localized,
+                                 document.services.count)
         }
-        let scripts = document.services.filter { $0.definition != nil }.count
-        if scripts > 0 {
-            body += " " + String(
-                format: "%d of the services are scripts, which are included."
-                    .localized, scripts
-            )
+        if document.instances.isEmpty {
+            body = String(format: "%d scripts will be exported.".localized,
+                          document.services.count)
         }
 
         let sheet = UIAlertController(
@@ -249,6 +224,45 @@ enum ServiceTransfer {
         present(controller, sheet)
     }
 
+    /// Resolves chosen names into the exporter's selection.
+    private static func document(
+        names: [String], includeCompanion: Bool, scope: Scope
+    ) -> ServiceExport {
+        let chosen = Set(names)
+        switch scope {
+        case .instances:
+            let instanceIDs = ServiceInstanceStore.instances()
+                .filter { chosen.contains($0.name) }
+                .map(\.id)
+            // The scripts come along because an instance without its script could
+            // not send anything, and the exporter adds any a chosen instance uses
+            // even when this is empty.
+            let serviceIDs = includeCompanion
+                ? CustomServiceStore.definitions().map(\.id)
+                : []
+            return ServiceExporter.document(
+                selection: ServiceExporter.Selection(
+                    instanceIDs: instanceIDs, serviceIDs: serviceIDs
+                )
+            )
+
+        case .services:
+            let serviceIDs = CustomServiceStore.definitions()
+                .filter { chosen.contains($0.name) }
+                .map(\.id)
+            let instanceIDs = includeCompanion
+                ? ServiceInstanceStore.instances()
+                    .filter { serviceIDs.contains($0.type) }
+                    .map(\.id)
+                : []
+            return ServiceExporter.document(
+                selection: ServiceExporter.Selection(
+                    instanceIDs: instanceIDs, serviceIDs: serviceIDs
+                )
+            )
+        }
+    }
+
     /// Writes the document to a temporary file, returning its URL.
     ///
     /// A file rather than a string in the share sheet: a `.json` attachment
@@ -279,7 +293,7 @@ enum ServiceTransfer {
                         message: "The clipboard is empty.".localized)
                 return
             }
-            preview(text: text, from: controller, scope: scope)
+            read(text: text, scope: scope, from: controller)
         })
         sheet.addAction(UIAlertAction(title: "From a File".localized, style: .default) {
             _ in
@@ -296,7 +310,7 @@ enum ServiceTransfer {
                 guard let url else { return }
                 do {
                     let text = try String(contentsOf: url, encoding: .utf8)
-                    preview(text: text, from: controller, scope: scope)
+                    read(text: text, scope: scope, from: controller)
                 } catch {
                     present(controller, title: "Import Failed".localized,
                             message: error.localizedDescription)
@@ -308,15 +322,13 @@ enum ServiceTransfer {
         present(controller, sheet)
     }
 
-    /// Shows what a document holds before anything is written.
+    /// Reads a document and shows what is in it before writing anything.
     ///
     /// Reading first, applying second: a pasted document is opaque, and the only
     /// way a user can tell a friend's services from their own backup is if they
-    /// are shown the names. It also lets them leave some behind, which is the
-    /// same choice export offers.
-    private static func preview(
-        text: String, from controller: UIViewController, scope: Scope
-    ) {
+    /// are shown the names. It also lets them leave some behind, which is the same
+    /// choice export offers.
+    private static func read(text: String, scope: Scope, from controller: UIViewController) {
         let document: ServiceExport
         do {
             document = try ServiceExporter.document(fromJSON: text)
@@ -325,84 +337,129 @@ enum ServiceTransfer {
             return
         }
 
-        // One line per entry, as the picker's items. Named with what the entry is,
-        // since a name alone does not say whether it is a destination or a script.
-        //
-        // A page of scripts shows only the scripts a document carries: its
-        // instances are for the Instances page to import, and offering them here
-        // would put a destination on the page that does not list destinations.
-        var items: [Item] = scope == .services ? [] : document.services.map { service in
-            let isScript = service.definition != nil
-            return Item(
-                kind: .instance,
-                // The document's own index is the id here: nothing is stored
-                // until the import runs, so there is no id to use.
-                id: service.name,
-                name: service.name,
-                detail: isScript
-                    ? "Service · uses a script".localized
-                    : (service.type ?? "Service".localized),
-                icon: ServiceImporter.storedIcon(for: service)
-                    ?? service.type.flatMap { ServiceArtwork.image(forType: $0) },
-                isPreSelected: true
-            )
-        }
-        items += document.definitions.map { definition in
-            Item(
-                kind: .definition,
-                id: definition.name,
-                name: definition.name,
-                detail: "Script".localized,
-                icon: ServiceIcon.image(fromBase64: (definition.defaults?[PrefKey.customIcon]
-                    as? String) ?? ""),
-                isPreSelected: true
-            )
-        }
-
-        guard !items.isEmpty else {
+        let listing = listing(for: document, scope: scope)
+        guard !listing.items.isEmpty else {
             present(controller, title: "Nothing to Import".localized,
-                    message: "The document has no services in it.".localized)
+                    message: scope == .services
+                        ? "The document has no services in it.".localized
+                        : "The document has no services in it.".localized)
             return
         }
 
-        let picker = TransferPickerController(
-            title: "Import Services".localized,
-            items: items,
-            actionTitle: "Import".localized,
-            footer: ("Services already on this device are left alone; anything new "
-                + "is added under the name shown here.").localized
-        ) { chosen in
-            apply(
-                document: document,
-                selecting: Set(chosen.map(\.id)),
-                scope: scope,
-                from: controller
-            )
+        let companionAvailable = !listing.companion.isEmpty
+        if listing.items.count == 1, !companionAvailable {
+            apply(document: document, names: [listing.items[0].name],
+                  includeCompanion: false, scope: scope, from: controller)
+            return
         }
-        present(controller, UINavigationController(rootViewController: picker))
+
+        let request = Request(
+            title: "Import Services".localized,
+            actionTitle: "Import".localized,
+            footer: ("Services already on this device are left alone; anything new is "
+                + "added under the name shown here.").localized,
+            companionLabel: companionLabel(scope: scope, forExport: false),
+            // On by default: the scripts are what makes an imported service work,
+            // and a document arriving with anything else is a deliberate choice its
+            // author made when exporting.
+            companionIsOn: true,
+            companionFooter: { isOn in
+                if scope == .services {
+                    return isOn
+                        ? "The services that use them are added too.".localized
+                        : ("Only the scripts are added. Nothing will use them until "
+                            + "you configure a service yourself.").localized
+                }
+                return isOn
+                    ? ("The scripts the services use are added too, so they work "
+                        + "straight away.").localized
+                    : ("Only the services are added. Anything using a script needs "
+                        + "that script to be here already.").localized
+            }
+        ) { names, includeCompanion in
+            apply(document: document, names: names,
+                  includeCompanion: includeCompanion, scope: scope, from: controller)
+        }
+
+        presentPicker(request, items: listing.items, from: controller)
     }
 
-    /// Adds the chosen entries from a document.
+    /// What a document offers the page that opened it.
+    private struct Listing {
+        /// The rows to show, being the kind this page is about.
+        var items: [Item]
+        /// How many of the *other* kind the document also carries.
+        var companion: [String]
+    }
+
+    private static func listing(for document: ServiceExport, scope: Scope) -> Listing {
+        switch scope {
+        case .instances:
+            return Listing(
+                items: document.instances.map { instance in
+                    Item(
+                        name: instance.name,
+                        detail: instance.service.map {
+                            String(format: "Uses the script \"%@\"".localized, $0)
+                        } ?? (instance.type ?? ""),
+                        icon: ServiceImporter.storedIcon(for: instance)
+                            ?? instance.type.flatMap { ServiceArtwork.image(forType: $0) },
+                        isPreSelected: true
+                    )
+                },
+                companion: document.services.map(\.name)
+            )
+
+        case .services:
+            return Listing(
+                items: document.services.map { service in
+                    let fields = service.configFields?.count ?? 0
+                    return Item(
+                        name: service.name,
+                        detail: fields == 0
+                            ? "Script".localized
+                            : String(format: "Script · %d settings".localized, fields),
+                        icon: ServiceImporter.storedIcon(for: service)
+                            ?? ServiceArtwork.image(forType: service.name),
+                        isPreSelected: true
+                    )
+                },
+                companion: document.instances.map(\.name)
+            )
+        }
+    }
+
+    /// Adds the chosen entries.
     private static func apply(
-        document: ServiceExport, selecting ids: Set<String>, scope: Scope,
+        document: ServiceExport, names: [String], includeCompanion: Bool, scope: Scope,
         from controller: UIViewController
     ) {
         // Filtered into a document of its own, so the importer has one job and
         // there is no second place that knows how a selection is spelled.
-        //
-        // From the Services page, the *instances* of a document are dropped
-        // rather than offered: the page is about scripts, and a destination added
-        // behind it would appear on a list the user is not looking at. A script
-        // those instances use still arrives through the definitions they carry.
-        var selection = ServiceExport(
-            services: scope == .services
-                ? []
-                : document.services.filter { ids.contains($0.name) }
-        )
-        selection.definitions = document.definitions.filter { ids.contains($0.name) }
-            + (scope == .services
-                ? document.services.compactMap { ids.contains($0.name) ? $0.definition : nil }
-                : [])
+        let chosen = Set(names)
+        var selection: ServiceExport
+        switch scope {
+        case .instances:
+            // An instance cannot be applied without its script, so the scripts
+            // are always brought along when they were not offered as rows.
+            selection = ServiceExport(
+                services: includeCompanion ? document.services : document.services,
+                instances: document.instances.filter { chosen.contains($0.name) }
+            )
+        case .services:
+            selection = ServiceExport(
+                services: document.services.filter { chosen.contains($0.name) },
+                instances: includeCompanion
+                    ? document.instances.filter { instance in
+                        instance.service.map { serviceName in
+                            document.services.contains {
+                                $0.name == serviceName && chosen.contains($0.name)
+                            }
+                        } ?? false
+                    }
+                    : []
+            )
+        }
 
         guard selection.count > 0 else {
             present(controller, title: "Nothing to Import".localized,
@@ -412,34 +469,8 @@ enum ServiceTransfer {
 
         do {
             let result = try ServiceImporter.apply(selection)
-
-            var message = String(
-                format: "%d services were added.".localized, result.added.count
-            )
-            if !result.definitions.isEmpty {
-                message += "\n" + String(
-                    format: "%d scripts were added: %@".localized,
-                    result.definitions.count, result.definitions.joined(separator: ", ")
-                )
-            }
-            if !result.renamed.isEmpty {
-                let pairs = result.renamed
-                    .map { "\($0.from) → \($0.to)" }
-                    .joined(separator: ", ")
-                message += "\n" + String(
-                    format: "Renamed to avoid a name already here: %@".localized, pairs
-                )
-            }
-            if !result.skipped.isEmpty {
-                message += "\n" + String(
-                    format: "Already on this device, so left alone: %@".localized,
-                    result.skipped.joined(separator: ", ")
-                )
-            }
-            if result.added.isEmpty, result.definitions.isEmpty {
-                message = "Nothing was added. ".localized + message
-            }
-            present(controller, title: "Import Finished".localized, message: message)
+            present(controller, title: "Import Finished".localized,
+                    message: summary(of: result))
             // The page behind the sheet has to show what just arrived. Asked of
             // the controller rather than reloaded from here, because only a page
             // knows what it is displaying.
@@ -447,6 +478,47 @@ enum ServiceTransfer {
         } catch {
             present(controller, title: "Import Failed".localized, message: describe(error))
         }
+    }
+
+    /// What an import did, as a paragraph.
+    private static func summary(of result: ServiceImporter.Result) -> String {
+        var lines: [String] = []
+        if !result.instances.isEmpty {
+            lines.append(String(format: "%d services were added: %@".localized,
+                                result.instances.count,
+                                result.instances.joined(separator: ", ")))
+        }
+        if !result.services.isEmpty {
+            lines.append(String(format: "%d scripts were added: %@".localized,
+                                result.services.count,
+                                result.services.joined(separator: ", ")))
+        }
+        if result.isEmpty {
+            lines.append("Nothing was added.".localized)
+        }
+        if !result.renamed.isEmpty {
+            let pairs = result.renamed.map { "\($0.from) → \($0.to)" }.joined(separator: ", ")
+            lines.append(String(format: "Renamed to avoid a name already here: %@"
+                .localized, pairs))
+        }
+        let skipped = result.skipped.map { entry -> String in
+            switch entry.reason {
+            case .alreadyPresent:
+                return String(format: "%@ (already here)".localized, entry.name)
+            case .emptyScript:
+                return String(format: "%@ (the script is empty)".localized, entry.name)
+            case .serviceMissing(let service):
+                return String(
+                    format: "%@ (its service \"%@\" is not included)".localized,
+                    entry.name, service
+                )
+            }
+        }
+        if !skipped.isEmpty {
+            lines.append(String(format: "Left alone: %@".localized,
+                                skipped.joined(separator: ", ")))
+        }
+        return lines.joined(separator: "\n")
     }
 
     /// A readable reason, preferring the Core layer's own wording.
@@ -470,17 +542,59 @@ enum ServiceTransfer {
                         + "(format %d); this one reads up to %d.").localized,
                     version, supported
                 )
-            case .nothingToAdd(let names):
+            case .missingService(let instance, let service):
                 return String(
-                    format: "Nothing was added: this device already has %@."
-                        .localized, names.joined(separator: ", ")
+                    format: ("\"%@\" uses a service called \"%@\", which the document "
+                        + "does not include.").localized, instance, service
                 )
             }
         }
         return error.localizedDescription
     }
 
+    // MARK: - The switch
+
+    /// How many of the other kind exist, for deciding whether to offer the switch
+    /// at all.
+    private static func companionCount(scope: Scope) -> Int {
+        switch scope {
+        case .instances: return CustomServiceStore.definitions().count
+        case .services: return ServiceInstanceStore.instances().count
+        }
+    }
+
+    private static func companionLabel(scope: Scope, forExport: Bool) -> String? {
+        guard companionCount(scope: scope) > 0 else { return nil }
+        switch scope {
+        case .instances:
+            return forExport
+                ? "Include the scripts they use".localized
+                : "Also import the scripts".localized
+        case .services:
+            return forExport
+                ? "Include the services that use them".localized
+                : "Also import the services that use them".localized
+        }
+    }
+
     // MARK: - Presenting
+
+    /// Shows a picker and runs its request.
+    private static func presentPicker(
+        _ request: Request, items: [Item], from controller: UIViewController
+    ) {
+        let picker = TransferPickerController(
+            title: request.title,
+            items: items,
+            actionTitle: request.actionTitle,
+            footer: request.footer,
+            companionLabel: request.companionLabel,
+            companionIsOn: request.companionIsOn,
+            companionFooter: request.companionFooter,
+            onConfirm: request.onConfirm
+        )
+        present(controller, UINavigationController(rootViewController: picker))
+    }
 
     private static func present(_ controller: UIViewController, _ other: UIViewController) {
         controller.present(other, animated: true)
@@ -502,19 +616,29 @@ enum ServiceTransfer {
 
 // MARK: - The picker
 
-/// A checklist of what to move, with the two lists' own appearance.
+/// A checklist of what to move, with the two pages' own appearance.
 ///
 /// Built like the pages it serves — an inset-grouped table, the same icons in the
 /// same place — because the items are the same objects the user is looking at two
 /// screens away, and they should not look like different things here.
+///
+/// The other kind is a switch in a section of its own at the bottom, not more
+/// rows: whether to carry the scripts alongside the services is a different
+/// question from which services, and mixing them into one list of tick boxes is
+/// what made the first version of this confusing.
 final class TransferPickerController: UIViewController {
     private let items: [Item]
     private let actionTitle: String
     private let footer: String
-    private let onConfirm: ([Item]) -> Void
+    private let companionLabel: String?
+    private let companionFooter: ((Bool) -> String)?
+    private let onConfirm: ([String], Bool) -> Void
 
-    /// Which rows are ticked, by id.
+    /// The names whose rows are ticked.
     private var selected: Set<String>
+    /// Whether the other kind travels too.
+    private var companionIsOn: Bool
+
     private var tableView: UITableView!
 
     init(
@@ -522,19 +646,28 @@ final class TransferPickerController: UIViewController {
         items: [Item],
         actionTitle: String,
         footer: String,
-        onConfirm: @escaping ([Item]) -> Void
+        companionLabel: String?,
+        companionIsOn: Bool,
+        companionFooter: ((Bool) -> String)?,
+        onConfirm: @escaping ([String], Bool) -> Void
     ) {
         self.items = items
         self.actionTitle = actionTitle
         self.footer = footer
+        self.companionLabel = companionLabel
+        self.companionIsOn = companionIsOn
+        self.companionFooter = companionFooter
         self.onConfirm = onConfirm
-        self.selected = Set(items.filter(\.isPreSelected).map(\.id))
+        self.selected = Set(items.filter(\.isPreSelected).map(\.name))
         super.init(nibName: nil, bundle: nil)
         self.title = title
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    /// Two sections when the switch is offered: the rows, then the switch.
+    private var hasCompanionSection: Bool { companionLabel != nil }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -544,6 +677,7 @@ final class TransferPickerController: UIViewController {
         tableView.dataSource = self
         tableView.delegate = self
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "switch")
         tableView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tableView)
         NSLayoutConstraint.activate([
@@ -553,9 +687,9 @@ final class TransferPickerController: UIViewController {
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
 
-        // Cancel on the left, the action on the right: the sheet's own
-        // convention, and the action is disabled while nothing is ticked so it
-        // cannot do nothing.
+        // Cancel on the left, the action on the right: the sheet's own convention,
+        // and the action is disabled while nothing is ticked so it cannot do
+        // nothing.
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             title: "Cancel".localized, style: .plain, target: self, action: #selector(cancel)
         )
@@ -570,11 +704,12 @@ final class TransferPickerController: UIViewController {
     }
 
     @objc private func confirm() {
-        let chosen = items.filter { selected.contains($0.id) }
+        let names = items.filter { selected.contains($0.name) }.map(\.name)
+        let companion = companionIsOn
         // Dismissed first: the caller presents its own sheet, and presenting over
         // a sheet that is still going away leaves it behind the new one.
         dismiss(animated: true) { [onConfirm] in
-            onConfirm(chosen)
+            onConfirm(names, companion)
         }
     }
 
@@ -584,15 +719,44 @@ final class TransferPickerController: UIViewController {
 }
 
 extension TransferPickerController: UITableViewDataSource, UITableViewDelegate {
+    func numberOfSections(in tableView: UITableView) -> Int {
+        hasCompanionSection ? 2 : 1
+    }
+
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        items.count
+        section == 0 ? items.count : 1
+    }
+
+    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        // The rows need no heading: the title says what they are.
+        nil
     }
 
     func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        footer
+        if section == 0 { return footer }
+        // The switch's own explanation, which changes with it: what happens when
+        // it is on and off is exactly what a user needs told.
+        return companionFooter?(companionIsOn)
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if indexPath.section == 1 {
+            let cell = tableView.dequeueReusableCell(withIdentifier: "switch", for: indexPath)
+            var configuration = UIListContentConfiguration.cell()
+            configuration.text = companionLabel
+            cell.contentConfiguration = configuration
+            cell.accessoryType = .none
+            cell.selectionStyle = .none
+
+            // A plain switch, kept in the cell: its state is read when the action
+            // is taken, so there is nothing to write through a target.
+            let toggle = UISwitch()
+            toggle.isOn = companionIsOn
+            toggle.addTarget(self, action: #selector(companionChanged(_:)), for: .valueChanged)
+            cell.accessoryView = toggle
+            return cell
+        }
+
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
         let item = items[indexPath.row]
 
@@ -603,18 +767,27 @@ extension TransferPickerController: UITableViewDataSource, UITableViewDelegate {
         configuration.image = item.icon
         configuration.imageProperties.maximumSize = CGSize(width: 29, height: 29)
         cell.contentConfiguration = configuration
-
-        cell.accessoryType = selected.contains(item.id) ? .checkmark : .none
+        cell.accessoryView = nil
+        cell.accessoryType = selected.contains(item.name) ? .checkmark : .none
         return cell
+    }
+
+    @objc private func companionChanged(_ sender: UISwitch) {
+        companionIsOn = sender.isOn
+        // The footer describes what the switch does, so it changes with it.
+        UIView.performWithoutAnimation {
+            tableView.reloadSections(IndexSet(integer: 1), with: .none)
+        }
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        let item = items[indexPath.row]
-        if selected.contains(item.id) {
-            selected.remove(item.id)
+        guard indexPath.section == 0 else { return }
+        let name = items[indexPath.row].name
+        if selected.contains(name) {
+            selected.remove(name)
         } else {
-            selected.insert(item.id)
+            selected.insert(name)
         }
         tableView.reloadRows(at: [indexPath], with: .none)
         refreshActionButton()
