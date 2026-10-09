@@ -338,6 +338,16 @@ public final class CustomAppController: ListController {
         // `_specifiers` ivar directly during setup, and the getter covers the
         // case where it discards the array later (backgrounding the app).
         installSpecifiers(buildSpecifiers())
+        seedImageSizing()
+    }
+
+    /// Records whether the installed page shows the image-sizing rows, from the
+    /// same judgement the builders used.
+    private func seedImageSizing() {
+        showsImageSizing = ServiceSpecifierBuilders.includeImage(
+            stored: PrefsStore.customAppPrefs(service: instanceID, appID: appID),
+            fallback: PrefsStore.instance(instanceID)
+        )
     }
 
     /// Builds the page's cells from this app's override.
@@ -352,12 +362,30 @@ public final class CustomAppController: ListController {
         // The per-app cells come from the same builders the service page uses,
         // already routed into this app's override by the builder.
         let cells = ServiceSpecifierBuilders.shared.builders(
-            for: serviceType, instanceID: instanceID, appID: appID
+            for: serviceType, instanceID: instanceID, appID: appID,
+            pageObserver: self
         )
         all.append(contentsOf: cells)
 
         return NSMutableArray(array: all)
     }
+
+    /// Rebuilds the page when "Include Image" has been switched, so the sizing
+    /// rows follow it here too; see ``ServiceController/cellDidChange(_:to:)``.
+    @objc func cellDidChange(_ key: String, to value: Any?) {
+        guard key == PrefKey.includeImage else { return }
+        let isOn = (value as? NSNumber)?.boolValue ?? (value as? Bool) ?? false
+        guard let previous = showsImageSizing else {
+            showsImageSizing = isOn
+            return
+        }
+        guard previous != isOn else { return }
+        showsImageSizing = isOn
+        installSpecifiers(buildSpecifiers())
+    }
+
+    /// Whether the installed page shows the image-sizing rows.
+    private var showsImageSizing: Bool?
 
     /// The cells, rebuilt whenever the framework has discarded the array.
     public override func rebuildSpecifiers() -> NSMutableArray? {

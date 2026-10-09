@@ -18,7 +18,10 @@ public final class ServiceSpecifierBuilders: NSObject {
     /// in as well, so a builder that wants the shared payload options can ask
     /// the service what it can carry without re-deriving any of it.
     public typealias Builder = (
-        _ service: String, _ appID: String?, _ defaults: ServiceConfig?
+        _ service: String,
+        _ appID: String?,
+        _ defaults: ServiceConfig?,
+        _ pageObserver: AnyObject?
     ) -> [PSSpecifier]
 
     @objc(sharedInstance)
@@ -65,14 +68,25 @@ public final class ServiceSpecifierBuilders: NSObject {
     ///   - service: the descriptor name, which selects the builder.
     ///   - instanceID: the instance the page edits.
     ///   - appID: non-nil on a per-app override page.
-    func builders(for service: String, instanceID: String, appID: String?) -> [PSSpecifier] {
+    /// The cells a service type contributes to one instance's page.
+    ///
+    /// - Parameter pageObserver: the controller to tell when a switch changes
+    ///   what the page shows. Passed down rather than read from a global so a
+    ///   page can never be told about a change it does not own.
+    func builders(
+        for service: String,
+        instanceID: String,
+        appID: String?,
+        pageObserver: AnyObject? = nil
+    ) -> [PSSpecifier] {
         // The service's declared defaults, which is where the payload options'
         // switch positions come from.
         let defaults = ServiceConfig(
             name: instanceID, type: service,
             raw: Prefs(ServiceRegistry.service(named: service).defaultPrefs())
         )
-        guard let built = builders[service]?(service, appID, defaults) else { return [] }
+        guard let built = builders[service]?(service, appID, defaults, pageObserver)
+        else { return [] }
         return route(built, service: service, instanceID: instanceID, appID: appID)
     }
 
@@ -322,16 +336,16 @@ public final class ServiceSpecifierBuilders: NSObject {
     /// service's. The image sizing is service-wide (a per-app override inherits
     /// it), and the decoded image is what makes the payload large enough for
     /// those numbers to matter.
-    private static func webhook(service: String, appID: String?, defaults: ServiceConfig?) -> [PSSpecifier] {
+    private static func webhook(service: String, appID: String?, defaults: ServiceConfig?, pageObserver: AnyObject?) -> [PSSpecifier] {
         // The endpoint fields come from Custom.plist; the payload options come
         // from the shared builder, which is what the webhook type registers.
-        payloadOptions(service: service, appID: appID, defaults: defaults)
+        payloadOptions(service: service, appID: appID, defaults: defaults, pageObserver: pageObserver)
     }
 
     // MARK: - Pushover
 
     /// Receiving-device and notification-sound pickers.
-    private static func pushover(service: String, appID: String?, defaults: ServiceConfig?) -> [PSSpecifier] {
+    private static func pushover(service: String, appID: String?, defaults: ServiceConfig?, pageObserver: AnyObject?) -> [PSSpecifier] {
         let isCustomApp = appID != nil
         let devices = detailLink(
             "Receiving Devices", detail: DeviceListController.self,
@@ -352,7 +366,7 @@ public final class ServiceSpecifierBuilders: NSObject {
     // MARK: - Pushbullet
 
     /// Pushbullet targets one device, so it gets the device picker only.
-    private static func pushbullet(service: String, appID: String?, defaults: ServiceConfig?) -> [PSSpecifier] {
+    private static func pushbullet(service: String, appID: String?, defaults: ServiceConfig?, pageObserver: AnyObject?) -> [PSSpecifier] {
         // The device picker only: Pushbullet's note carries a title and a body.
         [
             detailLink(
@@ -367,7 +381,7 @@ public final class ServiceSpecifierBuilders: NSObject {
 
     /// The event name, plus the "include icon" and "curate request data"
     /// toggles.
-    private static func ifttt(service: String, appID: String?, defaults: ServiceConfig?) -> [PSSpecifier] {
+    private static func ifttt(service: String, appID: String?, defaults: ServiceConfig?, pageObserver: AnyObject?) -> [PSSpecifier] {
         // The event name; the icon switch and the image size fields come from
         // the shared payload options, which ask the service what it can carry
         // (IFTTT has no image field).
@@ -376,13 +390,13 @@ public final class ServiceSpecifierBuilders: NSObject {
                       key: PrefKey.eventName, noAutoCorrect: true),
             toggle("Curate Request Data", service: service, appID: appID,
                    key: PrefKey.curateData, defaultValue: true),
-        ] + payloadOptions(service: service, appID: appID, defaults: defaults)
+        ] + payloadOptions(service: service, appID: appID, defaults: defaults, pageObserver: pageObserver)
     }
 
     // MARK: - Wechat
 
     /// The recipient, plus the Corporate ID / secret / agent ID credentials.
-    private static func wechat(service: String, appID: String?, defaults: ServiceConfig?) -> [PSSpecifier] {
+    private static func wechat(service: String, appID: String?, defaults: ServiceConfig?, pageObserver: AnyObject?) -> [PSSpecifier] {
         // A per-app override only changes who receives the message; the
         // credentials stay service-wide.
         if let appID {
@@ -403,7 +417,7 @@ public final class ServiceSpecifierBuilders: NSObject {
     ///
     /// The server URL is a service-wide setting, so a per-app override page
     /// shows only the message parameters.
-    private static func bark(service: String, appID: String?, defaults: ServiceConfig?) -> [PSSpecifier] {
+    private static func bark(service: String, appID: String?, defaults: ServiceConfig?, pageObserver: AnyObject?) -> [PSSpecifier] {
         var fields: [(title: String, key: String)] = [
             ("Level:", BarkPrefKey.level),
             ("Volume:", BarkPrefKey.volume),
@@ -426,18 +440,18 @@ public final class ServiceSpecifierBuilders: NSObject {
         return fields.map {
             textField($0.title, service: service, appID: appID,
                       key: $0.key, noAutoCorrect: true)
-        } + payloadOptions(service: service, appID: appID, defaults: defaults)
+        } + payloadOptions(service: service, appID: appID, defaults: defaults, pageObserver: pageObserver)
     }
 
     // MARK: - Pusher Receiver
 
     /// The database name, plus the icon/image options.
-    private static func pusherReceiver(service: String, appID: String?, defaults: ServiceConfig?) -> [PSSpecifier] {
+    private static func pusherReceiver(service: String, appID: String?, defaults: ServiceConfig?, pageObserver: AnyObject?) -> [PSSpecifier] {
         // The database name; the icon/image options come from the shared payload
         // options, which read the service's declared defaults.
         [textField("Database Name", service: service,
                    appID: appID, key: PrefKey.dbName, noAutoCorrect: true)]
-            + payloadOptions(service: service, appID: appID, defaults: defaults)
+            + payloadOptions(service: service, appID: appID, defaults: defaults, pageObserver: pageObserver)
     }
 
     // MARK: - Cell builders

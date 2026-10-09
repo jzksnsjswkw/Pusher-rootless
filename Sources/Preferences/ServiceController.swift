@@ -327,7 +327,8 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // type's own builder, looked up by name so a new service needs no change
         // here.
         all.append(contentsOf: ServiceSpecifierBuilders.shared.builders(
-            for: serviceType, instanceID: serviceInstanceID, appID: nil
+            for: serviceType, instanceID: serviceInstanceID, appID: nil,
+            pageObserver: self
         ))
 
         // A script service carries the app filter, since which apps it applies
