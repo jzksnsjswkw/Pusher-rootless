@@ -39,7 +39,6 @@ public final class ServiceIconController: PSViewController {
     /// The section of the page: which part of the icon is being edited.
     private enum Section: Int, CaseIterable {
         case preview
-        case size
         case gallery
         case tints
         case photo
@@ -49,7 +48,6 @@ public final class ServiceIconController: PSViewController {
     // change: the page is a draft until it is left.
     private var selectedSymbol: String?
     private var selectedTint: Int = 0
-    private var selectedSize: ServiceIcon.Size
     private var photoImage: UIImage?
     /// Whether the icon came from the photo library, which is what decides
     /// whether the tint row means anything.
@@ -62,9 +60,6 @@ public final class ServiceIconController: PSViewController {
     public init(storage: Storage, heading: String) {
         self.storage = storage
         self.heading = heading
-        let stored = ServiceIconController.readPrefs(storage)
-        let storedSize = ServiceIcon.Size(rawValue: stored.int(PrefKey.customIconSize))
-        self.selectedSize = storedSize ?? .standard
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -73,13 +68,11 @@ public final class ServiceIconController: PSViewController {
     public override init(nibName: String?, bundle: Bundle?) {
         self.storage = .instance(id: "")
         self.heading = ""
-        self.selectedSize = .standard
         super.init(nibName: nibName, bundle: bundle)
     }
     public override init(forContentSize contentSize: CGSize) {
         self.storage = .instance(id: "")
         self.heading = ""
-        self.selectedSize = .standard
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -152,7 +145,7 @@ public final class ServiceIconController: PSViewController {
             return
         }
         object[PrefKey.customIcon] = base64
-        object[PrefKey.customIconSize] = selectedSize.rawValue
+        object[PrefKey.customIconSize] = ServiceIcon.pixelSize
         object[PrefKey.customIconSource] = isPhotoSource ? "photo" : "symbol"
         if isPhotoSource {
             // Nothing else to remember: the picture is the whole recipe.
@@ -168,14 +161,14 @@ public final class ServiceIconController: PSViewController {
     private func renderCurrent() -> UIImage? {
         if isPhotoSource {
             guard let photoImage else { return nil }
-            return ServiceIcon.normalize(photoImage, to: selectedSize)
+            return ServiceIcon.normalize(photoImage, to: .standard)
         }
         guard let symbol = selectedSymbol else { return nil }
         let tint = ServiceIcon.tints[
             max(0, min(selectedTint, ServiceIcon.tints.count - 1))
         ].color
         return ServiceIcon.render(
-            symbol: symbol, tint: tint == .clear ? nil : tint, size: selectedSize
+            symbol: symbol, tint: tint == .clear ? nil : tint, size: .standard
         )
     }
 
@@ -196,8 +189,7 @@ public final class ServiceIconController: PSViewController {
             }
             // The size and tint rows draw their selection from the same state.
             self.tableView.reloadSections(
-                IndexSet([Section.preview.rawValue, Section.size.rawValue,
-                          Section.tints.rawValue]), with: .none
+                IndexSet([Section.preview.rawValue, Section.tints.rawValue]), with: .none
             )
         }
     }
@@ -264,7 +256,6 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
         -> Int {
         switch Section(rawValue: section) {
         case .preview: return 1
-        case .size: return 1
         case .gallery: return 1
         case .tints: return showsTints ? 1 : 0
         case .photo: return 2   // choose, and "use the app icon"
@@ -276,7 +267,6 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
         -> String? {
         switch Section(rawValue: section) {
         case .preview: return "Preview".localized
-        case .size: return "Icon Size".localized
         case .gallery: return "Choose a Symbol".localized
         case .tints: return showsTints ? "Color".localized : nil
         case .photo: return nil
@@ -290,9 +280,6 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
         case .preview:
             return ("This is the picture the service list, its settings page and "
                 + "the notification use.").localized
-        case .size:
-            return ("The icon is stored at this size and sent as it is. A larger "
-                + "icon costs more on every notification.").localized
         case .gallery:
             return ("Your own icon replaces the sending app's icon in the "
                 + "notification.").localized
@@ -309,16 +296,6 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
             (cell as? PreviewCell)?.show(renderCurrent(), name: heading)
             previewCell = cell
             cell.selectionStyle = .none
-            return cell
-
-        case .size:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "plain", for: indexPath)
-            var configuration = UIListContentConfiguration.valueCell()
-            configuration.text = "Size".localized
-            configuration.secondaryText = selectedSize.label
-            cell.contentConfiguration = configuration
-            cell.accessoryType = .disclosureIndicator
-            cell.selectionStyle = .default
             return cell
 
         case .gallery:
@@ -374,8 +351,6 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
     public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         switch Section(rawValue: indexPath.section) {
-        case .size:
-            presentSizePicker()
         case .photo:
             if indexPath.row == 0 {
                 pickPhoto()
@@ -387,29 +362,6 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
         }
     }
 
-    /// The stored size, as an action sheet. Four options fit without a picker
-    /// wheel, and naming them in pixels says more than small/medium/large.
-    private func presentSizePicker() {
-        let sheet = UIAlertController(
-            title: "Icon Size".localized, message: nil, preferredStyle: .actionSheet
-        )
-        for size in ServiceIcon.Size.allCases {
-            let action = UIAlertAction(title: size.label, style: .default) { [weak self] _ in
-                guard let self else { return }
-                self.selectedSize = size
-                self.invalidate()
-                self.tableView.reloadRows(
-                    at: [IndexPath(row: 0, section: Section.size.rawValue)], with: .none
-                )
-            }
-            action.setValue(size == selectedSize, forKey: "checked")
-            sheet.addAction(action)
-        }
-        sheet.addAction(UIAlertAction(title: "Cancel".localized, style: .cancel))
-        // An action sheet needs an anchor on iPad; on iPhone this is a no-op.
-        sheet.popoverPresentationController?.sourceView = tableView
-        present(sheet, animated: true)
-    }
 }
 
 // MARK: - Photo library
@@ -545,8 +497,6 @@ private final class PreviewCell: UITableViewCell {
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         preview.contentMode = .scaleAspectFit
-        preview.layer.cornerRadius = 6.5
-        preview.clipsToBounds = true
         preview.translatesAutoresizingMaskIntoConstraints = false
 
         label.font = .preferredFont(forTextStyle: .body)

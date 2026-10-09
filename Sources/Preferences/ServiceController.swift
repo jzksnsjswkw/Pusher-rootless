@@ -53,7 +53,23 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         )
         label.font = .boldSystemFont(ofSize: 17)
 
-        let stack = UIStackView(arrangedSubviews: [UIImageView(image: icon), label])
+        // Sized to match a list row's icon and drawn as the same 29-point tile,
+        // so the page's title and the row that opened it show one picture at one
+        // size. A `UIImageView` with a bare image would take the bitmap's own
+        // size and square corners, which is what made a chosen logo look unlike
+        // the built-in artwork beside it.
+        let iconView = UIImageView(image: icon)
+        // No corner radius here: the tile shape is baked into the image itself,
+        // which is what keeps a chosen logo and the bundled artwork identical in
+        // shape — the same reason the list row sets none.
+        iconView.contentMode = .scaleAspectFit
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            iconView.widthAnchor.constraint(equalToConstant: 29),
+            iconView.heightAnchor.constraint(equalToConstant: 29),
+        ])
+
+        let stack = UIStackView(arrangedSubviews: [iconView, label])
         stack.alignment = .center
         stack.spacing = 10
         navigationItem.titleView = stack

@@ -547,8 +547,13 @@ public final class ServiceTypePickerController: ListController {
             // that property is resolved through the framework's lazy icon
             // loading, which a row without a bundle-backed icon set never
             // triggers. Handing the cell the image directly is unconditional.
+            // A user's definition shows the logo its author chose — the same
+            // picture the definition's own row and its instances show — so one
+            // kind of service is not drawn two ways depending on the page.
             specifier?.setProperty(
-                ServiceArtwork.image(forType: descriptor.name), forKey: Self.iconImagePropertyKey
+                ServiceIcon.logo(forDefinitionID: descriptor.name)
+                    ?? ServiceArtwork.image(forType: descriptor.name),
+                forKey: Self.iconImagePropertyKey
             )
             // The row does not navigate, so it needs a detail controller to be
             // treated as a live link, and a cell class that draws no chevron.

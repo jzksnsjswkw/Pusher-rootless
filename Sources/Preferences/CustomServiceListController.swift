@@ -200,12 +200,14 @@ extension CustomServiceListController: UITableViewDataSource, UITableViewDelegat
 
     public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: Self.cellIdentifier, for: indexPath)
-        cell.textLabel?.text = definitions[indexPath.row].name
+        let definition = definitions[indexPath.row]
+        cell.textLabel?.text = definition.name
         cell.accessoryType = .disclosureIndicator
-        cell.imageView?.image = nil
-        // A definition is only ever a script, so the artwork is the generic
-        // service icon rather than something per-definition.
-        cell.imageView?.image = UIImage.pusher(named: "DefaultService")
+        // The definition's own logo, so two scripts are told apart the way two
+        // services are; the generic artwork remains the fallback for one that
+        // has not chosen a logo.
+        cell.imageView?.image = ServiceIcon.logo(forDefinitionID: definition.id)
+            ?? UIImage.pusher(named: "DefaultService")
         return cell
     }
 

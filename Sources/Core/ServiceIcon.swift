@@ -29,24 +29,23 @@ import UIKit
 /// override the icon the script declares.
 public enum ServiceIcon {
 
-    /// The sizes a service icon may be stored at.
+    /// The one size an icon is stored at.
     ///
-    /// A notification icon is drawn small — 58 points is what IFTTT documents —
-    /// so 512 is already generous for a source image; the point of the ladder is
-    /// to let a user trade fidelity for payload size, which matters because the
-    /// icon travels base64-in-JSON on every single notification.
-    public enum Size: Int, CaseIterable {
-        case small = 58
-        case medium = 128
-        case large = 256
-        case extraLarge = 512
+    /// Not a choice: an icon is drawn at a row's size (29 points) and, in a
+    /// payload, at about 58 — so the source only needs enough pixels for the
+    /// largest of those on the sharpest screen. 96 is that number with a little
+    /// room, and being a single size is what keeps a chosen logo the same object
+    /// as the bundled artwork rather than a differently-sized neighbour. It also
+    /// keeps the weight of a payload field that rides on every notification
+    /// predictable instead of a decision the user has to reason about.
+    public static let pixelSize = 96
 
-        /// The default: comfortably above the drawn size without being heavy.
-        public static let standard: Size = .medium
-
-        public var label: String {
-            "\(rawValue) × \(rawValue)"
-        }
+    /// Kept as a type so call sites read the same as they did when the size was
+    /// selectable; there is only one now.
+    public enum Size {
+        case standard
+        public var rawValue: Int { ServiceIcon.pixelSize }
+        public var label: String { "\(ServiceIcon.pixelSize) × \(ServiceIcon.pixelSize)" }
     }
 
     /// The built-in gallery, as SF Symbols.
@@ -164,6 +163,34 @@ public enum ServiceIcon {
         return UIImage(data: data)
     }
 
+    // MARK: - The tile shape
+
+    /// The squircle an app icon is drawn in, at `side` points across.
+    ///
+    /// A superellipse rather than `UIBezierPath(roundedRect:cornerRadius:)`: a
+    /// circular corner is a visibly different shape from the one every icon on
+    /// the system uses, and next to a built-in logo (Bark's, WeChat's) a plain
+    /// rounded rectangle reads as the odd one out. The exponent is the one
+    /// Apple's icons approximate, and the corner radius falls out of it — there
+    /// is no separate radius to pick.
+    static func tilePath(side: CGFloat) -> UIBezierPath {
+        let path = UIBezierPath()
+        let half = side / 2
+        let exponent: CGFloat = 5
+        let steps = 180
+        for step in 0...steps {
+            let angle = CGFloat(step) / CGFloat(steps) * 2 * .pi
+            let cosAngle = cos(angle)
+            let sinAngle = sin(angle)
+            let x = half * copysign(pow(abs(cosAngle), 2 / exponent), cosAngle)
+            let y = half * copysign(pow(abs(sinAngle), 2 / exponent), sinAngle)
+            let point = CGPoint(x: half + x, y: half + y)
+            if step == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        path.close()
+        return path
+    }
+
     // MARK: - Rendering
 
     /// Draws a gallery symbol at `size`, optionally tinted.
@@ -192,46 +219,53 @@ public enum ServiceIcon {
 
         return UIGraphicsImageRenderer(
             size: CGSize(width: side, height: side), format: format
-        ).image { context in
+        ).image { _ in
+            let tile = tilePath(side: side)
+            // Everything is drawn inside the tile, so the shape is the same
+            // whether the field is filled or only the glyph shows.
+            tile.addClip()
             if let tint {
                 tint.setFill()
-                context.fill(CGRect(x: 0, y: 0, width: side, height: side))
+                tile.fill()
                 // A white glyph on a colored field: the pairing that stays legible
                 // whatever the color and whatever the wallpaper behind it.
                 let rendered = glyph.withTintColor(.white, renderingMode: .alwaysOriginal)
-                let origin = CGPoint(
+                rendered.draw(at: CGPoint(
                     x: (side - rendered.size.width) / 2,
                     y: (side - rendered.size.height) / 2
-                )
-                rendered.draw(at: origin)
+                ))
             } else {
                 let rendered = glyph.withTintColor(.label, renderingMode: .alwaysOriginal)
-                let origin = CGPoint(
+                rendered.draw(at: CGPoint(
                     x: (side - rendered.size.width) / 2,
                     y: (side - rendered.size.height) / 2
-                )
-                rendered.draw(at: origin)
+                ))
             }
         }
     }
 
-    /// Scales an arbitrary image into a square icon of `size`.
+    /// Scales an arbitrary image into an icon tile of `size`.
     ///
-    /// Fitted rather than cropped, and centred on transparency: a user's picture
-    /// has its own aspect ratio and its own subject position, and cropping to a
-    /// square would cut off whichever one the picture was composed around.
+    /// Filled rather than fitted: the result has to sit beside the built-in
+    /// logos as the same kind of object — a square tile — and a fitted picture
+    /// would be a small photo floating in a square with transparent margins,
+    /// which is a different shape from every other icon on the page. The
+    /// overflow is cropped from the centre, which for a picture chosen as an
+    /// identifier (a logo, a face, a mark) is where its subject is.
     public static func normalize(_ image: UIImage, to size: Size) -> UIImage? {
         let side = CGFloat(size.rawValue)
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
         format.opaque = false
 
-        let scale = min(side / image.size.width, side / image.size.height)
+        let scale = max(side / image.size.width, side / image.size.height)
         let drawn = CGSize(width: image.size.width * scale, height: image.size.height * scale)
 
         return UIGraphicsImageRenderer(
             size: CGSize(width: side, height: side), format: format
         ).image { _ in
+            let tile = tilePath(side: side)
+            tile.addClip()
             image.draw(in: CGRect(
                 x: (side - drawn.width) / 2, y: (side - drawn.height) / 2,
                 width: drawn.width, height: drawn.height

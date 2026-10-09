@@ -43,7 +43,7 @@ public final class CustomServiceEditorController: ListController {
 
     public override func viewDidLoad() {
         super.viewDidLoad()
-        navigationItem.title = definition?.name ?? "Custom".localized
+        refreshTitle()
         installSpecifiers(buildSpecifiers())
         observePreferenceChanges()
         // The switches' locked state depends on the stored values, which a
@@ -57,12 +57,42 @@ public final class CustomServiceEditorController: ListController {
 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        // The name or script may have changed on the pages this one pushes.
-        navigationItem.title = definition?.name ?? "Custom".localized
+        // The name, script or logo may have changed on the pages this one pushes.
+        refreshTitle()
         table?.reloadData()
     }
 
     /// Presents the scripting guide as a sheet.
+    /// Draws the title: the definition's logo beside its name, as a service page
+    /// does, so a script is identified the same way wherever it is edited — and
+    /// so the logo the user just chose is visible on the page they chose it from.
+    private func refreshTitle() {
+        let name = definition?.name ?? "Custom".localized
+        guard let definition,
+              let logo = ServiceIcon.logo(forDefinitionID: definition.id) else {
+            navigationItem.titleView = nil
+            navigationItem.title = name
+            return
+        }
+        let iconView = UIImageView(image: logo)
+        // No corner radius here: the tile shape is baked into the image itself,
+        // which is what keeps a chosen logo and the bundled artwork identical in
+        // shape — the same reason the list row sets none.
+        iconView.contentMode = .scaleAspectFit
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            iconView.widthAnchor.constraint(equalToConstant: 29),
+            iconView.heightAnchor.constraint(equalToConstant: 29),
+        ])
+        let label = UILabel()
+        label.text = name
+        label.font = .boldSystemFont(ofSize: 17)
+        let stack = UIStackView(arrangedSubviews: [iconView, label])
+        stack.alignment = .center
+        stack.spacing = 10
+        navigationItem.titleView = stack
+    }
+
     @objc private func showScriptingGuide() {
         ScriptingGuide.present(from: self)
     }
