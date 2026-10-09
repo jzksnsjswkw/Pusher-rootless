@@ -14,6 +14,8 @@ public final class CustomServiceEditorController: ListController {
 
     private static let scriptRowIdentifier = "script"
     private static let nameRowIdentifier = "name"
+    private static let configRowIdentifier = "configRow"
+    private static let configGroupIdentifier = "configGroup"
 
     /// The framework builds the page through this initializer when a plist names
     /// it, and through the one below when this code does. Both are needed; see
@@ -99,7 +101,9 @@ public final class CustomServiceEditorController: ListController {
     }
 
     @objc private func showScriptingGuide() {
-        ScriptingGuide.present(from: self)
+        ScriptingGuide.present(
+            from: self, declaredFields: ConfigFields.declared(byDefinition: definitionID)
+        )
     }
 
     /// Observes writes to the definition's defaults, so the thread switch can be
@@ -381,6 +385,11 @@ public final class CustomServiceEditorController: ListController {
         scriptRow?.setProperty("DefaultService", forKey: "icon")
         if let scriptRow { all.append(scriptRow) }
 
+        // ── The settings this service declares ──────────────────────────────
+        // Next to the script, because the two are read together: the script says
+        // what it does with a value, this says which values exist.
+        all.append(contentsOf: configRowSpecifiers())
+
         // The guide, as its own tappable row under the script: a footer is not
         // obviously tappable, and the entry point is what makes the AI workflow
         // discoverable.
@@ -436,6 +445,49 @@ public final class CustomServiceEditorController: ListController {
         return NSMutableArray(array: all)
     }
 
+
+    // MARK: - The configuration row
+
+    /// The row that opens the declared-settings list, and the explanation under
+    /// it.
+    private func configRowSpecifiers() -> [PSSpecifier] {
+        var specifiers: [PSSpecifier] = []
+        guard let row = PSSpecifier.preferenceSpecifierNamed(
+            "Configuration".localized, target: self,
+            set: nil, get: nil, detail: nil, cell: .buttonCell, edit: nil
+        ) else { return [] }
+        row.identifier = Self.configRowIdentifier
+        row.setProperty("DefaultService", forKey: "icon")
+        row.buttonAction = #selector(showConfigFields)
+        specifiers.append(row)
+
+        let count = ConfigFields.declared(byDefinition: definitionID).count
+        let group = PSSpecifier.emptyGroup()
+        group?.identifier = Self.configGroupIdentifier
+        group?.setProperty(
+            count == 0
+                ? ("Declare the settings this service needs — a key, a URL, a flag. "
+                    + "The script reads them as pref.<name>, and every service of "
+                    + "this type gets a field to fill in.").localized
+                : String(
+                    format: ("%d settings. The script reads them as pref.<name>, "
+                        + "and every service of this type gets a field to fill in.")
+                        .localized,
+                    count
+                ),
+            forKey: "footerText"
+        )
+        if let group { specifiers.append(group) }
+        return specifiers
+    }
+
+    /// Opens the declared-settings list.
+    ///
+    /// Handled here so the definition travels with the push; the row carries no
+    /// `detail:` class for that reason (see the script row's note).
+    @objc private func showConfigFields() {
+        push(ConfigFieldListController(definitionID: definitionID))
+    }
 
     // MARK: - Name
 

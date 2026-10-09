@@ -149,6 +149,7 @@ public enum JavaScriptRunner {
         bullet: [String: Any],
         storage: [String: String] = [:],
         options: Options = .default,
+        prefs: [String: Any] = [:],
         fetch: @escaping (URLRequest) -> FetchResult
     ) -> Outcome {
         // A shared context lives on one thread; a private context may go
@@ -157,14 +158,14 @@ public enum JavaScriptRunner {
         guard options.usesOwnContext else {
             return host.run(
                 script: script, bullet: bullet, storage: storage,
-                options: options, fetch: fetch
+                options: options, prefs: prefs, fetch: fetch
             )
         }
 
         guard options.usesOwnThread, options.timeout > 0 else {
             return evaluate(
                 script: script, bullet: bullet, storage: storage,
-                options: options, fetch: fetch
+                options: options, prefs: prefs, fetch: fetch
             )
         }
 
@@ -175,7 +176,7 @@ public enum JavaScriptRunner {
         let thread = Thread {
             box.value = evaluate(
                 script: script, bullet: bullet, storage: storage,
-                options: options, fetch: fetch
+                options: options, prefs: prefs, fetch: fetch
             )
             finished.signal()
         }
@@ -387,6 +388,7 @@ public enum JavaScriptRunner {
         bullet: [String: Any],
         storage: [String: String],
         options: Options,
+        prefs: [String: Any],
         fetch: @escaping (URLRequest) -> FetchResult
     ) -> Outcome {
         guard let context = JSContext() else {
@@ -395,7 +397,7 @@ public enum JavaScriptRunner {
         }
         return evaluate(
             script: script, in: context, bullet: bullet, storage: storage,
-            options: options, fetch: fetch
+            options: options, prefs: prefs, fetch: fetch
         )
     }
 
@@ -409,6 +411,7 @@ public enum JavaScriptRunner {
         bullet: [String: Any],
         storage: [String: String],
         options: Options,
+        prefs: [String: Any],
         fetch: @escaping (URLRequest) -> FetchResult
     ) -> Outcome {
         var requests: [PushRequest] = []
@@ -460,6 +463,24 @@ public enum JavaScriptRunner {
         installFetch(into: context, options: options, perform: fetch)
         installFetchRecorder(into: context) { trace.append($0) }
         installFetchObserver(into: context)
+
+        // `pref`: the values the service's author declared, as filled in on the
+        // instance running now. Frozen field by field for the same reason
+        // `device` is — writing to it would change something that is not saved,
+        // so the next run would read a different value than the script wrote.
+        context.setObject(prefs, forKeyedSubscript: "__pref" as NSString)
+        _ = context.evaluateScript(
+            "var __frozenPref = {};"
+                + "Object.keys(__pref).forEach(function (k) {"
+                + "  __frozenPref[k] = __pref[k];"
+                + "  Object.defineProperty(__frozenPref, k,"
+                + "    { writable: false, configurable: false });"
+                + "});"
+                + "Object.defineProperty(globalThis, 'pref',"
+                + "  { value: __frozenPref, writable: false, configurable: true });"
+                + "delete globalThis.__pref;"
+                + "delete globalThis.__frozenPref;"
+        )
 
         // The notification, marked non-writable so a script cannot replace it and
         // read stale fields back out of its own copy.
@@ -899,6 +920,7 @@ private final class ScriptHost {
         bullet: [String: Any],
         storage: [String: String],
         options: JavaScriptRunner.Options,
+        prefs: [String: Any],
         fetch: @escaping (URLRequest) -> JavaScriptRunner.FetchResult
     ) -> JavaScriptRunner.Outcome {
         startThreadIfNeeded()
@@ -909,7 +931,7 @@ private final class ScriptHost {
             guard let context else { return }
             box.outcome = JavaScriptRunner.evaluate(
                 script: script, in: context, bullet: bullet, storage: storage,
-                options: options, fetch: fetch
+                options: options, prefs: prefs, fetch: fetch
             )
         }
         lock.unlock()

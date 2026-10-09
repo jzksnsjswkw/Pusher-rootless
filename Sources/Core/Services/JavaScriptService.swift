@@ -62,6 +62,10 @@ public enum JavaScriptService: PushService {
             bullet: payload(context: context, config: config),
             storage: storedValues(config: config),
             options: options(config: config),
+            // `pref`: the values this service declared and this instance filled
+            // in. An empty object when the service declares nothing, so a script
+            // can read `pref.anything` safely either way.
+            prefs: ConfigFields.values(forInstance: config.name, type: config.type),
             fetch: ScriptHTTP.perform
         )
 

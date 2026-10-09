@@ -20,6 +20,24 @@ public final class PreferencesStorage: NSObject {
     public static func setValue(_ value: Any?, forInstanceSpecifier specifier: PSSpecifier) {
         guard let id = specifier.string(SpecifierRouting.PropertyKey.instanceID) else { return }
 
+        // A declared config field stores into the instance's own namespace, so
+        // the service's names cannot collide with the framework's keys
+        // (`enabled`, `appList`, `includeImage`, …) and a service is free to
+        // declare a field called `enabled` without breaking anything.
+        if specifier.bool(SpecifierRouting.PropertyKey.isConfigField) {
+            ConfigFields.setValue(
+                value,
+                forKey: specifier.string(SpecifierRouting.PropertyKey.key) ?? "",
+                onInstance: id
+            )
+            notifyChangeObserver(
+                of: specifier,
+                key: specifier.string(SpecifierRouting.PropertyKey.key) ?? "",
+                value: value
+            )
+            return
+        }
+
         if specifier.bool(SpecifierRouting.PropertyKey.isCustomApp) {
             setCustomAppValue(value, specifier: specifier, id: id)
             return
@@ -84,6 +102,20 @@ public final class PreferencesStorage: NSObject {
     @objc(readValueForInstanceSpecifier:)
     public static func readValue(forInstanceSpecifier specifier: PSSpecifier) -> Any? {
         guard let id = specifier.string(SpecifierRouting.PropertyKey.instanceID) else { return nil }
+
+        if specifier.bool(SpecifierRouting.PropertyKey.isConfigField) {
+            let key = specifier.string(SpecifierRouting.PropertyKey.key) ?? ""
+            let values = (PrefsStore.instance(id).dict(PrefKey.configValues) ?? Prefs())
+            // A value the instance does not have reads as the kind of nothing
+            // that kind can hold — "" for a text field, off for a switch — rather
+            // than as the declaration's default, which was applied at creation.
+            let stored = values[key]
+            if specifier.cellType == .switchCell {
+                return NSNumber(value: (stored as? NSNumber)?.boolValue
+                    ?? (stored as? Bool) ?? false)
+            }
+            return stored as? String ?? ""
+        }
 
         if specifier.bool(SpecifierRouting.PropertyKey.isCustomApp) {
             return customAppValue(specifier: specifier, id: id)

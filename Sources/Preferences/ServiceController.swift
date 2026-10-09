@@ -307,6 +307,13 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         }
         SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .instance(id: serviceInstanceID))
 
+        // ── The settings this service declares ──────────────────────────────
+        // Where a service's own vocabulary is filled in: the fields the service
+        // declared, with this instance's values. They sit above the shared
+        // payload options because they are what makes *this* destination work —
+        // a key that is missing means nothing is sent at all.
+        all.append(contentsOf: declaredConfigSpecifiers())
+
         // ── The logo, in the page's own identity group ───────────────────────
         // Not among the payload options: a logo identifies the service, so it
         // belongs beside the name it labels. For a service with a plist that is
@@ -403,6 +410,72 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     }
 
     /// The "Send Test Notification" button.
+    /// The settings the service declares, as cells this instance fills in.
+    ///
+    /// Built from the declarations rather than from a plist, because they are
+    /// the service's own vocabulary and exist only at runtime. Grouped the way
+    /// the service arranged them, so a page and the script that reads the same
+    /// fields describe them the same way.
+    func declaredConfigSpecifiers() -> [PSSpecifier] {
+        let fields = ConfigFields.declared(byDefinition: serviceType)
+        guard !fields.isEmpty else { return [] }
+
+        var specifiers: [PSSpecifier] = []
+        for group in ConfigFields.grouped(fields) {
+            guard let head = PSSpecifier.groupSpecifier(
+                withName: group.name.isEmpty ? nil : group.name
+            ) else { continue }
+            if !group.note.isEmpty {
+                head.setProperty(group.note, forKey: "footerText")
+            }
+            specifiers.append(head)
+
+            for field in group.fields where !field.key.isEmpty {
+                switch field.kind {
+                case .toggle:
+                    guard let cell = PSSpecifier.preferenceSpecifierNamed(
+                        field.displayTitle, target: PreferencesStorage.self,
+                        set: #selector(PreferencesStorage.setValue(_:forInstanceSpecifier:)),
+                        get: #selector(PreferencesStorage.readValue(forInstanceSpecifier:)),
+                        detail: nil, cell: .switchCell, edit: nil
+                    ) else { continue }
+                    cell.identifier = field.key
+                    cell.setProperty(serviceInstanceID,
+                                     forKey: SpecifierRouting.PropertyKey.instanceID)
+                    cell.setProperty(serviceType,
+                                     forKey: SpecifierRouting.PropertyKey.serviceType)
+                    cell.setProperty(field.key, forKey: SpecifierRouting.PropertyKey.key)
+                    cell.setProperty(true, forKey: SpecifierRouting.PropertyKey.isConfigField)
+                    // The declaration's default is not a fallback — the value was
+                    // seeded when the instance was created — so an unset switch
+                    // reads off, which is what the stored value would say anyway.
+                    cell.setProperty(false, forKey: SpecifierRouting.PropertyKey.defaultValue)
+                    cell.setProperty(true, forKey: "enabled")
+                    specifiers.append(cell)
+
+                case .text:
+                    guard let cell = PSSpecifier.preferenceSpecifierNamed(
+                        field.displayTitle, target: PreferencesStorage.self,
+                        set: #selector(PreferencesStorage.setValue(_:forInstanceSpecifier:)),
+                        get: #selector(PreferencesStorage.readValue(forInstanceSpecifier:)),
+                        detail: nil, cell: .editTextCell, edit: nil
+                    ) else { continue }
+                    cell.identifier = field.key
+                    cell.setProperty(serviceInstanceID,
+                                     forKey: SpecifierRouting.PropertyKey.instanceID)
+                    cell.setProperty(serviceType,
+                                     forKey: SpecifierRouting.PropertyKey.serviceType)
+                    cell.setProperty(field.key, forKey: SpecifierRouting.PropertyKey.key)
+                    cell.setProperty(true, forKey: SpecifierRouting.PropertyKey.isConfigField)
+                    cell.setProperty(true, forKey: "enabled")
+                    cell.setProperty(true, forKey: "noAutoCorrect")
+                    specifiers.append(cell)
+                }
+            }
+        }
+        return specifiers
+    }
+
     /// The two JavaScript hooks of this instance.
     ///
     /// Each is a switch plus a link to its editor. The switch is separate from

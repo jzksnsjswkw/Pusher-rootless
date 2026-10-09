@@ -28,6 +28,34 @@ enum JavaScriptAPI {
         """
     }
 
+    /// The `pref` object a *script* gets: the settings its service declared.
+    ///
+    /// Rendered from the declarations rather than written out, because unlike
+    /// `bullet` and `fetch` these are the service's own fields: an AI writing a
+    /// script should see `pref.apiKey: string` and nothing else, so it cannot
+    /// invent a setting the user never declared.
+    ///
+    /// - Returns: `nil` when the service declares nothing, since a script for
+    ///   such a service has no `pref` to read.
+    static func scriptPrefs(declared: [ConfigField]) -> String? {
+        let fields = declared.filter { !$0.key.isEmpty }
+        guard !fields.isEmpty else { return nil }
+        var lines = ["pref: {"]
+        for field in fields {
+            let type = field.kind == .toggle ? "boolean" : "string"
+            var comment = field.displayTitle
+            if field.defaultBool, field.kind == .toggle {
+                comment += " (" + "default on".localized + ")"
+            } else if !field.defaultString.isEmpty, field.kind == .text {
+                comment += " (" + String(format: "default %@".localized, field.defaultString) + ")"
+            }
+            lines.append("  \(field.key): \(type)   // \(comment)")
+        }
+        lines.append("}")
+        lines.append("// " + ("Set on each service, not here: your script only reads it.".localized))
+        return lines.joined(separator: "\n")
+    }
+
     /// The functions a *script* can call.
     static var scriptFunctions: String {
         """
@@ -116,8 +144,16 @@ enum JavaScriptAPI {
     // MARK: - The AI prompts
 
     /// The prompt for writing a service script.
-    static func scriptPrompt(requirement: String) -> String {
-        AIRequirement.preamble + "\n\n"
+    ///
+    /// - Parameter declared: the settings the service declares, so the prompt
+    ///   teaches exactly the `pref` fields that exist. The AI writes against the
+    ///   real ones; it is not left to guess a name the user never declared.
+    static func scriptPrompt(requirement: String, declared: [ConfigField] = []) -> String {
+        let prefs = scriptPrefs(declared: declared).map { $0 + "\n" } ?? ""
+        let rule = declared.isEmpty ? "" :
+            "- " + ("Read the user's settings from pref, never hard-code a key or "
+                + "URL that a pref field already carries.").localized + "\n"
+        return AIRequirement.preamble + "\n\n"
             + ("Write a JavaScript script for Pusher, an iOS tweak that forwards "
                 + "notifications to a push service.").localized + "\n\n"
             + ("Runtime: JavaScriptCore on iOS. The script runs once per "
@@ -125,8 +161,9 @@ enum JavaScriptAPI {
                 + "Modern syntax (const/let, arrow functions, destructuring, "
                 + "optional chaining, async/await, Promise) is available. There "
                 + "is no DOM, no Node APIs and no timers.").localized + "\n\n"
-            + "API:".localized + "\n" + scriptBullet + "\n" + scriptFunctions + "\n"
+            + "API:".localized + "\n" + scriptBullet + "\n" + prefs + scriptFunctions + "\n"
             + ("Rules:".localized + "\n"
+                + rule
                 + "- " + "Call push() to forward the notification; without it nothing is sent.".localized + "\n"
                 + "- " + "The script must finish within 2 seconds.".localized + "\n"
                 + "- " + "Do not use while(true) loops or blocking patterns.".localized) + "\n\n"

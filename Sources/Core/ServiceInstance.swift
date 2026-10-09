@@ -111,15 +111,22 @@ public enum ServiceInstanceStore {
     @discardableResult
     public static func add(type: String, name: String) -> ServiceInstance {
         let descriptor = ServiceRegistry.service(named: type)
+        var prefs = descriptor.newInstancePrefs()
+        // The config fields the service declares are seeded with their defaults
+        // here, and only here: this is what "a default" means — the value the
+        // instance's page is filled in with when the instance is made. An
+        // instance that is later given nothing reads "", and editing a default
+        // changes the next instance rather than this one.
+        let seeded = ConfigFields.seedValues(forDefinition: type)
+        if !seeded.isEmpty {
+            prefs[PrefKey.configValues] = seeded
+        }
         let instance = ServiceInstance(
             id: ServiceInstance.makeID(),
             type: type,
             name: name,
             isEnabled: true,
-            // `newInstancePrefs`, not `defaultPrefs`: a definition-backed type
-            // starts from what the definition page declares, so the values a
-            // user set there are what a new instance actually carries.
-            config: Prefs(descriptor.newInstancePrefs())
+            config: Prefs(prefs)
         )
         var stored = rawInstances()
         stored.append(encoded(instance))

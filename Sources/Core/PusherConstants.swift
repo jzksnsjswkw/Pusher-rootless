@@ -182,6 +182,13 @@ public enum PrefKey {
     public static let hookFilteredScript = "hookFilteredScript"
     /// Each hook's `localStorage`, kept per instance *and per hook*.
     public static let hookStorage = "hookStorage"
+
+    // MARK: Service config fields
+
+    /// A service's declared settings — its own vocabulary, on the definition.
+    public static let configFields = "configFields"
+    /// An instance's values for those settings.
+    public static let configValues = "configValues"
     public static let curateData = "curateData"
     public static let imageMaxWidth = "imageMaxWidth"
     public static let imageMaxHeight = "imageMaxHeight"

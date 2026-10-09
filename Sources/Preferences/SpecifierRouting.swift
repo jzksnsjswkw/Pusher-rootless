@@ -100,6 +100,10 @@ public enum SpecifierRouting {
         /// A non-retaining back-reference to the list controller, for cells that
         /// need to reload themselves.
         static let listReference = "psListRef"
+        /// Marks a cell that edits one of a service's own declared settings, so
+        /// its value is stored under the service's namespace rather than among
+        /// the framework's keys.
+        static let isConfigField = "isConfigField"
         /// A cell that changes what the page shows (rather than only what a
         /// request carries) names the controller to tell, as a non-retaining
         /// reference. The storage layer calls it after the value is written.

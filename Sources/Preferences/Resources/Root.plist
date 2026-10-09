@@ -50,11 +50,7 @@
 			<key>icon</key>
 			<string>services</string>
 			<key>label</key>
-			<string>Services</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
+			<string>Instances</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -64,7 +60,7 @@
 			<key>icon</key>
 			<string>DefaultService</string>
 			<key>label</key>
-			<string>Custom</string>
+			<string>Services</string>
 		</dict>
 		<dict>
 			<key>cell</key>

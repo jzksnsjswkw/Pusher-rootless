@@ -56,7 +56,7 @@ open class ListController: PSListController, TintableController {
     /// that property during setup and may leave a non-nil *empty* array behind,
     /// which would make a nil check skip loading forever and leave the page
     /// blank.
-    private var hasLoadedSpecifiers = false
+    var hasLoadedSpecifiers = false
 
     /// Rebuilds the page's cells when the framework has discarded them.
     ///
