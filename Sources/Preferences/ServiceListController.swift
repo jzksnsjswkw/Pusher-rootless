@@ -103,7 +103,7 @@ public class ServiceListController: PlainViewController {
     private func reloadData() {
         instances = ServiceInstanceStore.instances()
         for instance in instances where icons[instance.type] == nil {
-            icons[instance.type] = ServiceIcon.image(forType: instance.type)
+            icons[instance.type] = ServiceArtwork.image(forType: instance.type)
         }
         servicesTable.reloadData()
     }
@@ -365,7 +365,12 @@ extension ServiceListController: UITableViewDataSource, UITableViewDelegate {
 // MARK: - Service icons
 
 /// The artwork for a service type.
-enum ServiceIcon {
+/// The built-in artwork a service type ships with.
+///
+/// Distinct from ``ServiceIcon``, which is the *user's own* icon for a service:
+/// this is the bundled fallback the service list draws when they have not
+/// chosen one.
+enum ServiceArtwork {
     /// The bundle resource name for a service type's artwork.
     ///
     /// A specifier's `icon` property takes the *name*, which the framework then
@@ -532,7 +537,7 @@ public final class ServiceTypePickerController: ListController {
             // loading, which a row without a bundle-backed icon set never
             // triggers. Handing the cell the image directly is unconditional.
             specifier?.setProperty(
-                ServiceIcon.image(forType: descriptor.name), forKey: Self.iconImagePropertyKey
+                ServiceArtwork.image(forType: descriptor.name), forKey: Self.iconImagePropertyKey
             )
             // The row does not navigate, so it needs a detail controller to be
             // treated as a live link, and a cell class that draws no chevron.

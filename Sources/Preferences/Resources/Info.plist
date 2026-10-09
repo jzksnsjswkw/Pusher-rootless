@@ -23,6 +23,8 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>1.0</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Choose a picture to use as a service's notification icon.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSPRootListController</string>
 </dict>

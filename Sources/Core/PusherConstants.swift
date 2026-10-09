@@ -148,6 +148,22 @@ public enum PrefKey {
     public static let scriptShareThread = "scriptShareThread"
     /// Seconds a run may take.
     public static let scriptTimeout = "scriptTimeout"
+    /// A service's own icon, as base64 PNG.
+    ///
+    /// Stored pre-rendered at the chosen size, so the payload can use it
+    /// verbatim: rendering a symbol per notification would cost a draw for a
+    /// picture that never changes.
+    public static let customIcon = "customIcon"
+    /// The gallery symbol the icon was drawn from, when it came from the
+    /// gallery. Kept so the picker can show what is selected.
+    public static let customIconSymbol = "customIconSymbol"
+    /// The tint the symbol was drawn in, as an index into the gallery's tints.
+    public static let customIconTint = "customIconTint"
+    /// How the icon is stored, so the picker can reopen the right section.
+    public static let customIconSource = "customIconSource"
+    /// The stored icon's side length in pixels.
+    public static let customIconSize = "customIconSize"
+
     /// Largest response body `fetch` accepts, in bytes.
     public static let scriptMaxResponseBytes = "scriptMaxResponseBytes"
 

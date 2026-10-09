@@ -380,6 +380,16 @@ public final class CustomServiceEditorController: ListController {
     // MARK: - Rows
 
     public override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        if let specifier = specifier(at: indexPath),
+           specifier.bool(SpecifierRouting.PropertyKey.isIconRow) {
+            tableView.deselectRow(at: indexPath, animated: true)
+            view.endEditing(true)
+            push(ServiceIconController(
+                storage: .definition(id: definitionID), heading: "Icon".localized
+            ))
+            return
+        }
+
         tableView.deselectRow(at: indexPath, animated: true)
 
         // The script row is handled here, and *before* super: the framework's

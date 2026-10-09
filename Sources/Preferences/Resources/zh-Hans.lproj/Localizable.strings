@@ -346,3 +346,13 @@
 "Tap Copy AI Prompt (top right). It is a system prompt: it teaches the assistant this API. The dialog asks what you want the script to do — write it there, paste the whole thing to your assistant, then paste the JavaScript it writes back here." = "点右上角「复制 AI 提示词」。这是一段系统提示词，教会助手本 API。对话框会询问你希望脚本做什么——写在那里，把整段粘贴给助手，再把它生成的 JavaScript 粘回这里。";
 "Tap Copy AI Prompt (top right). It is a system prompt that teaches the assistant this hook's API. The dialog asks what you want; paste the whole thing to your assistant, then paste the JavaScript it writes back here." = "点右上角「复制 AI 提示词」。这是一段系统提示词，教会助手本钩子的 API。对话框会询问你的需求；把整段粘贴给助手，再把它生成的 JavaScript 粘回这里。";
 "The script runs fresh for every notification. A top-level let or const belongs to that run alone and is gone by the next one — that is what keeps one notification's data out of another's.\nlocalStorage is how a value survives to the next notification: it is kept per service, so two services of the same type do not share it." = "每条通知都会重新运行脚本。顶层 let 或 const 只属于那一次运行，下一条通知时就已消失——这正是让通知之间数据互不串扰的原因。\nlocalStorage 是让数值保留到下一条通知的方式：它按服务隔离，因此同一类型的两个服务不共享它。";
+"Icon" = "图标";
+"Save" = "保存";
+"Choose a Symbol" = "选择图标符号";
+"Icon Size" = "图标尺寸";
+"Color" = "颜色";
+"Size" = "尺寸";
+"Choose from Photos" = "从相册选择";
+"Use the App's Icon" = "使用应用的图标";
+"The icon is stored at this size and sent as it is. A larger icon costs more on every notification." = "图标按此尺寸存储并原样发送。图标越大，每条通知的开销越高。";
+"Your own icon replaces the sending app's icon in the notification." = "你自己的图标会替换通知中发送方应用的图标。";

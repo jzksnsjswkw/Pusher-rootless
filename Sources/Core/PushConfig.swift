@@ -211,11 +211,24 @@ public enum ConfigLoader {
         for (key, value) in instance.config.raw {
             raw[key] = value
         }
-        // A definition-backed instance already inherits its definition's
-        // payload options, because the descriptor's `newInstancePrefs` includes
-        // them — see ``ServiceDescriptor/init(definition:)``. Nothing extra is
-        // layered here: doing it in one place is what keeps the definition from
-        // silently losing to the script type's own static defaults.
+        // A definition-backed instance inherits its definition's payload options
+        // through the descriptor's `newInstancePrefs` — see
+        // ``ServiceDescriptor/init(definition:)`` — so there is nothing to layer
+        // here. What is added below is only the *fallback* case: an instance that
+        // never chose an icon of its own takes the definition's, so editing a
+        // definition updates the instances that are following it and leaves the
+        // ones that chose for themselves alone.
+        if let definition = CustomServiceStore.definition(id: instance.type),
+           !ServiceIcon.isCustomized(Prefs(raw)) {
+            let fromDefinition = CustomServiceStore.definitionPrefs(definition)
+            for key in [PrefKey.customIcon, PrefKey.customIconSymbol,
+                        PrefKey.customIconTint, PrefKey.customIconSource,
+                        PrefKey.customIconSize] {
+                if raw[key] == nil, let value = fromDefinition[key] {
+                    raw[key] = value
+                }
+            }
+        }
 
         let stored = instance.config
 

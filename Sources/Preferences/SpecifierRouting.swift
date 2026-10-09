@@ -103,6 +103,9 @@ public enum SpecifierRouting {
         /// Which of an instance's two hooks a link cell opens — the engine's
         /// cell handler reads it, so one handler serves both links.
         static let hookPhase = "hookPhase"
+        /// Marks the cell that opens the icon picker, which a page intercepts
+        /// because the picker must be told which store to write to.
+        static let isIconRow = "isIconRow"
     }
 }
 

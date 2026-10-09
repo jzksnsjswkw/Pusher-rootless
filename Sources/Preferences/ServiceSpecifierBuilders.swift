@@ -162,6 +162,38 @@ public final class ServiceSpecifierBuilders: NSObject {
         return built
     }
 
+    // MARK: - The service's own icon
+
+    /// The cell that opens the icon picker.
+    ///
+    /// Offered by every service whose payload carries an icon, and never when it
+    /// does not: the same rule the payload switches follow, because a user's own
+    /// icon is one of those fields.
+    ///
+    /// The row shows the current choice as its icon, so the list reads the same
+    /// way the notification will.
+    private static func iconRow(
+        service: String, appID: String?, defaults: ServiceConfig?
+    ) -> [PSSpecifier] {
+        let descriptor = ServiceRegistry.service(named: service)
+        guard descriptor.supportsIcon else { return [] }
+
+        guard let specifier = PSSpecifier.preferenceSpecifierNamed(
+            "Icon".localized, target: nil, set: nil, get: nil,
+            detail: ServiceIconController.self, cell: .linkCell, edit: nil
+        ) else { return [] }
+        specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.serviceType)
+        specifier.setProperty(appID != nil, forKey: SpecifierRouting.PropertyKey.isCustomApp)
+        // Marks the row for the pages that intercept the tap: the picker needs to
+        // know *which* store to write to, and a detail controller is built
+        // through `init(nibName:bundle:)` with nowhere to pass one.
+        specifier.setProperty(true, forKey: SpecifierRouting.PropertyKey.isIconRow)
+        if let appID {
+            specifier.setProperty(appID, forKey: "customAppIDKey")
+        }
+        return [specifier]
+    }
+
     // MARK: - Payload options
 
     /// The icon/image options, for the services that have them.
@@ -188,6 +220,14 @@ public final class ServiceSpecifierBuilders: NSObject {
         // default, a webhook publishes the image but not the icon).
         let iconDefault = defaults?.raw.bool(PrefKey.includeIcon) ?? true
         let imageDefault = defaults?.raw.bool(PrefKey.includeImage) ?? true
+
+        // The icon itself comes first: it is what the icon switches below are
+        // about, and a row that opens a picker reads better above the switch
+        // that includes its result.
+        specifiers.append(contentsOf: iconRow(
+            service: routingName == nil ? service : JavaScriptService.serviceName,
+            appID: appID, defaults: defaults
+        ))
 
         if descriptor.supportsIcon {
             specifiers.append(toggle("Include Icon", service: name, appID: appID,

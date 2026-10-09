@@ -128,10 +128,19 @@ public extension PushService {
         ]
 
         if shouldIncludeIcon(config: config) {
-            // The provider resolves the icon through SpringBoard on demand and
-            // may hop to the main thread; it returns nil when no icon is
-            // available, in which case the field is omitted.
-            if let base64 = PushImage.base64(context.iconImage) {
+            // The service's own icon wins over the sending app's.
+            //
+            // A service often reaches an account rather than an app — a bot, a
+            // channel, a webhook — so the app icon is the wrong picture twice
+            // over. When the user has picked one, it is already stored at its
+            // final size, so it travels verbatim; only the app icon has to be
+            // rendered, which is why the provider is consulted second.
+            if let own = ServiceIcon.image(from: config.raw) {
+                data["icon"] = ServiceIcon.storedValue(own)
+            } else if let base64 = PushImage.base64(context.iconImage) {
+                // The provider resolves the app icon through SpringBoard on
+                // demand and may hop to the main thread; it returns nil when no
+                // icon is available, in which case the field is omitted.
                 data["icon"] = base64
             }
         }

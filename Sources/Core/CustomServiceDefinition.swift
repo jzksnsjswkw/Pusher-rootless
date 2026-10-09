@@ -152,6 +152,11 @@ public enum CustomServiceStore {
             PrefKey.includeIcon, PrefKey.includeImage,
             PrefKey.imageMaxWidth, PrefKey.imageMaxHeight, PrefKey.imageShrinkFactor,
             PrefKey.dateFormat,
+            // The icon travels with the payload options because it is one of
+            // them: a script that posts to a chat account has an icon of its own,
+            // and every instance of it should start with that icon.
+            PrefKey.customIcon, PrefKey.customIconSymbol, PrefKey.customIconTint,
+            PrefKey.customIconSource, PrefKey.customIconSize,
         ]
         return keys.reduce(into: [:]) { result, key in
             if let value = stored[key] { result[key] = value }

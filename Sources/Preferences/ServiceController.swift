@@ -21,7 +21,7 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     public init(instance: ServiceInstance) {
         self.serviceInstanceID = instance.id
         self.serviceType = instance.type
-        self.icon = ServiceIcon.image(forType: instance.type)
+        self.icon = ServiceArtwork.image(forType: instance.type)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -399,6 +399,16 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     public override func tableView(
         _ tableView: UITableView, didSelectRowAt indexPath: IndexPath
     ) {
+        if let specifier = specifier(at: indexPath),
+           specifier.bool(SpecifierRouting.PropertyKey.isIconRow) {
+            tableView.deselectRow(at: indexPath, animated: true)
+            view.endEditing(true)
+            push(ServiceIconController(
+                storage: .instance(id: serviceInstanceID), heading: "Icon".localized
+            ))
+            return
+        }
+
         if let specifier = specifier(at: indexPath),
            let name = specifier.property(
                forKey: SpecifierRouting.PropertyKey.hookPhase
