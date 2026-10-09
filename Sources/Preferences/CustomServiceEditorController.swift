@@ -74,7 +74,7 @@ public final class CustomServiceEditorController: ListController {
     /// does, so a script is identified the same way wherever it is edited — and
     /// so the logo the user just chose is visible on the page they chose it from.
     private func refreshTitle() {
-        let name = definition?.name ?? "Custom".localized
+        let name = definition?.name ?? "Services".localized
         guard let definition,
               let logo = ServiceIcon.logo(forDefinitionID: definition.id) else {
             navigationItem.titleView = nil
@@ -371,28 +371,39 @@ public final class CustomServiceEditorController: ListController {
             all.append(logoRow)
         }
 
-        // ── The script ──────────────────────────────────────────────────────
-        // The group head, the script row, then the guide: the guide sits under
-        // the script it explains, inside the same group.
+        // ── The script and its settings ─────────────────────────────────────
+        // One group: the script says what it does with a value, Configuration
+        // says which values exist, and the guide explains both. Reading them
+        // apart from each other is what makes the group work, so they share one.
         let scriptGroup = PSSpecifier.emptyGroup()
         if let scriptGroup { all.append(scriptGroup) }
 
-        let scriptRow = PSSpecifier.preferenceSpecifierNamed(
+        if let scriptRow = PSSpecifier.preferenceSpecifierNamed(
             "Script".localized, target: nil, set: nil, get: nil,
             detail: CustomServiceScriptController.self, cell: .linkCell, edit: nil
-        )
-        scriptRow?.identifier = Self.scriptRowIdentifier
-        scriptRow?.setProperty("DefaultService", forKey: "icon")
-        if let scriptRow { all.append(scriptRow) }
+        ) {
+            scriptRow.identifier = Self.scriptRowIdentifier
+            scriptRow.setProperty("DefaultService", forKey: "icon")
+            all.append(scriptRow)
+        }
 
-        // ── The settings this service declares ──────────────────────────────
-        // Next to the script, because the two are read together: the script says
-        // what it does with a value, this says which values exist.
-        all.append(contentsOf: configRowSpecifiers())
+        // The settings this service declares, as the row that opens their list.
+        if let configRow = PSSpecifier.preferenceSpecifierNamed(
+            "Configuration".localized, target: nil, set: nil, get: nil,
+            // A placeholder `detail:`, exactly as the script row does it: the
+            // framework greys out a link that names no detail class (it reads
+            // that as "nothing to open"), and the tap is intercepted below before
+            // the framework can build the placeholder.
+            detail: ConfigFieldListController.self, cell: .linkCell, edit: nil
+        ) {
+            configRow.identifier = Self.configRowIdentifier
+            configRow.setProperty("DefaultService", forKey: "icon")
+            configRow.setProperty(configCountDetail(), forKey: "detailText")
+            all.append(configRow)
+        }
 
-        // The guide, as its own tappable row under the script: a footer is not
-        // obviously tappable, and the entry point is what makes the AI workflow
-        // discoverable.
+        // The guide, last in the group: a footer is not obviously tappable, and
+        // the entry point is what makes the AI workflow discoverable.
         if let guideRow = PSSpecifier.preferenceSpecifierNamed(
             "How to write a script".localized, target: self,
             set: nil, get: nil, detail: nil, cell: .buttonCell, edit: nil
@@ -405,7 +416,9 @@ public final class CustomServiceEditorController: ListController {
         scriptGroup?.setProperty(
             ("The script runs for every notification. Call push(req) to send one, "
                 + "call it more than once to send several, or not at all to skip "
-                + "this notification.").localized,
+                + "this notification.\n"
+                + "Configuration declares the settings the script reads as "
+                + "pref.<name>; each service fills them in.").localized,
             forKey: "footerText"
         )
 
@@ -448,45 +461,11 @@ public final class CustomServiceEditorController: ListController {
 
     // MARK: - The configuration row
 
-    /// The row that opens the declared-settings list, and the explanation under
-    /// it.
-    private func configRowSpecifiers() -> [PSSpecifier] {
-        var specifiers: [PSSpecifier] = []
-        guard let row = PSSpecifier.preferenceSpecifierNamed(
-            "Configuration".localized, target: self,
-            set: nil, get: nil, detail: nil, cell: .buttonCell, edit: nil
-        ) else { return [] }
-        row.identifier = Self.configRowIdentifier
-        row.setProperty("DefaultService", forKey: "icon")
-        row.buttonAction = #selector(showConfigFields)
-        specifiers.append(row)
-
+    /// What the Configuration row says on its right: how many settings the
+    /// service declares, since the row itself only says that it has some.
+    private func configCountDetail() -> String {
         let count = ConfigFields.declared(byDefinition: definitionID).count
-        let group = PSSpecifier.emptyGroup()
-        group?.identifier = Self.configGroupIdentifier
-        group?.setProperty(
-            count == 0
-                ? ("Declare the settings this service needs — a key, a URL, a flag. "
-                    + "The script reads them as pref.<name>, and every service of "
-                    + "this type gets a field to fill in.").localized
-                : String(
-                    format: ("%d settings. The script reads them as pref.<name>, "
-                        + "and every service of this type gets a field to fill in.")
-                        .localized,
-                    count
-                ),
-            forKey: "footerText"
-        )
-        if let group { specifiers.append(group) }
-        return specifiers
-    }
-
-    /// Opens the declared-settings list.
-    ///
-    /// Handled here so the definition travels with the push; the row carries no
-    /// `detail:` class for that reason (see the script row's note).
-    @objc private func showConfigFields() {
-        push(ConfigFieldListController(definitionID: definitionID))
+        return count == 0 ? "" : String(format: "%d".localized, count)
     }
 
     // MARK: - Name
@@ -528,6 +507,15 @@ public final class CustomServiceEditorController: ListController {
         if let specifier = specifier(at: indexPath),
            specifier.identifier == Self.scriptRowIdentifier, let definition {
             push(CustomServiceScriptController(definitionID: definition.id))
+            return
+        }
+
+        // Same reason as the script row: handled before super so the framework
+        // does not push a placeholder built through `init(nibName:bundle:)`,
+        // which could not carry the definition.
+        if let specifier = specifier(at: indexPath),
+           specifier.identifier == Self.configRowIdentifier {
+            push(ConfigFieldListController(definitionID: definitionID))
             return
         }
         super.tableView(tableView, didSelectRowAt: indexPath)

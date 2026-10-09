@@ -383,3 +383,7 @@
 "\"%@\" is already used by the script environment." = "「%@」已被脚本环境占用。";
 "\"%@\" is already a setting of this service." = "「%@」已是此服务的配置项。";
 "This setting needs a name" = "此配置项需要一个名称";
+"Add Instance" = "添加实例";
+"Each one becomes a type you can add on the Instances page." = "每一个都会成为可在「实例」页添加的类型。";
+"Define a service by writing a script, then add it on the Instances page." = "编写脚本定义一个服务，然后在「实例」页添加它。";
+"The script runs for every notification. Call push(req) to send one, call it more than once to send several, or not at all to skip this notification.\nConfiguration declares the settings the script reads as pref.<name>; each service fills them in." = "脚本会针对每条通知运行。调用 push(req) 发送一条；调用多次可发送多条，不调用则跳过这条通知。\n「配置」声明脚本以 pref.<名称> 读取的设置项，由每个实例填写。";

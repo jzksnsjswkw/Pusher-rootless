@@ -31,7 +31,7 @@ public final class CustomServiceListController: PlainViewController {
         tableView.delegate = self
         view.addSubview(tableView)
 
-        navigationItem.title = "Custom".localized
+        navigationItem.title = "Services".localized
         // Both actions sit on the right: the left slot is the back button, and
         // taking it traps the user on this page.
         navigationItem.rightBarButtonItems = [
@@ -191,11 +191,11 @@ extension CustomServiceListController: UITableViewDataSource, UITableViewDelegat
 
     public func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         guard definitions.isEmpty else {
-            return ("Each one becomes a service type you can add on the Services "
-                + "page.").localized
+            return ("Each one becomes a type you can add on the Instances page."
+                .localized)
         }
-        return ("Define a service by writing a script, then add it on the Services "
-            + "page.").localized
+        return ("Define a service by writing a script, then add it on the "
+            + "Instances page.").localized
     }
 
     public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {

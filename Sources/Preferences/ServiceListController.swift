@@ -46,8 +46,8 @@ public class ServiceListController: PlainViewController {
     /// here it lands in `CreateDetailControllerInstanceWithClass`.
     ///
     /// The page they build is the unscoped one, which is what the home page's
-    /// "Services" row means; the "Custom" row is built by
-    /// ``CustomServiceListController``.
+    /// "Instances" row means; the "Services" row — the types a user defines — is
+    /// built by ``CustomServiceListController``.
     public override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
         super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
     }
@@ -80,7 +80,7 @@ public class ServiceListController: PlainViewController {
         rightButton = UIBarButtonItem(
             title: "Edit".localized, style: .plain, target: self, action: #selector(toggleEditing(_:))
         )
-        navigationItem.title = "Services".localized
+        navigationItem.title = "Instances".localized
         // Both actions sit on the right, as on the Custom page: the left slot is
         // the back button, and the add button must stay reachable in edit mode,
         // when tapping a row renames rather than opens.
@@ -479,7 +479,7 @@ public final class ServiceTypePickerController: ListController {
 
     public override func viewDidLoad() {
         super.viewDidLoad()
-        navigationItem.title = "Add Service".localized
+        navigationItem.title = "Add Instance".localized
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .cancel, target: self, action: #selector(cancel)
         )
