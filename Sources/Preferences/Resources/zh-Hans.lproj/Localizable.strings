@@ -173,35 +173,7 @@
 "Action:" = "Action：";
 "ID:" = "ID：";
 "Delete:" = "Delete：";
-"Optional Bark push parameters. Leave empty to not send that parameter.
-Level: critical / active / timeSensitive / passive (default active)
-Volume: 0-10, only for critical alerts (default 5)
-Badge: badge number
-Call: 1 to repeat the ringtone for 30 seconds
-AutoCopy: 1 to auto-copy push content
-Sound: ringtone name
-Image: HTTPS image URL
-Group: group name to group notifications
-IsArchive: 1 to save the push to history
-TTL: retention time in seconds for archived pushes
-URL: URL to open when the push is tapped
-Action: alert shows an action popup, none makes tapping do nothing
-ID: update the push with the same ID
-Delete: 1 to delete the push with the given ID (requires ID)" = "可选的 Bark 推送参数，留空则不发送该参数。
-Level：critical / active / timeSensitive / passive（默认 active）
-Volume：0-10，仅对 critical 级别生效（默认 5）
-Badge：角标数字
-Call：填 1 让铃声重复响 30 秒
-AutoCopy：填 1 自动复制推送内容
-Sound：铃声名称
-Image：HTTPS 图片 URL
-Group：分组名称，用于将通知分组
-IsArchive：填 1 将推送保存到历史记录
-TTL：存档推送的保留时间（秒）
-URL：点击推送时打开的链接
-Action：alert 打开应用时显示操作弹窗，none 点击无动作
-ID：相同 ID 会更新对应推送
-Delete：填 1 删除对应 ID 的推送（需同时填写 ID）";
+"Optional Bark push parameters. Leave empty to not send that parameter.\nLevel: critical / active / timeSensitive / passive (default active)\nVolume: 0-10, only for critical alerts (default 5)\nBadge: badge number\nCall: 1 to repeat the ringtone for 30 seconds\nAutoCopy: 1 to auto-copy push content\nSound: ringtone name\nImage: HTTPS image URL\nGroup: group name to group notifications\nIsArchive: 1 to save the push to history\nTTL: retention time in seconds for archived pushes\nURL: URL to open when the push is tapped\nAction: alert shows an action popup, none makes tapping do nothing\nID: update the push with the same ID\nDelete: 1 to delete the push with the given ID (requires ID)" = "可选的 Bark 推送参数，留空则不发送该参数。\nLevel：critical / active / timeSensitive / passive（默认 active）\nVolume：0-10，仅对 critical 级别生效（默认 5）\nBadge：角标数字\nCall：填 1 让铃声重复响 30 秒\nAutoCopy：填 1 自动复制推送内容\nSound：铃声名称\nImage：HTTPS 图片 URL\nGroup：分组名称，用于将通知分组\nIsArchive：填 1 将推送保存到历史记录\nTTL：存档推送的保留时间（秒）\nURL：点击推送时打开的链接\nAction：alert 打开应用时显示操作弹窗，none 点击无动作\nID：相同 ID 会更新对应推送\nDelete：填 1 删除对应 ID 的推送（需同时填写 ID）";
 /* Service instance management */
 "Add Service" = "添加服务";
 "Service Type" = "服务类型";
@@ -252,11 +224,7 @@ Delete：填 1 删除对应 ID 的推送（需同时填写 ID）";
 "bullet — the notification" = "bullet——通知内容";
 "bullet.deviceName, bullet.appName, bullet.appID, bullet.title, bullet.subtitle, bullet.message, bullet.date are strings. bullet.icon and bullet.image are base64 PNG data (strings), present when the notification has them." = "bullet.deviceName、bullet.appName、bullet.appID、bullet.title、bullet.subtitle、bullet.message、bullet.date 均为字符串。bullet.icon 和 bullet.image 是 base64 PNG 数据（字符串），通知带有图标/图片时才存在。";
 "Other functions" = "其它可用函数";
-"fetch(url, init) — real HTTP, like the browser's fetch. Returns a Response with ok, status, and json()/text().
-localStorage — persists values between notifications, per service.
-console.log(...) — shown in the editor's Run output." = "fetch(url, init)——真实 HTTP，与浏览器 fetch 相同。返回 Response，含 ok、status 和 json()/text()。
-localStorage——按服务持久化，跨通知保留。
-console.log(...)——显示在编辑器的运行输出中。";
+"fetch(url, init) — real HTTP, like the browser's fetch. Returns a Response with ok, status, and json()/text().\nlocalStorage — persists values between notifications, per service.\nconsole.log(...) — shown in the editor's Run output." = "fetch(url, init)——真实 HTTP，与浏览器 fetch 相同。返回 Response，含 ok、status 和 json()/text()。\nlocalStorage——按服务持久化，跨通知保留。\nconsole.log(...)——显示在编辑器的运行输出中。";
 "Limits" = "限制";
 "The script must finish within 2 seconds, so no long loops. Fetch runs for real: during a run, requests are actually sent." = "脚本须在 2 秒内完成，不要写长循环。fetch 是真实请求：运行时会真正发出。";
 "Let an AI write it" = "让 AI 来写";
@@ -268,47 +236,13 @@ console.log(...)——显示在编辑器的运行输出中。";
 "Write a JavaScript script for Pusher, an iOS tweak that forwards notifications to a push service." = "为 Pusher 编写一段 JavaScript 脚本。Pusher 是一个把 iOS 通知转发到推送服务的越狱插件。";
 "Runtime: JavaScriptCore on iOS. The script runs once per notification, as an async function, so top-level await works. Modern syntax (const/let, arrow functions, destructuring, optional chaining, async/await, Promise) is available. There is no DOM, no Node APIs, no timers." = "运行时：iOS 上的 JavaScriptCore。脚本每条通知运行一次，以 async 函数形式执行，支持顶层 await。可用现代语法（const/let、箭头函数、解构、可选链、async/await、Promise）。没有 DOM、没有 Node API、没有定时器。";
 "Injected values:" = "注入的变量：";
-"- bullet — the notification:
-    bullet.deviceName  string  this iPhone's name
-    bullet.appName     string  the sending app's display name
-    bullet.appID       string  the sending app's bundle ID
-    bullet.title       string  may be empty
-    bullet.subtitle    string  may be empty
-    bullet.message     string  the notification body
-    bullet.date        string  formatted timestamp
-    bullet.icon        string  base64 PNG of the app icon
-    bullet.image       string  base64 of the attachment image" = "- bullet——通知内容：
-    bullet.deviceName  字符串  本机名称
-    bullet.appName     字符串  发送通知的应用显示名
-    bullet.appID       字符串  发送通知的应用 bundle ID
-    bullet.title       字符串  可能为空
-    bullet.subtitle    字符串  可能为空
-    bullet.message     字符串  通知正文
-    bullet.date        字符串  已格式化的时间戳
-    bullet.icon        字符串  应用图标的 base64 PNG
-    bullet.image       字符串  通知附件图片的 base64";
+"- bullet — the notification:\n    bullet.deviceName  string  this iPhone's name\n    bullet.appName     string  the sending app's display name\n    bullet.appID       string  the sending app's bundle ID\n    bullet.title       string  may be empty\n    bullet.subtitle    string  may be empty\n    bullet.message     string  the notification body\n    bullet.date        string  formatted timestamp\n    bullet.icon        string  base64 PNG of the app icon\n    bullet.image       string  base64 of the attachment image" = "- bullet——通知内容：\n    bullet.deviceName  字符串  本机名称\n    bullet.appName     字符串  发送通知的应用显示名\n    bullet.appID       字符串  发送通知的应用 bundle ID\n    bullet.title       字符串  可能为空\n    bullet.subtitle    字符串  可能为空\n    bullet.message     字符串  通知正文\n    bullet.date        字符串  已格式化的时间戳\n    bullet.icon        字符串  应用图标的 base64 PNG\n    bullet.image       字符串  通知附件图片的 base64";
 "Injected functions:" = "注入的函数：";
-"- push(req) — sends a request. Call once to send, several times to send several, or never to skip this notification. req:
-      { url: string (required),
-        method: \"GET\" | \"POST\" | ... (default \"POST\"),
-        headers: { name: value },
-        body: object (sent as JSON) or string (sent as-is) }
-- fetch(url, init) — real HTTP, web-platform semantics: a Promise of a Response with ok, status, headers, url, and json()/text().
-- localStorage.getItem/setItem/removeItem/clear — persists per service.
-- console.log/info/warn/error — shown in the editor's Run output" = "- push(req)——发送一个请求。调用一次发送一条，调用多次发送多条，不调用则跳过该通知。req 结构：
-      { url: 字符串（必填），
-        method: \"GET\" | \"POST\" | …（默认 \"POST\"），
-        headers: { 名称: 值 },
-        body: 对象（以 JSON 发送）或字符串（原样发送） }
-- fetch(url, init)——真实 HTTP，与 Web 平台语义一致：返回 Promise<Response>，含 ok、status、headers、url 和 json()/text()。
-- localStorage.getItem/setItem/removeItem/clear——按服务持久化。
-- console.log/info/warn/error——显示在脚本编辑器的运行输出中。";
+"default \"POST\"" = "默认 \"POST\"";
+"an object is sent as JSON" = "对象会以 JSON 发送";
+"an object is sent as JSON" = "对象会以 JSON 发送";
 "Rules:" = "规则：";
-"- Call push() to forward the notification; without it, nothing is sent.
-- The script must finish within 2 seconds.
-- Do not use while(true) loops or blocking patterns." = "- 调用 push() 才会转发通知；不调用则什么都不会发送。
-- 脚本必须在 2 秒内完成。
-- 不要使用 while(true) 死循环或阻塞式写法。";
+"- Call push() to forward the notification; without it, nothing is sent.\n- The script must finish within 2 seconds.\n- Do not use while(true) loops or blocking patterns." = "- 调用 push() 才会转发通知；不调用则什么都不会发送。\n- 脚本必须在 2 秒内完成。\n- 不要使用 while(true) 死循环或阻塞式写法。";
 "Output ONLY the JavaScript source — no markdown fences, no explanation, no commentary." = "只输出 JavaScript 源码——不要 markdown 代码围栏、不要解释、不要任何说明文字。";
 "USER REQUIREMENT — replace the line below with what you want, or write your requirement after this prompt:" = "用户需求——把下面这一行替换成你想要的效果，或直接在本提示词后面写下你的需求：";
 "★ Write here what you want the script to do." = "★ 在这里写下你想让脚本实现的效果。";
@@ -333,9 +267,7 @@ console.log(...)——显示在编辑器的运行输出中。";
 "Top-level await works: the script is run as an async function." = "支持顶层 await：脚本以 async 函数的形式运行。";
 "localStorage is kept per service, so two services of this type do not share it." = "localStorage 按服务隔离，因此同一类型的两个服务不会共享它。";
 "bullet.deviceName, bullet.appName, bullet.appID, bullet.title, bullet.subtitle, bullet.message, bullet.date" = "bullet.deviceName、bullet.appName、bullet.appID、bullet.title、bullet.subtitle、bullet.message、bullet.date";
-"bullet.icon   — base64 PNG of the app icon
-bullet.image  — base64 of the notification's attachment" = "bullet.icon   — 应用图标的 base64 PNG
-bullet.image  — 通知附件图片的 base64";
+"bullet.icon   — base64 PNG of the app icon\nbullet.image  — base64 of the notification's attachment" = "bullet.icon   — 应用图标的 base64 PNG\nbullet.image  — 通知附件图片的 base64";
 "Also available: fetch(url, init), localStorage, console.log()" = "其它可用：fetch(url, init)、localStorage、console.log()";
 "The token is cached in localStorage, so a page of notifications does not fetch a new one for every message. It is re-fetched once it is older than the expiry the server returned." = "令牌会缓存在 localStorage 中，因此一批通知不会为每条消息都去获取新令牌。当它超过服务器返回的有效期后才会重新获取。";
 "The server's own lifetime when it gives one; an hour when it does not, since a cache that never expires is worse than one that expires too early." = "服务器给了有效期就用它的；没给则按一小时算——永不过期的缓存比过早过期的更糟。";
@@ -343,12 +275,74 @@ bullet.image  — 通知附件图片的 base64";
 "bullet.icon   — base64 PNG of the app icon" = "bullet.icon   — 应用图标的 base64 PNG";
 "bullet.image  — base64 of the notification's attachment" = "bullet.image  — 通知附件图片的 base64";
 "Where variables live" = "变量存在哪里";
-"The script runs fresh for every notification. A top-level let or const belongs to that run alone and is gone by the next one — that is what keeps one notification's data out of another's.
-localStorage is the way to carry a value across notifications: it is kept per service, so two services of the same type do not share it." = "每条通知都会重新运行脚本。顶层声明的 let 或 const 只属于这一次运行，下一条通知时就已消失——这正是让通知之间数据互不串扰的原因。
-要跨通知保留数值请使用 localStorage：它按服务隔离，因此同一类型的两个服务不会共享它。";
+"The script runs fresh for every notification. A top-level let or const belongs to that run alone and is gone by the next one — that is what keeps one notification's data out of another's.\nlocalStorage is the way to carry a value across notifications: it is kept per service, so two services of the same type do not share it." = "每条通知都会重新运行脚本。顶层声明的 let 或 const 只属于这一次运行，下一条通知时就已消失——这正是让通知之间数据互不串扰的原因。\n要跨通知保留数值请使用 localStorage：它按服务隔离，因此同一类型的两个服务不会共享它。";
 "JavaScript Hooks" = "JavaScript 钩子";
 "Runs for every notification this service would receive. A hook cannot send anything: it decides whether to continue (keep) and may rewrite the notification's text." = "该服务本会收到的每条通知都会运行。钩子无法发送任何内容：它决定是否继续（keep），并可以改写通知文本。";
 "On Receiving" = "收到通知时";
 "After Filtering" = "筛选之后";
 "Edit Received Hook" = "编辑「收到通知时」钩子";
 "Edit Filtered Hook" = "编辑「筛选之后」钩子";
+"Guide" = "指南";
+"What a hook does" = "钩子做什么";
+"Deciding" = "如何决定";
+"device — the device" = "device — 设备状态";
+"If a hook fails" = "钩子出错时";
+"Functions" = "可用函数";
+"Runs as soon as the notification arrives for this service — before the app list, the notification settings and the device conditions are consulted." = "该服务收到通知时立即运行——早于应用黑白名单、通知设置条件和设备状态的判断。";
+"Runs after every filter has already passed, immediately before the request is built — the last place to change what goes out." = "在所有筛选都已通过之后、构建请求之前立即运行——改变发出内容的最后机会。";
+"Reports the device; it does not set it. Assigning to it changes nothing, which is deliberate: a hook must not be able to tell the filters that the device is in a state it is not." = "只报告设备状态，不设置它。赋值不会生效，这是刻意的：钩子不能让筛选器以为设备处于它并不处于的状态。";
+"These three fields are yours to rewrite: what you leave in bullet when you call keep() is what the rest of the pipeline sees, including the log and the payload." = "这三个字段由你改写：调用 keep() 时 bullet 里的值就是后续管线看到的内容，包括日志与推送载荷。";
+"A hook that throws before deciding does not drop the notification: it continues, and the reason appears in the log. A hook that fails while switched off costs nothing at all." = "在做出决定前抛错的钩子不会丢弃通知：通知会继续，原因记入日志。关闭状态下的钩子完全不产生开销。";
+"The hook runs fresh for every notification, so a top-level let or const is gone by the next one. localStorage is how a value survives — kept per service and per hook, so this hook and the other one on the same service do not share it." = "每条通知都会重新运行钩子，因此顶层 let 或 const 下一条通知时就已消失。要保留数值请用 localStorage——它按服务和钩子分别隔离，因此同一个服务的两个钩子不会共享它。";
+"The hook must finish within 2 seconds. Fetch runs for real, so a hook that asks a model to read a message does make that request — on every notification it runs for." = "钩子必须在 2 秒内完成。fetch 会真实发出请求，因此用模型识别短信的钩子，每运行一次就真的会调用一次。";
+"A hook cannot send anything: there is no push(). It decides whether to continue and may rewrite the notification's text." = "钩子无法发送任何内容：没有 push()。它决定是否继续，并可以改写通知文本。";
+"This prompt describes this API. Add what you want below — the AI writes the code, it does not decide what you need." = "这段提示词描述了本 API。请在下方补充你想要的效果——AI 只负责写代码，不会替你决定需要什么。";
+"What should it do?" = "你希望它做什么？";
+"Read the notification's fields and decide. bullet.icon and bullet.image are present only when the notification carries them." = "读取通知字段并作出判断。bullet.icon 与 bullet.image 仅在通知确实携带时才存在。";
+"Call push() to forward the notification; without it nothing is sent." = "调用 push() 才会转发通知；不调用则什么都不发。";
+"Call keep() to let the notification through; returning without it drops it." = "调用 keep() 才会放行通知；不调用则丢弃它。";
+"Rewriting bullet.title/subtitle/message changes what is sent." = "改写 bullet.title/subtitle/message 会改变发出的内容。";
+"device is read-only: it reports the device, it does not set it." = "device 是只读的：它报告设备状态，不设置它。";
+"The script must finish within 2 seconds." = "脚本必须在 2 秒内完成。";
+"The hook must finish within 2 seconds." = "钩子必须在 2 秒内完成。";
+"Do not use while(true) loops or blocking patterns." = "不要使用 while(true) 循环或阻塞式写法。";
+"Each notification is a separate run: a variable declared at the top level does not survive to the next one. Use localStorage for that." = "每条通知都是一次独立运行：顶层声明的变量不会保留到下一条。需要保留请用 localStorage。";
+"this iPhone's name" = "本机名称";
+"the sending app's display name" = "发送方应用的显示名称";
+"the sending app's bundle ID" = "发送方应用的包名";
+"the notification title, may be empty" = "通知标题，可能为空";
+"the notification subtitle, may be empty" = "通知副标题，可能为空";
+"the notification body" = "通知正文";
+"a formatted timestamp" = "格式化时间";
+"base64 PNG of the app icon, when there is one" = "应用图标的 base64 PNG（存在时）";
+"base64 PNG of the attachment, when there is one" = "附件图片的 base64 PNG（存在时）";
+"base64 PNG of the app icon" = "应用图标的 base64 PNG";
+"base64 of the attachment image" = "附件图片的 base64";
+"where to send it" = "发送目标地址";
+"default \"POST\"" = "默认 \"POST\"";
+"an object is sent as JSON" = "对象会以 JSON 发送";
+"Call push() to send. Call it more than once to send several, or not at all to skip this notification." = "调用 push() 发送。多次调用可发送多条，不调用则跳过本条通知。";
+"Real HTTP: Response has ok, status, headers, url, json() and text()." = "真实 HTTP：Response 含 ok、status、headers、url、json() 与 text()。";
+"Kept per service, and persists between notifications." = "按服务隔离，并在通知之间保留。";
+"Shown in the editor's Run output." = "显示在编辑器的运行输出中。";
+"editable — keep() carries your change onward" = "可改写——keep() 会把改动传下去";
+"editable" = "可改写";
+"read-only" = "只读";
+"the screen is locked" = "屏幕是否锁定";
+"on Wi-Fi" = "是否连接 Wi-Fi";
+"on cellular data" = "是否使用蜂窝网络";
+"has any network at all" = "是否有任何网络";
+"keep()                 continue with the notification" = "keep()                 继续处理该通知";
+"keep({ force: true })  continue even if a filter would block it" = "keep({ force: true })  即使筛选器会拦截也继续";
+"return without calling keep()   drop this notification" = "不调用 keep() 直接返回   丢弃该通知";
+"Real HTTP — the same fetch a script gets." = "真实 HTTP——与脚本所用的一致。";
+"Kept per service and per hook, so the two hooks do not share it." = "按服务和钩子隔离，因此两个钩子不会共享。";
+"Write a JavaScript hook for Pusher, an iOS tweak that forwards notifications to push services." = "为 Pusher 编写一段 JavaScript 钩子。Pusher 是一个把通知转发到推送服务的 iOS 插件。";
+"A hook decides whether a notification is forwarded, and may rewrite its text. It cannot send anything: there is no push(). It runs once per notification as an async function, so top-level await works. There is no DOM, no Node APIs and no timers." = "钩子决定一条通知是否转发，并可以改写其文本。它无法发送任何内容：没有 push()。每条通知以 async 函数运行一次，因此支持顶层 await。没有 DOM、没有 Node API、没有定时器。";
+"Runtime: JavaScriptCore on iOS. The script runs once per notification as an async function, so top-level await works. Modern syntax (const/let, arrow functions, destructuring, optional chaining, async/await, Promise) is available. There is no DOM, no Node APIs and no timers." = "运行环境：iOS 上的 JavaScriptCore。脚本每条通知以 async 函数运行一次，因此支持顶层 await。可用现代语法（const/let、箭头函数、解构、可选链、async/await、Promise）。没有 DOM、没有 Node API、没有定时器。";
+"★ Write here what you want it to do." = "★ 在这里写下你想要的效果。";
+"API:" = "API：";
+"The prompt describes this API. Add what you want below — the AI writes the code, it does not decide what you need." = "这段提示词描述了本 API。请在下方补充你想要的效果——AI 只负责写代码，不会替你决定需要什么。";
+"Tap Copy AI Prompt (top right). It is a system prompt: it teaches the assistant this API. The dialog asks what you want the script to do — write it there, paste the whole thing to your assistant, then paste the JavaScript it writes back here." = "点右上角「复制 AI 提示词」。这是一段系统提示词，教会助手本 API。对话框会询问你希望脚本做什么——写在那里，把整段粘贴给助手，再把它生成的 JavaScript 粘回这里。";
+"Tap Copy AI Prompt (top right). It is a system prompt that teaches the assistant this hook's API. The dialog asks what you want; paste the whole thing to your assistant, then paste the JavaScript it writes back here." = "点右上角「复制 AI 提示词」。这是一段系统提示词，教会助手本钩子的 API。对话框会询问你的需求；把整段粘贴给助手，再把它生成的 JavaScript 粘回这里。";
+"The script runs fresh for every notification. A top-level let or const belongs to that run alone and is gone by the next one — that is what keeps one notification's data out of another's.\nlocalStorage is how a value survives to the next notification: it is kept per service, so two services of the same type do not share it." = "每条通知都会重新运行脚本。顶层 let 或 const 只属于那一次运行，下一条通知时就已消失——这正是让通知之间数据互不串扰的原因。\nlocalStorage 是让数值保留到下一条通知的方式：它按服务隔离，因此同一类型的两个服务不共享它。";

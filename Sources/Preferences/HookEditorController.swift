@@ -68,6 +68,8 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
         navigationItem.rightBarButtonItems = [
             UIBarButtonItem(title: "Run".localized, style: .plain,
                             target: self, action: #selector(runHook)),
+            UIBarButtonItem(title: "Guide".localized, style: .plain,
+                            target: self, action: #selector(showGuide)),
         ]
 
         view.backgroundColor = .systemGroupedBackground
@@ -272,6 +274,13 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         moveGutter()
+    }
+
+    /// The guide, presented over the editor: the API is a thing a user consults
+    /// *while* writing, so leaving the page to read it would be the wrong shape.
+    @objc private func showGuide() {
+        view.endEditing(true)
+        HookGuide.present(from: self, phase: phase)
     }
 
     // MARK: - Running
