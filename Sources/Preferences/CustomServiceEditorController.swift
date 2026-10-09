@@ -145,16 +145,15 @@ public final class CustomServiceEditorController: ListController {
     private var showsImageSizing: Bool?
 
     private func rebuildIfImageSizingChanged() {
-        let shouldShow = ServiceSpecifierBuilders.includeImage(
-            stored: CustomServiceStore.rawEntry(id: definitionID),
-            fallback: Prefs(ServiceRegistry.service(named: definitionID).newInstancePrefs())
-        )
+        // From the cell, as on a service page: it carries the value the toggle
+        // just wrote, so the rebuild follows the tap rather than a file write.
+        guard let isOn = isToggleOn(PrefKey.includeImage) else { return }
         guard let previous = showsImageSizing else {
-            showsImageSizing = shouldShow
+            showsImageSizing = isOn
             return
         }
-        guard previous != shouldShow else { return }
-        showsImageSizing = shouldShow
+        guard previous != isOn else { return }
+        showsImageSizing = isOn
         installSpecifiers(buildSpecifiers())
     }
 

@@ -43,6 +43,7 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
 
         // Through the setter so the identity check in the getter works.
         self.specifiers = buildSpecifiers()
+        observePreferenceChanges()
 
         guard let icon else { return }
         let label = UILabel()
@@ -121,24 +122,55 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     ///
     /// Remembered so a rebuild happens only when the answer changes: the rows
     /// are how the picture is scaled, so with the image switched off they
-    /// describe nothing and are not built at all. Rebuilding is what removes
-    /// them, and a switch tap posts a Darwin notification, so the change lands
-    /// as a rebuild through the `specifiers` getter.
+    /// describe nothing and are not built at all.
     private var showsImageSizing: Bool?
 
-    /// Rebuilds the page when "Include Image" has been switched, so the sizing
-    /// rows appear and disappear with it.
-    private func rebuildIfImageSizingChanged() {
-        let shouldShow = ServiceSpecifierBuilders.includeImage(
-            stored: PrefsStore.instance(serviceInstanceID),
-            fallback: Prefs(ServiceRegistry.service(named: serviceType).newInstancePrefs())
+    /// Watches the switch that decides whether the page has sizing rows.
+    ///
+    /// The switches write through `PreferencesStorage`, which has no reference
+    /// back to this controller, so the dependency is noticed where the write can
+    /// be seen: `PrefsStore` posts a **Darwin** notification
+    /// (`CFNotificationCenter`, which `NotificationCenter` cannot observe), and
+    /// that is what re-evaluates the page.
+    private func observePreferenceChanges() {
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            { _, observer, _, _, _ in
+                guard let observer else { return }
+                let controller = Unmanaged<ServiceController>
+                    .fromOpaque(observer).takeUnretainedValue()
+                DispatchQueue.main.async { controller.rebuildIfImageSizingChanged() }
+            },
+            Pusher.prefsNotification as CFString,
+            nil,
+            .coalesce
         )
-        guard let previous = showsImageSizing else {
-            showsImageSizing = shouldShow
+    }
+
+    deinit {
+        CFNotificationCenterRemoveEveryObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque()
+        )
+    }
+
+    /// Rebuilds the page when "Include Image" has been switched.
+    ///
+    /// The answer comes from the installed cell, not from storage: the toggle's
+    /// own value is written by the framework's action, and reading the cell is
+    /// what makes the rebuild follow the tap rather than a file write.
+    private func rebuildIfImageSizingChanged() {
+        guard let isOn = isToggleOn(PrefKey.includeImage) else {
+            // The row is not on this page (the type has no image at all).
             return
         }
-        guard previous != shouldShow else { return }
-        showsImageSizing = shouldShow
+        guard let previous = showsImageSizing else {
+            showsImageSizing = isOn
+            return
+        }
+        guard previous != isOn else { return }
+        showsImageSizing = isOn
         installSpecifiers(buildSpecifiers())
     }
 

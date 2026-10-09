@@ -142,6 +142,20 @@ open class ListController: PSListController, TintableController {
         self.specifiers = NSMutableArray(array: specifiers as! [Any])
     }
 
+    /// Whether a toggle in this page's **installed** cells is currently on.
+    ///
+    /// Read from the cell rather than from storage because the cell is what the
+    /// user just touched: the framework writes the new value through the
+    /// specifier's setter and keeps its own copy, so asking the cell is the one
+    /// answer that cannot lag behind the tap.
+    func isToggleOn(_ identifier: String) -> Bool? {
+        guard let specifier = specifier(forID: identifier) else { return nil }
+        if let value = specifier.property(forKey: "value") as? NSNumber {
+            return value.boolValue
+        }
+        return specifier.storedDefault as? Bool
+    }
+
     /// Loads a specifier plist from this bundle.
     ///
     /// The bundle is passed explicitly rather than relying on
