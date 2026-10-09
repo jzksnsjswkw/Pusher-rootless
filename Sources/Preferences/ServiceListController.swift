@@ -13,7 +13,7 @@ import Preferences
 /// an instance is on, and the order instances are tried in. Both are only
 /// persisted when editing ends, so a half-finished drag is never saved.
 @objc(NSPServiceListController)
-public class ServiceListController: PlainViewController {
+public class ServiceListController: PlainViewController, ServiceTransferHost {
     private static let cellIdentifier = "ServiceCell"
 
     /// Every instance this list shows, in order.
@@ -85,7 +85,7 @@ public class ServiceListController: PlainViewController {
         // own: there is nothing to look at, only something to do.
         transferButton = UIBarButtonItem(
             image: UIImage(systemName: "ellipsis.circle"),
-            menu: transferMenu()
+            menu: UIMenu(title: "", children: [])
         )
         navigationItem.title = "Instances".localized
         // Actions sit on the right, as on the Services page: the left slot is the
@@ -122,6 +122,7 @@ public class ServiceListController: PlainViewController {
                 ?? ServiceArtwork.image(forType: instance.type)
         }
         servicesTable.reloadData()
+        updateTransferMenu()
     }
 
     /// The instance shown at one row.
@@ -146,12 +147,13 @@ public class ServiceListController: PlainViewController {
         reloadData()
     }
 
-    /// Import and export, as a menu.
+    /// Rebuilds the transfer menu against what there is right now.
     ///
-    /// A menu rather than three bar buttons: these are rare actions, and the bar
-    /// already carries `+` and `Edit`. The menu is rebuilt when it opens, since
-    /// "Export" makes no sense with nothing configured.
-    private func transferMenu() -> UIMenu {
+    /// Export is meaningless with nothing configured, so it is disabled rather
+    /// than offered and refused — import stays, since a device with nothing on it
+    /// is exactly where an import is most wanted.
+    private func updateTransferMenu() {
+        let canExport = !instances.isEmpty
         let export = UIAction(
             title: "Export…".localized,
             image: UIImage(systemName: "square.and.arrow.up")
@@ -159,6 +161,8 @@ public class ServiceListController: PlainViewController {
             guard let self else { return }
             ServiceTransfer.offerExport(from: self, scope: .instances)
         }
+        export.attributes = canExport ? [] : .disabled
+
         let importAction = UIAction(
             title: "Import…".localized,
             image: UIImage(systemName: "square.and.arrow.down")
@@ -166,7 +170,7 @@ public class ServiceListController: PlainViewController {
             guard let self else { return }
             ServiceTransfer.offerImport(from: self, scope: .instances)
         }
-        return UIMenu(title: "", children: [export, importAction])
+        transferButton?.menu = UIMenu(title: "", children: [export, importAction])
     }
 
     @objc private func toggleEditing(_ sender: UIBarButtonItem) {

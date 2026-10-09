@@ -22,6 +22,9 @@ public final class CustomServiceListController: PlainViewController, ServiceTran
 
     private var definitions: [CustomServiceDefinition] = []
     private var tableView: UITableView!
+    private var addButton: UIBarButtonItem!
+    private var editButton: UIBarButtonItem!
+    private var transferButton: UIBarButtonItem!
 
     public override func viewDidLoad() {
         super.viewDidLoad()
@@ -38,30 +41,18 @@ public final class CustomServiceListController: PlainViewController, ServiceTran
         navigationItem.title = "Services".localized
         // Both actions sit on the right: the left slot is the back button, and
         // taking it traps the user on this page.
-        let transfer = UIBarButtonItem(
+        transferButton = UIBarButtonItem(
             image: UIImage(systemName: "ellipsis.circle"),
-            menu: UIMenu(title: "", children: [
-                UIAction(title: "Export…".localized,
-                         image: UIImage(systemName: "square.and.arrow.up")) {
-                    [weak self] _ in
-                    guard let self else { return }
-                    ServiceTransfer.offerExport(from: self, scope: .services)
-                },
-                UIAction(title: "Import…".localized,
-                         image: UIImage(systemName: "square.and.arrow.down")) {
-                    [weak self] _ in
-                    guard let self else { return }
-                    ServiceTransfer.offerImport(from: self, scope: .services)
-                },
-            ])
+            menu: UIMenu(title: "", children: [])
         )
-        navigationItem.rightBarButtonItems = [
-            UIBarButtonItem(barButtonSystemItem: .add, target: self,
-                            action: #selector(addDefinition)),
-            UIBarButtonItem(title: "Edit".localized, style: .plain, target: self,
-                            action: #selector(toggleEditing(_:))),
-            transfer,
-        ]
+        addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self,
+                                    action: #selector(addDefinition))
+        editButton = UIBarButtonItem(title: "Edit".localized, style: .plain,
+                                     target: self, action: #selector(toggleEditing(_:)))
+        // Held as properties, not anonymous: the transfer menu is rebuilt from
+        // state, and the edit button's own enabled state is what says whether
+        // there is anything to reorder.
+        navigationItem.rightBarButtonItems = [addButton, editButton, transferButton]
     }
 
     public override func viewWillAppear(_ animated: Bool) {
@@ -81,15 +72,50 @@ public final class CustomServiceListController: PlainViewController, ServiceTran
     private func reloadData() {
         definitions = CustomServiceStore.definitions()
         tableView.reloadData()
-        updateEditButton()
+        updateBarButtons()
     }
 
-    /// The edit button is pointless with nothing to reorder or delete.
-    private func updateEditButton() {
-        navigationItem.rightBarButtonItems?.last?.isEnabled = !definitions.isEmpty
-        if definitions.isEmpty, tableView.isEditing {
-            tableView.setEditing(false, animated: true)
+    /// Keeps the two stateful buttons honest about what can be done.
+    ///
+    /// The edit button is pointless with nothing to reorder or delete, and export
+    /// is meaningless with nothing to export — but import stays live either way,
+    /// since a device with nothing on it is exactly where an import is wanted.
+    /// Edit mode is left alone while it is on, or there would be no way out of it.
+    private func updateBarButtons() {
+        editButton?.isEnabled = tableView.isEditing || !definitions.isEmpty
+
+        let canExport = !definitions.isEmpty
+        let export = UIAction(
+            title: "Export…".localized,
+            image: UIImage(systemName: "square.and.arrow.up")
+        ) { [weak self] _ in
+            guard let self else { return }
+            ServiceTransfer.offerExport(from: self, scope: .services)
         }
+        export.attributes = canExport ? [] : .disabled
+
+        let importAction = UIAction(
+            title: "Import…".localized,
+            image: UIImage(systemName: "square.and.arrow.down")
+        ) { [weak self] _ in
+            guard let self else { return }
+            // Leaving edit mode first: otherwise the page the import writes to is
+            // the page behind the sheet, and it comes back with the edit controls
+            // still showing — where a tap renames instead of opening.
+            self.applyEditing(false)
+            ServiceTransfer.offerImport(from: self, scope: .services)
+        }
+        transferButton?.menu = UIMenu(title: "", children: [export, importAction])
+    }
+
+    /// Turns editing off, including the button's title.
+    ///
+    /// Named distinctly from `UIViewController.setEditing(_:animated:)`, which
+    /// this is not an override of: that one is about the controller's own edit
+    /// affordances, this is about the table's.
+    private func applyEditing(_ editing: Bool) {
+        tableView.setEditing(editing, animated: true)
+        editButton?.title = editing ? "Done".localized : "Edit".localized
     }
 
     // MARK: - Actions
@@ -111,12 +137,8 @@ public final class CustomServiceListController: PlainViewController, ServiceTran
     }
 
     @objc private func toggleEditing(_ sender: UIBarButtonItem) {
-        tableView.setEditing(!tableView.isEditing, animated: true)
-        sender.title = tableView.isEditing ? "Done".localized : "Edit".localized
-        // Disabling the button while editing would leave no way out of edit
-        // mode, so it is only ever disabled when editing is already off.
-        navigationItem.rightBarButtonItems?.last?.isEnabled =
-            tableView.isEditing || !definitions.isEmpty
+        applyEditing(!tableView.isEditing)
+        updateBarButtons()
     }
 
     /// Renames a definition, refusing a name another one already has.
