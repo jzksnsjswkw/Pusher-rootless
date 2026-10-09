@@ -21,7 +21,11 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     public init(instance: ServiceInstance) {
         self.serviceInstanceID = instance.id
         self.serviceType = instance.type
-        self.icon = ServiceArtwork.image(forType: instance.type)
+        // The service's own logo first: the title bar should show the same
+        // picture the list row does, which is what makes the logo the service's
+        // identity rather than a decoration on one screen.
+        self.icon = ServiceIcon.logo(forInstanceID: instance.id)
+            ?? ServiceArtwork.image(forType: instance.type)
         super.init(nibName: nil, bundle: nil)
     }
 

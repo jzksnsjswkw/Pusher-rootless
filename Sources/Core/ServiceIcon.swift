@@ -1,13 +1,17 @@
 import UIKit
 
-/// A service's own icon: the picture a notification is labelled with, instead of
-/// the sending app's.
+/// A service's own logo: the picture that identifies it.
 ///
-/// A service that forwards to a chat app is often reaching an *account*, not an
-/// app — a webhook, a bot, a channel — and the app icon is then the wrong
-/// picture twice over: it is the app that happened to raise the notification,
-/// not where the notification is going. An icon of the user's own says what the
-/// destination is.
+/// Two services of the same type are otherwise indistinguishable — two rows
+/// reading "Bark" with the same red logo — and a service the user wrote has no
+/// artwork at all. A logo says which destination a row is, and it is the same
+/// picture everywhere the service appears: in the list, on its settings page,
+/// and (where the payload has a field for it) in the notification itself.
+///
+/// It also fixes a second problem for notifications: a service often reaches an
+/// *account* rather than an app — a bot, a channel, a webhook — so the sending
+/// app's icon is the wrong picture twice over, being the app that happened to
+/// raise the notification rather than where the notification is going.
 ///
 /// ## What is stored
 ///
@@ -111,6 +115,24 @@ public enum ServiceIcon {
     ]
 
     // MARK: - Stored form
+
+    /// The logo of one instance, or `nil` when it has none.
+    ///
+    /// A definition's logo is the fallback, so a script's instances show the
+    /// logo the script declares until one of them chooses its own.
+    public static func logo(forInstanceID id: String) -> UIImage? {
+        let stored = PrefsStore.instance(id)
+        if let own = image(from: stored) { return own }
+        guard let type = stored.nonEmptyString(PrefKey.instanceType),
+              let definition = CustomServiceStore.definition(id: type)
+        else { return nil }
+        return image(from: CustomServiceStore.rawEntry(id: definition.id))
+    }
+
+    /// The logo of one definition, or `nil` when it has none.
+    public static func logo(forDefinitionID id: String) -> UIImage? {
+        image(from: CustomServiceStore.rawEntry(id: id))
+    }
 
     /// The icon of one instance or definition, or `nil` when it has none and the
     /// notification's own app icon should be used.

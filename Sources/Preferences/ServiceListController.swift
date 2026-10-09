@@ -21,6 +21,8 @@ public class ServiceListController: PlainViewController {
     /// Icons, keyed by instance type (not by instance — two instances of one
     /// service share their artwork).
     private var icons: [String: UIImage] = [:]
+    /// One logo per row, in the table's own order.
+    private var logos: [UIImage?] = []
     private var loadedControllers: [String: ServiceController] = [:]
 
     private var servicesTable: UITableView!
@@ -102,8 +104,15 @@ public class ServiceListController: PlainViewController {
     /// Re-reads the instances and reloads the table.
     private func reloadData() {
         instances = ServiceInstanceStore.instances()
-        for instance in instances where icons[instance.type] == nil {
-            icons[instance.type] = ServiceArtwork.image(forType: instance.type)
+        // The service's own logo wins; the built-in artwork is the fallback, so
+        // a row always shows something.
+        //
+        // Keyed by instance rather than by type: two instances of one service
+        // are separate destinations and may carry different logos, which is the
+        // whole reason a logo is attached to the instance.
+        logos = instances.map { instance in
+            ServiceIcon.logo(forInstanceID: instance.id)
+                ?? ServiceArtwork.image(forType: instance.type)
         }
         servicesTable.reloadData()
     }
@@ -274,7 +283,9 @@ extension ServiceListController: UITableViewDataSource, UITableViewDelegate {
 
         cell.textLabel?.text = Localization.instanceDisplayName(instance)
         cell.detailTextLabel?.text = nil
-        cell.imageView?.image = icons[instance.type]
+        cell.imageView?.image = indexPath.row < logos.count
+            ? logos[indexPath.row]
+            : icons[instance.type]
         cell.accessoryType = .disclosureIndicator
 
         // The switch is the row's own accessory, so it is rebuilt each time

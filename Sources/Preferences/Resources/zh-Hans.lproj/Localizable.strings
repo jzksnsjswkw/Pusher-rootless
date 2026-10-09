@@ -356,3 +356,5 @@
 "Use the App's Icon" = "使用应用的图标";
 "The icon is stored at this size and sent as it is. A larger icon costs more on every notification." = "图标按此尺寸存储并原样发送。图标越大，每条通知的开销越高。";
 "Your own icon replaces the sending app's icon in the notification." = "你自己的图标会替换通知中发送方应用的图标。";
+"Preview" = "预览";
+"This is the picture the service list, its settings page and the notification use." = "这是服务列表、其设置页以及通知中使用的图片。";

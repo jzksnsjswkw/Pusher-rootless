@@ -38,6 +38,7 @@ public final class ServiceIconController: PSViewController {
 
     /// The section of the page: which part of the icon is being edited.
     private enum Section: Int, CaseIterable {
+        case preview
         case size
         case gallery
         case tints
@@ -191,11 +192,12 @@ public final class ServiceIconController: PSViewController {
         DispatchQueue.main.async { [weak self] in
             guard let self, token == self.renderToken else { return }
             if let cell = self.previewCell as? PreviewCell {
-                cell.show(self.renderCurrent())
+                cell.show(self.renderCurrent(), name: self.heading)
             }
             // The size and tint rows draw their selection from the same state.
             self.tableView.reloadSections(
-                IndexSet([Section.size.rawValue, Section.tints.rawValue]), with: .none
+                IndexSet([Section.preview.rawValue, Section.size.rawValue,
+                          Section.tints.rawValue]), with: .none
             )
         }
     }
@@ -261,10 +263,11 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
     public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int)
         -> Int {
         switch Section(rawValue: section) {
+        case .preview: return 1
         case .size: return 1
         case .gallery: return 1
         case .tints: return showsTints ? 1 : 0
-        case .photo: return 3   // preview, choose, and "use the app icon"
+        case .photo: return 2   // choose, and "use the app icon"
         default: return 0
         }
     }
@@ -272,6 +275,7 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
     public func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int)
         -> String? {
         switch Section(rawValue: section) {
+        case .preview: return "Preview".localized
         case .size: return "Icon Size".localized
         case .gallery: return "Choose a Symbol".localized
         case .tints: return showsTints ? "Color".localized : nil
@@ -283,6 +287,9 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
     public func tableView(_ tableView: UITableView, titleForFooterInSection section: Int)
         -> String? {
         switch Section(rawValue: section) {
+        case .preview:
+            return ("This is the picture the service list, its settings page and "
+                + "the notification use.").localized
         case .size:
             return ("The icon is stored at this size and sent as it is. A larger "
                 + "icon costs more on every notification.").localized
@@ -297,6 +304,13 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
     public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath)
         -> UITableViewCell {
         switch Section(rawValue: indexPath.section) {
+        case .preview:
+            let cell = tableView.dequeueReusableCell(withIdentifier: "preview", for: indexPath)
+            (cell as? PreviewCell)?.show(renderCurrent(), name: heading)
+            previewCell = cell
+            cell.selectionStyle = .none
+            return cell
+
         case .size:
             let cell = tableView.dequeueReusableCell(withIdentifier: "plain", for: indexPath)
             var configuration = UIListContentConfiguration.valueCell()
@@ -337,16 +351,9 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
             return cell
 
         case .photo:
-            if indexPath.row == 0 {
-                let cell = tableView.dequeueReusableCell(withIdentifier: "preview", for: indexPath)
-                (cell as? PreviewCell)?.show(renderCurrent())
-                previewCell = cell
-                cell.selectionStyle = .none
-                return cell
-            }
             let cell = tableView.dequeueReusableCell(withIdentifier: "plain", for: indexPath)
             var configuration = UIListContentConfiguration.cell()
-            if indexPath.row == 1 {
+            if indexPath.row == 0 {
                 configuration.text = "Choose from Photos".localized
                 configuration.image = UIImage(systemName: "photo.on.rectangle")
                 cell.accessoryType = .none
@@ -370,7 +377,7 @@ extension ServiceIconController: UITableViewDataSource, UITableViewDelegate {
         case .size:
             presentSizePicker()
         case .photo:
-            if indexPath.row == 1 {
+            if indexPath.row == 0 {
                 pickPhoto()
             } else {
                 clearIcon()
@@ -523,36 +530,66 @@ private final class IconCell: UITableViewCell {
     }
 }
 
-/// The rendered result, so the page shows the real icon rather than describing
-/// it.
+/// The result as the service list will draw it: the logo at row size beside the
+/// service's name, with the switch a row carries.
+///
+/// Shown small and in context rather than large and alone, because the question
+/// the picker has to answer is "which row is this?", and an icon that reads well
+/// at 72 points can still be a smudge at the 29 a list row gives it.
 private final class PreviewCell: UITableViewCell {
     /// Named `preview` rather than `imageView`: `UITableViewCell` already has one.
     private let preview = UIImageView()
+    private let label = UILabel()
+    private let toggle = UISwitch()
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         preview.contentMode = .scaleAspectFit
-        preview.layer.cornerRadius = 12
+        preview.layer.cornerRadius = 6.5
         preview.clipsToBounds = true
         preview.translatesAutoresizingMaskIntoConstraints = false
+
+        label.font = .preferredFont(forTextStyle: .body)
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        toggle.isOn = true
+        toggle.isUserInteractionEnabled = false
+        toggle.translatesAutoresizingMaskIntoConstraints = false
+
         contentView.addSubview(preview)
+        contentView.addSubview(label)
+        contentView.addSubview(toggle)
         NSLayoutConstraint.activate([
-            preview.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            preview.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
-            preview.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
-            preview.widthAnchor.constraint(equalToConstant: 72),
-            preview.heightAnchor.constraint(equalToConstant: 72),
+            preview.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            preview.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            preview.widthAnchor.constraint(equalToConstant: 29),
+            preview.heightAnchor.constraint(equalToConstant: 29),
+            preview.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 12),
+            preview.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12),
+
+            label.leadingAnchor.constraint(equalTo: preview.trailingAnchor, constant: 12),
+            label.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            label.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 12),
+            label.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12),
+
+            toggle.leadingAnchor.constraint(greaterThanOrEqualTo: label.trailingAnchor, constant: 8),
+            toggle.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            toggle.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
         ])
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    func show(_ image: UIImage?) {
+    func show(_ image: UIImage?, name: String) {
         preview.image = image
         if image == nil {
+            // The fallback the list itself would draw: a service with no logo of
+            // its own still shows the type's artwork.
             preview.image = UIImage(systemName: "questionmark")
             preview.tintColor = .tertiaryLabel
         }
+        preview.backgroundColor = image == nil ? .clear : .clear
+        label.text = name
     }
 }
