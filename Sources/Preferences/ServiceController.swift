@@ -288,7 +288,12 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // either a stranger's fields or none at all. It gets the warning and the
         // actions that still make sense.
         if ServiceRegistry.knownService(named: serviceType) == nil {
-            return NSMutableArray(array: missingServiceSpecifiers())
+            let cells = missingServiceSpecifiers()
+            // Same finishing pass as the full page below: the count suffix on the
+            // app-list row is added here for every cell, so the short page cannot
+            // drift from the long one.
+            for specifier in cells { updateTitleCounts(specifier) }
+            return NSMutableArray(array: cells)
         }
 
         // Which cells describe this instance is a property of its *type*: a
@@ -412,15 +417,19 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // gave them titles and groups went with the service, so what is left is
         // the key — which is still the name the script read it by.
         all.append(contentsOf: declaredConfigSpecifiers())
+        // Through `updateTitleCounts`, exactly as the full page does: the app-list
+        // row's "(N total)" suffix is what tells the user a filter is set, and a
+        // row built without it would lose the count on the next appearance while
+        // every *other* page kept it.
         all.append(contentsOf: appFilterSpecifiers())
 
-        // The log row comes from the shared tail, so the link keeps pointing at
-        // the same controller and carries the same routing properties as on a
-        // normal page — a hand-built row would be a second definition of the same
-        // row.
-        all.append(contentsOf: globalTailSpecifiers().filter {
-            AppListTitle.baseName(of: $0.name ?? "") == "Log".localized
-        })
+        // The whole shared tail, not a hand-picked row: the device conditions, the
+        // notification-settings link and the log are properties of the *instance*
+        // — when it is allowed to fire, what it checks — and they outlive the
+        // service. Taking only the log row made the page a different shape from
+        // every other instance's, and quietly dropped conditions the user had set
+        // or may still want to set.
+        all.append(contentsOf: globalTailSpecifiers())
 
         all.append(contentsOf: hookSpecifiers())
         return all
