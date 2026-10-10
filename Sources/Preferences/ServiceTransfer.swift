@@ -886,9 +886,15 @@ extension TransferPickerController: UITableViewDataSource, UITableViewDelegate {
     }
 
     @objc private func companionChanged(_ sender: UISwitch) {
-        // A forced switch cannot be turned off: it is showing a fact about what
-        // is ticked, not holding a preference.
-        sender.setOn(companionIsOn, animated: true)
+        // A forced switch has nothing to store: it is showing a fact about what is
+        // ticked, not holding a preference, so it is put back where it was.
+        guard companionRequiredReason == nil else {
+            sender.setOn(true, animated: true)
+            return
+        }
+        companionIsOn = sender.isOn
+        // The footer describes what the switch does, so it changes with it.
+        refreshCompanionSection()
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
