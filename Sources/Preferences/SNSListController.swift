@@ -206,15 +206,39 @@ public final class SNSListController: ListController {
 
     // MARK: - The synchronize button
 
-    /// Whether every condition currently falls back to the global value.
+    /// Whether every condition currently holds the same value as the global.
     ///
-    /// Decided by whether the service *holds* each key, not by comparing values: a
-    /// deliberate override that happens to equal the global is still an override,
-    /// and removing it is still something the button should be able to do.
+    /// Compared by *value*, not by whether the service holds an override.
+    ///
+    /// The two answers differ in exactly one case, and it decided the design: a
+    /// user toggles a switch and toggles it back. The stored override is then real
+    /// but equal to the global, and the page shows the global's value — so as far
+    /// as the user is concerned nothing changed, and a button reading "Synchronize
+    /// With Global" that would remove nothing is the worse of the two
+    /// contradictions. What the button is named is what it must be true of.
     private var isSynchronized: Bool {
         guard let instanceID else { return true }
         let stored = PrefsStore.instance(instanceID)
-        return !conditions.contains { stored[$0.key] != nil }
+        let global = PrefsStore.global()
+        // Through the same resolution the page reads with, so a value that is
+        // absent on both sides counts as equal rather than as a difference.
+        return conditions.allSatisfy { condition in
+            resolved(condition.key, instance: stored) == resolved(condition.key, instance: global)
+        }
+    }
+
+    /// One condition's effective value, as a comparable scalar.
+    ///
+    /// Booleans throughout: the segment's `true`/`false` and the sentinel for
+    /// "follow the global" are the only values these keys take, and comparing an
+    /// `NSNumber` to a `Bool` is how two equal settings come out as different.
+    private func resolved(_ key: String, instance: Prefs) -> Bool {
+        guard let value = instance[key] else {
+            // Nothing stored: the condition's own default, which is also what the
+            // global page shows for a switch it has never been given.
+            return conditions.first { $0.key == key }?.defaultValue ?? false
+        }
+        return Prefs([key: value]).bool(key, default: false)
     }
 
     /// The synchronize button and its footer, built but not installed.
@@ -268,20 +292,21 @@ public final class SNSListController: ListController {
     /// framework knows.
     @objc(setPreferenceValue:specifier:)
     public override func setPreferenceValue(_ value: Any?, specifier: PSSpecifier) {
-        guard isServiceMode, let instanceID else {
+        guard isServiceMode else {
             PreferencesStorage.setValue(value, forGlobalSpecifier: specifier)
+            // The global page has no synchronize button, but its change *is* the new
+            // global, so a service's copy opened later reads it — nothing to do here
+            // beyond keeping the two companions in step.
+            mirrorCompanions(of: specifier, value: value)
             return
-        }
-
-        // Any edit makes this page out of sync with the globals.
-        if let synchronizeButton {
-            synchronizeButton.name = "Synchronize With Global".localized
-            synchronizeButton.setProperty(true, forKey: "enabled")
-            reloadSpecifier(synchronizeButton, animated: true)
         }
 
         PreferencesStorage.setValue(value, forInstanceSpecifier: specifier)
         mirrorCompanions(of: specifier, value: value)
+        // Decided from what was just stored rather than assumed: an edit that puts
+        // the value back where the global has it leaves nothing to synchronize, and
+        // the button has to say so.
+        refreshSynchronizeButton()
     }
 
     /// The value to show: the service's own override, or the global default.
@@ -297,6 +322,21 @@ public final class SNSListController: ListController {
             return own
         }
         return PreferencesStorage.readValue(forGlobalSpecifier: specifier)
+    }
+
+    /// Re-reads the button's state from the store.
+    ///
+    /// Called after every write rather than set optimistically, because whether an
+    /// edit makes the service diverge is a question only the store can answer — and
+    /// it answered "no" in the case that prompted this: a switch toggled and
+    /// toggled back.
+    private func refreshSynchronizeButton() {
+        guard let synchronizeButton else { return }
+        let synchronized = isSynchronized
+        synchronizeButton.name = (synchronized
+            ? "Synchronized" : "Synchronize With Global").localized
+        synchronizeButton.setProperty(!synchronized, forKey: "enabled")
+        reloadSpecifier(synchronizeButton, animated: true)
     }
 
     /// Keeps the two conditions the AND/OR flag governs in step.
