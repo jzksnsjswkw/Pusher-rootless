@@ -435,6 +435,8 @@ enum ServiceTransfer {
                         isPreSelected: true
                     )
                 },
+                // The instances that use the chosen services, by name — the
+                // switch's subject on this page, in both directions.
                 companion: document.instances.map(\.name)
             )
         }
@@ -579,6 +581,10 @@ enum ServiceTransfer {
 
     /// How many of the other kind exist, for deciding whether to offer the switch
     /// at all.
+    /// Whether the *other* kind exists at all, so a switch would have a subject.
+    ///
+    /// Only used on the export side: import asks the document instead, since a
+    /// switch is pointless when the file carries nothing of the other kind.
     private static func companionCount(scope: Scope) -> Int {
         switch scope {
         case .instances: return CustomServiceStore.definitions().count
@@ -587,15 +593,16 @@ enum ServiceTransfer {
     }
 
     private static func companionLabel(scope: Scope, forExport: Bool) -> String? {
-        guard companionCount(scope: scope) > 0 else { return nil }
         switch scope {
         case .instances:
-            // Import never offers it: see ``listing(for:scope:)``.
+            // Export only. Importing an instance needs its service, so there is
+            // nothing to ask — see ``listing(for:scope:)``.
             return forExport ? "Include the services they use".localized : nil
         case .services:
-            return forExport
-                ? "Include the instances that use them".localized
-                : "Also import the instances that use them".localized
+            // The same words either way: on both pages the switch decides whether
+            // the instances using the chosen services come along, and the user does
+            // not care that one is an export and the other an import.
+            return "Include the instances that use them".localized
         }
     }
 

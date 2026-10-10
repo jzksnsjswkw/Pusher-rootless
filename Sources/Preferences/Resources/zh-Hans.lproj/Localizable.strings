@@ -473,8 +473,7 @@
 "Service · %d settings" = "服务 · %d 项配置";
 "%@ (the service is empty)" = "%@（服务为空）";
 "Include the services they use" = "同时导出它们使用的服务";
-"Include the instances that use them" = "同时导出使用它们的实例";
-"Also import the instances that use them" = "同时导入使用它们的实例";
+"Include the instances that use them" = "同时包含使用它们的实例";
 "Not used by any instance yet" = "尚未被任何实例使用";
 "Used by %d instances" = "被 %d 个实例使用";
 "\"%@\" uses a service this device does not have and the document does not carry, so services are included." = "「%@」使用的服务本机没有、文档也未包含，因此会一并导入服务。";
