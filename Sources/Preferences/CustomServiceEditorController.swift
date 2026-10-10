@@ -518,7 +518,9 @@ public final class CustomServiceEditorController: ListController {
 @objc(NSPCustomServiceScriptController)
 public final class CustomServiceScriptController: PSViewController, UITextViewDelegate {
     private let definitionID: String
-    private let textView = UITextView()
+    /// Built by ``UITextView/scriptEditor()``, which supplies the text storage
+    /// that colours the JavaScript as it is typed.
+    private let textView = UITextView.scriptEditor()
     private let outputView = UITextView()
     private let runButton = UIButton(type: .system)
     private var outputHeight: NSLayoutConstraint!

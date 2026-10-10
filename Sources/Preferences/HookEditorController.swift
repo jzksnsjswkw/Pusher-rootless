@@ -16,7 +16,9 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
     private let instanceID: String
     private let phase: BulletinHookRunner.Phase
 
-    private let textView = UITextView()
+    /// Built by ``UITextView/scriptEditor()``, which supplies the text storage
+    /// that colours the JavaScript as it is typed.
+    private let textView = UITextView.scriptEditor()
     private let outputView = UITextView()
     private let gutter = UIView()
     private let gutterLabel = UILabel()
