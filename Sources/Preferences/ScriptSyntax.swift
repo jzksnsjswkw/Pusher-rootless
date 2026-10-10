@@ -14,14 +14,22 @@ import UIKit
 enum ScriptSyntax {
 
     /// What a run of characters is, as far as colouring is concerned.
+    ///
+    /// The set is GitHub's own: that theme separates thirteen token classes, but
+    /// these six are the ones a reader actually scans for, and the two that carry
+    /// most of the effect are ``function`` and ``property`` — a page where every
+    /// name is one colour is exactly what makes highlighting look flat.
     enum Kind {
         case keyword
-        /// Strings and template literals.
+        /// Strings, template literals and regular expressions.
         case string
         case comment
         case number
-        /// A name this app injects — `push`, `bullet`, `pref`, `fetch`.
-        case runtime
+        /// A name being *read*: an object key, a member after a dot, a property
+        /// of an injected object (`pref.key`).
+        case property
+        /// A name being *called*: `push(`, `fetch(`, `res.json(`.
+        case function
     }
 
     /// A coloured run, in UTF-16 units so the range can be handed straight to
@@ -48,16 +56,21 @@ enum ScriptSyntax {
         "null", "true", "false", "undefined",
     ]
 
-    /// The names the runtime puts in scope.
+    /// The objects the runtime puts in scope.
     ///
-    /// Coloured apart from the language because they are the vocabulary of *this*
-    /// app — the thing a user is looking up when they open an editor — and because
-    /// seeing `push` in a different colour from the code around it is the quickest
-    /// confirmation that a script is written against the right API.
+    /// Drawn in the property colour rather than left plain. GitHub cannot know
+    /// about them, but here they are the vocabulary a user is looking up — the
+    /// thing that says a script is written against the right API — so `pref` and
+    /// `bullet` standing out is the one place this palette deviates, and it
+    /// deviates by using a colour the theme already defines for names.
     static let runtimeNames: Set<String> = [
-        "push", "bullet", "device", "pref", "fetch", "localStorage", "console",
-        "keep", "globalThis",
+        "bullet", "device", "pref", "localStorage", "console", "globalThis",
     ]
+
+    /// The runtime's callable names. They are recognised as function calls by the
+    /// same lookahead as any other name, and listed here only so the intent is
+    /// written down: `push` and `keep` are the two the contract is about.
+    static let runtimeFunctions: Set<String> = ["push", "fetch", "keep"]
 
     // MARK: - Scanning
 
@@ -232,6 +245,11 @@ enum ScriptSyntax {
                 } else if isDigit(c) {
                     scanNumber()
                 } else {
+                    // Recorded like anywhere else, or a `.` inside a `${ … }` hole
+                    // would not mark what follows it as a property — which is the
+                    // most visible place in a script for that to go wrong, since
+                    // building a URL out of `pref` fields is the common case.
+                    if !isWhitespace(c) { lastSignificant = c }
                     index += 1
                 }
             }
@@ -311,16 +329,61 @@ enum ScriptSyntax {
             // identifier of any kind ends the window in which a `/` begins a
             // literal.
             lastWasKeywordAllowingRegex = false
-            if runtimeNames.contains(name) {
-                emit(start, index, .runtime)
-            } else if keywords.contains(name) {
+
+            if keywords.contains(name) {
                 emit(start, index, .keyword)
                 lastWasKeywordAllowingRegex = keywordsAllowingRegex.contains(name)
+            } else if runtimeNames.contains(name) {
+                emit(start, index, .property)
+            } else if runtimeFunctions.contains(name), nextMeaningfulCharacter == openParen {
+                emit(start, index, .function)
+            } else if isFunctionCall {
+                // Any name followed by `(`: `res.json(`, `Number(`, `add(`.
+                emit(start, index, .function)
+            } else if isPropertyName {
+                // A key in an object literal, or a member after a dot.
+                emit(start, index, .property)
             }
             // Anything else is left uncoloured: the editor's own text colour
-            // already covers identifiers.
+            // already covers ordinary identifiers.
 
             lastSignificant = identifierMarker
+        }
+
+        /// The next character that is not whitespace, so `foo (` is still a call.
+        private var nextMeaningfulCharacter: UInt16 {
+            var i = index
+            while i < count, isWhitespace(units[i]) { i += 1 }
+            return at(i)
+        }
+
+        /// Whether the identifier just read is being called.
+        private var isFunctionCall: Bool { nextMeaningfulCharacter == openParen }
+
+        /// Whether the identifier just read names a value rather than a variable:
+        /// a member after `.`, or a key in an object literal.
+        private var isPropertyName: Bool {
+            // `pref.key`, `bullet.title`, `res.status`.
+            if lastSignificant == dot { return true }
+            // `{ key: value }` — a key is followed by a colon, and a colon only
+            // appears there or in a ternary, which the brace test below rules out.
+            guard nextMeaningfulCharacter == colon else { return false }
+            return isInsideObjectLiteral
+        }
+
+        /// Whether the cursor is inside `{ … }` rather than a block.
+        ///
+        /// Approximated from the last significant character: inside an object
+        /// literal, the things before a key are `{`, `,` or another key's value.
+        /// A block's `:` only appears as a label, which a script this app runs
+        /// does not use — and if it did, the cost is one word in the wrong colour.
+        private var isInsideObjectLiteral: Bool {
+            switch lastSignificant {
+            case openBrace, comma:
+                return true
+            default:
+                return false
+            }
         }
 
         /// Keywords after which an expression — and so a regular expression — may
@@ -397,6 +460,14 @@ final class ScriptTextStorage: NSTextStorage {
 
     private let backing = NSMutableAttributedString()
 
+    /// The view being colouring. Weak, and only for its `traitCollection`: the
+    /// palette depends on the appearance, and a text storage has none of its own.
+    weak var host: UITextView?
+
+    /// The appearance the current colours were chosen for, so a change of
+    /// appearance can be noticed and the document recoloured.
+    private var paletteIsDark: Bool?
+
     override var string: String { backing.string }
 
     override func attributes(
@@ -432,6 +503,17 @@ final class ScriptTextStorage: NSTextStorage {
         super.processEditing()
     }
 
+    /// Recolours when the device switches between light and dark.
+    ///
+    /// The colours are baked into the storage on every edit, so without this the
+    /// document would keep the palette it was typed in until the next keystroke.
+    func appearanceChanged() {
+        guard host != nil else { return }
+        let isDark = host?.traitCollection.userInterfaceStyle == .dark
+        guard isDark != paletteIsDark else { return }
+        applyColours()
+    }
+
     private func applyColours() {
         let whole = NSRange(location: 0, length: backing.length)
         guard whole.length > 0 else { return }
@@ -446,7 +528,11 @@ final class ScriptTextStorage: NSTextStorage {
         // whatever colour it was typed into — deleting a quote would leave the
         // word it had enclosed red — because colouring only ever *set* the tokens
         // it recognised.
-        addAttribute(.foregroundColor, value: UIColor.label, range: whole)
+        let traits = host?.traitCollection ?? UITraitCollection.current
+        paletteIsDark = traits.userInterfaceStyle == .dark
+        addAttribute(
+            .foregroundColor, value: ScriptPalette.plain(in: traits), range: whole
+        )
         for span in ScriptSyntax.spans(in: backing.string)
         where NSMaxRange(span.range) <= whole.length {
             addAttribute(
@@ -457,6 +543,23 @@ final class ScriptTextStorage: NSTextStorage {
 
         endEditing()
         isColouring = false
+    }
+}
+
+/// An editor text view that recolours itself when the appearance changes.
+///
+/// A subclass exists for exactly one reason: `traitCollectionDidChange` is only
+/// delivered to a view, and the colours live in the text storage.
+private final class ScriptEditorTextView: UITextView {
+    weak var storage: ScriptTextStorage?
+
+    override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+        super.traitCollectionDidChange(previous)
+        guard traitCollection.userInterfaceStyle != previous?.userInterfaceStyle else {
+            return
+        }
+        textColor = ScriptPalette.plain(in: traitCollection)
+        storage?.appearanceChanged()
     }
 }
 
@@ -476,41 +579,125 @@ extension UITextView {
         layoutManager.addTextContainer(container)
         storage.addLayoutManager(layoutManager)
 
-        let textView = UITextView(frame: .zero, textContainer: container)
-        textView.textColor = UIColor.label
+        let textView = ScriptEditorTextView(frame: .zero, textContainer: container)
+        storage.host = textView
+        textView.storage = storage
+        // The theme's own foreground, not `.label`: ordinary code is drawn in
+        // this colour, so using the system label colour would make the plain text
+        // and the coloured tokens look like they came from two palettes.
+        textView.textColor = ScriptPalette.plain(in: textView.traitCollection)
         return textView
     }
 }
 
-/// The colours, adapted to the appearance.
+/// The colours, taken from GitHub's own syntax themes.
 ///
-/// Tuned for reading rather than for showing off: the keywords are a muted
-/// magenta and the strings a dark red in light mode, which is roughly where a
-/// long-standing editor puts them, so the result looks familiar rather than
-/// invented. Each is darkened or lightened for its appearance because the same
-/// hue cannot carry enough contrast on both a white and a black page.
+/// Not invented: these are the values from highlight.js's `github` and
+/// `github-dark` stylesheets — the pair of palettes the site itself uses — so the
+/// code in these editors looks like code the user has read everywhere else.
+/// Inventing a palette is how an editor ends up looking almost right.
+///
+/// The kinds are coarser than GitHub's: that theme distinguishes thirteen token
+/// classes, and this scanner produces six. Where a kind covers several of theirs,
+/// the colour is the one that carries the meaning a reader is looking for —
+/// `push` shares a colour with `Math.floor` rather than with a keyword, because
+/// both are names being *called*, which is what a reader is scanning for.
 enum ScriptPalette {
-    static func color(for kind: ScriptSyntax.Kind) -> UIColor {
-        switch kind {
-        case .keyword:
-            return adaptive(light: (0.61, 0.14, 0.55), dark: (0.99, 0.37, 0.62))
-        case .string:
-            return adaptive(light: (0.77, 0.10, 0.09), dark: (0.99, 0.42, 0.36))
-        case .number:
-            return adaptive(light: (0.11, 0.00, 0.81), dark: (0.82, 0.75, 0.41))
-        case .comment:
-            return adaptive(light: (0.36, 0.42, 0.47), dark: (0.42, 0.47, 0.53))
-        case .runtime:
-            return adaptive(light: (0.06, 0.41, 0.63), dark: (0.40, 0.72, 1.00))
+
+    /// The palette for one appearance.
+    ///
+    /// A plain struct rather than six closures, so the values can be read off a
+    /// theme file and compared at a glance.
+    struct Theme {
+        let keyword: UIColor
+        let string: UIColor
+        let comment: UIColor
+        let number: UIColor
+        let function: UIColor
+        let plain: UIColor
+
+        init(
+            keyword: String, string: String, comment: String,
+            number: String, function: String, plain: String
+        ) {
+            self.keyword = UIColor(hex: keyword)
+            self.string = UIColor(hex: string)
+            self.comment = UIColor(hex: comment)
+            self.number = UIColor(hex: number)
+            self.function = UIColor(hex: function)
+            self.plain = UIColor(hex: plain)
         }
     }
 
-    private static func adaptive(
-        light: (CGFloat, CGFloat, CGFloat), dark: (CGFloat, CGFloat, CGFloat)
-    ) -> UIColor {
+    /// `github` — the light theme.
+    ///
+    /// Its default foreground is #333 rather than black, which is what keeps a
+    /// page of code from looking heavier than the UI around it.
+    static let light = Theme(
+        keyword: "#a71d5d",     // hljs-keyword
+        string: "#183691",      // hljs-string, hljs-regexp
+        comment: "#969896",     // hljs-comment
+        number: "#0086b3",      // hljs-number, hljs-literal, hljs-attr
+        function: "#795da3",    // hljs-title.function_
+        plain: "#333333"        // hljs-level default
+    )
+
+    /// `github-dark` — the dark theme, from GitHub's own CSS.
+    static let dark = Theme(
+        keyword: "#ff7b72",
+        string: "#a5d6ff",
+        comment: "#8b949e",
+        number: "#79c0ff",
+        function: "#d2a8ff",
+        plain: "#c9d1d9"
+    )
+
+    static func color(for kind: ScriptSyntax.Kind) -> UIColor {
         UIColor { traits in
-            let c = traits.userInterfaceStyle == .dark ? dark : light
-            return UIColor(red: c.0, green: c.1, blue: c.2, alpha: 1)
+            let theme = traits.userInterfaceStyle == .dark ? dark : light
+            switch kind {
+            case .keyword: return theme.keyword
+            case .string: return theme.string
+            case .comment: return theme.comment
+            case .number: return theme.number
+            case .property: return theme.number
+            case .function: return theme.function
+            }
         }
+    }
+
+    /// The colour ordinary code is drawn in, which the editor's own text colour
+    /// also has to be set to or the page will not match the theme.
+    static func plain(in traits: UITraitCollection) -> UIColor {
+        (traits.userInterfaceStyle == .dark ? dark : light).plain
+    }
+}
+
+extension UIColor {
+    /// A colour from `#RRGGBB` or `#RGB`, the two forms the theme files use.
+    ///
+    /// A convenience rather than a dependency on the theme files themselves: the
+    /// values above are quoted from them, and being able to read the same string
+    /// here as in the stylesheet is what makes comparing the two possible.
+    convenience init(hex: String) {
+        var digits = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if digits.hasPrefix("#") { digits.removeFirst() }
+
+        // Three-digit form: each digit is doubled, so #abc is #aabbcc.
+        if digits.count == 3 {
+            digits = digits.map { "\($0)\($0)" }.joined()
+        }
+
+        var value: UInt64 = 0
+        guard digits.count == 6, Scanner(string: digits).scanHexInt64(&value) else {
+            self.init(white: 0.5, alpha: 1)
+            return
+        }
+        self.init(
+            red: CGFloat((value >> 16) & 0xFF) / 255,
+            green: CGFloat((value >> 8) & 0xFF) / 255,
+            blue: CGFloat(value & 0xFF) / 255,
+            alpha: 1
+        )
     }
 }
