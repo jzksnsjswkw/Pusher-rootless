@@ -50,7 +50,6 @@ enum ScriptFormatter {
         let tokens = ScriptSyntax.tokens(in: text)
         guard !tokens.isEmpty else { return nil }
 
-        let indentUnit = detectIndentUnit(in: tokens)
         var writer = Writer(indentUnit: indentUnit, breaks: LineBreaks(tokens: tokens))
         writer.run(tokens)
         return writer.result
@@ -58,48 +57,18 @@ enum ScriptFormatter {
 
     // MARK: - Indentation
 
-    /// The indentation the file already uses, so formatting does not impose one.
+    /// Two spaces.
     ///
-    /// A script indented with two spaces comes back indented with two spaces.
-    /// Imposing four would rewrite every line of a file whose author had already
-    /// made that choice, which is exactly the behaviour being avoided. When the
-    /// file shows no opinion — one line, or none indented — four spaces is the
-    /// default convention in this project.
-    static func detectIndentUnit(in tokens: [ScriptSyntax.Span]) -> String {
-        var counts: [Int] = []
-
-        for (index, token) in tokens.enumerated() {
-            // Only the whitespace before a line's first token matters.
-            guard token.kind == .plain, index + 1 < tokens.count else { continue }
-            let next = tokens[index + 1]
-            guard NSMaxRange(token.range) == next.range.location else { continue }
-
-            // The plain run ending at a newline, followed by the run that starts
-            // the next line: that second run's width is the indentation.
-            guard token.text.contains("\n") else { continue }
-            let tail = token.text.components(separatedBy: "\n").last ?? ""
-            guard tail.isEmpty else { continue }
-
-            let width = indentationWidth(next.text)
-            if width > 0 { counts.append(width) }
-        }
-
-        guard let smallest = counts.min() else { return "    " }
-        // One level is the smallest indentation present: a deeper line is a
-        // multiple of it, so the smallest is the unit.
-        return String(repeating: " ", count: smallest)
-    }
-
-    /// How many columns a run of whitespace ends with.
-    private static func indentationWidth(_ run: String) -> Int {
-        var width = 0
-        for character in run {
-            if character == " " { width += 1 }
-            else if character == "\t" { width += 4 }
-            else { break }
-        }
-        return width
-    }
+    /// Fixed rather than detected. Detecting the file's own indentation sounds
+    /// more polite and is worse in practice: the result then depends on what was
+    /// pasted, so the same script formats two ways and a user copying code out of
+    /// an AI answer gets whatever that answer happened to use. One indent, always,
+    /// is the behaviour a button can have.
+    ///
+    /// Two rather than four because of where this runs. The editor shows about 40
+    /// characters across on a phone, and four-space indentation spends a tenth of
+    /// that on each level of nesting — three levels in and half the line is gone.
+    static let indentUnit = "  "
 
     // MARK: - Line breaks
 
