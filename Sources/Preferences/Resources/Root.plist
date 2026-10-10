@@ -80,6 +80,16 @@
 		</dict>
 		<dict>
 			<key>action</key>
+			<string>openUpstreamGitHub</string>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>icon</key>
+			<string>github</string>
+			<key>label</key>
+			<string>Original Repository</string>
+		</dict>
+		<dict>
+			<key>action</key>
 			<string>openGitHub</string>
 			<key>cell</key>
 			<string>PSButtonCell</string>
@@ -87,14 +97,6 @@
 			<string>github</string>
 			<key>label</key>
 			<string>Maintainer / GitHub</string>
-		</dict>
-		<dict>
-			<key>action</key>
-			<string>openUpstreamGitHub</string>
-			<key>cell</key>
-			<string>PSButtonCell</string>
-			<key>label</key>
-			<string>Original Repository</string>
 		</dict>
 	</array>
 	<key>title</key>
