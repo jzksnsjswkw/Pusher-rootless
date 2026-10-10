@@ -393,7 +393,9 @@ enum ServiceTransfer {
         }
 
         let request = Request(
-            title: "Import Services".localized,
+            title: scope == .services
+                ? "Import Services".localized
+                : "Import Instances".localized,
             actionTitle: "Import".localized,
             footer: ("Services already on this device are left alone; anything new is "
                 + "added under the name shown here.").localized,
@@ -541,7 +543,7 @@ enum ServiceTransfer {
         do {
             let result = try ServiceImporter.apply(selection)
             present(controller, title: "Import Finished".localized,
-                    message: summary(of: result))
+                    message: summary(of: result, scope: scope))
             // The page behind the sheet has to show what just arrived. Asked of
             // the controller rather than reloaded from here, because only a page
             // knows what it is displaying.
@@ -552,18 +554,27 @@ enum ServiceTransfer {
     }
 
     /// What an import did, as a paragraph.
-    private static func summary(of result: ServiceImporter.Result) -> String {
+    ///
+    /// Worded per page, because the two pages count different things: a page of
+    /// instances has no interest in a script being added except as the reason its
+    /// instance works.
+    private static func summary(
+        of result: ServiceImporter.Result, scope: Scope
+    ) -> String {
+        // The page's own kind is reported first: on a page of instances, what the
+        // user came for is the instances, and a service appearing above them reads
+        // as the wrong answer to the question they asked.
         var lines: [String] = []
-        if !result.instances.isEmpty {
-            lines.append(String(format: "%d services were added: %@".localized,
-                                result.instances.count,
-                                result.instances.joined(separator: ", ")))
-        }
-        if !result.services.isEmpty {
-            lines.append(String(format: "%d services were added: %@".localized,
-                                result.services.count,
-                                result.services.joined(separator: ", ")))
-        }
+        let instanceLine = result.instances.isEmpty ? nil : String(
+            format: "%d instances were added: %@".localized,
+            result.instances.count, result.instances.joined(separator: ", ")
+        )
+        let serviceLine = result.services.isEmpty ? nil : String(
+            format: "%d services were added: %@".localized,
+            result.services.count, result.services.joined(separator: ", ")
+        )
+        lines += (scope == .services ? [serviceLine, instanceLine] : [instanceLine, serviceLine])
+            .compactMap { $0 }
         if result.isEmpty {
             lines.append("Nothing was added.".localized)
         }
