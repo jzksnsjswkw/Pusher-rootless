@@ -14,6 +14,9 @@ settings conditions and a Chinese interface.
 You need Theos and `com.opa334.altlist` from
 [AltList](https://github.com/opa334/AltList).
 
+The scheme must be named — the build stops without one, because a classic rootful
+package is not something this repository produces.
+
 ```bash
 # rootless
 THEOS_PACKAGE_SCHEME=rootless make clean package

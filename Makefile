@@ -3,33 +3,28 @@ THEOS_DEVICE_PORT=22
 
 FINALPACKAGE = 1
 
-# iOS 15+ for the rootless/roothide schemes (they exist only on iOS 15+), and
-# iOS 13.7 for a classic rootful build. The tweak itself supports iOS 10+ at
-# runtime; the deployment target only bounds the SDK features it may use, so it
-# is raised for the schemes that require it.
+# The package scheme must be named. It picks the layout the device needs, and
+# guessing was never safe: a build without a scheme targets the classic rootful
+# paths, which no supported device uses, and it fails in a way that looks like a
+# code error rather than a missing argument.
+#
+#   make package THEOS_PACKAGE_SCHEME=roothide    # roothide / Dopamine
+#   make package THEOS_PACKAGE_SCHEME=rootless    # rootless (elsewhere)
+#
+# Both use the 16.5 SDK: the deployment target is iOS 15, since neither layout
+# exists before it, and the tweak reaches older systems only through the rootful
+# build this repository no longer produces.
 ifeq ($(THEOS_PACKAGE_SCHEME),rootless)
 	TARGET = iphone:clang:16.5:15.0
 else ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
 	TARGET = iphone:clang:16.5:15.0
 else
-	TARGET = iphone:clang:14.5:13.7
+$(error THEOS_PACKAGE_SCHEME must be set: use THEOS_PACKAGE_SCHEME=roothide (or =rootless). A rootful build is not supported — the 14.x SDK crashes Swift 6.3, and no supported device uses that layout)
 endif
 
-# IMPORTANT: on roothide devices always build with
-#   make package THEOS_PACKAGE_SCHEME=roothide
-# Without an explicit scheme the Preferences bundle is linked without the
-# @loader_path/.jbroot rpath and AltList.framework fails to load at runtime
+# The scheme also decides the install prefix and the rpath the Preferences
+# bundle needs; without one, AltList.framework fails to load at runtime
 # ("Library not loaded: @rpath/AltList.framework/AltList").
-
-# The rootful build uses the 14.5 SDK, which predates several iOS 15 additions
-# this code names: the Swift concurrency modules, the `Sendable` protocol and
-# four system colors. One compile-time flag drives every `#if`, so the source
-# stays scheme-blind (see Sources/Shared/Compatibility.swift).
-ifneq ($(findstring 14.5,$(TARGET)),)
-	SWIFTFLAGS += -Xfrontend -disable-implicit-concurrency-module-import
-	SWIFTFLAGS += -Xfrontend -disable-implicit-string-processing-module-import
-	SWIFTFLAGS += -DLEGACY_SDK
-endif
 
 include $(THEOS)/makefiles/common.mk
 
