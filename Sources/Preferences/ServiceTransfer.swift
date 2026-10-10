@@ -214,11 +214,11 @@ enum ServiceTransfer {
                 )
                 present(controller, title: "Copied".localized,
                         message: String(
-                            format: "The services are on the clipboard (%@). Paste them "
-                                + "into a message, or into Pusher on another device.",
+                            format: ("The services are on the clipboard (%@). Paste them "
+                                + "into a message, or into Pusher on another device.")
+                                .localized,
                             size
-                        )
-                        .localized)
+                        ))
             } catch {
                 present(controller, title: "Export Failed".localized,
                         message: error.localizedDescription)

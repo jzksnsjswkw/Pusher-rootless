@@ -186,7 +186,11 @@ public final class ConfigFieldEditorController: ListController {
         ) ?? PSSpecifier()
         specifier.identifier = identifier
         specifier.setProperty(true, forKey: "enabled")
-        specifier.setProperty(placeholder, forKey: "placeholder")
+        // The placeholder is localised: it is a hint about what goes in the field
+        // ("API Key", "Connection"), and the ones that are example *values*
+        // ("apiKey") pass through unchanged because the string table has no entry
+        // for them.
+        specifier.setProperty(placeholder.localized, forKey: "placeholder")
         if noAutoCorrect {
             specifier.setProperty(true, forKey: "noAutoCorrect")
         }

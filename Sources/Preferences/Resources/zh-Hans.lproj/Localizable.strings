@@ -488,3 +488,5 @@
 "The services the instances use are added too, so they work straight away." = "实例所使用的服务也会被添加，因此可以立即工作。";
 "Read the user's settings from pref, never hard-code a key or URL that a pref field already carries." = "从 pref 读取用户的设置，不要硬编码 pref 字段已经提供的密钥或 URL。";
 "The service's own settings — a key, a URL, a flag — are declared on the service and filled in on each service that uses it. The script reads them from pref, so one script can serve several services with different values." = "服务自身的设置（密钥、URL、开关等）在服务上声明，并由每个使用它的服务填写。脚本从 pref 读取它们，因此同一个脚本可以服务多个使用不同取值的实例。";
+"API Key" = "密钥";
+"Connection" = "连接";
