@@ -388,3 +388,50 @@ public final class SNSListController: ListController {
             .first { $0.string(SpecifierRouting.PropertyKey.key) == key }
     }
 }
+
+// MARK: - Global settings
+
+/// The global settings page: the app list, plus the default device conditions.
+@objc(NSPGlobalSettingsListController)
+public final class GlobalSettingsListController: ListController {
+    public override func viewDidLoad() {
+        super.viewDidLoad()
+        buildSpecifiers()
+    }
+
+    /// The page's cells are two plists combined; see `rebuildSpecifiers()`.
+    private var builtSpecifiers: NSMutableArray?
+
+    /// Rebuilds both plists into one array when the framework discards them.
+    public override func rebuildSpecifiers() -> NSMutableArray? {
+        builtSpecifiers
+    }
+
+    private func buildSpecifiers() {
+        guard !hasInstalledSpecifiers else { return }
+
+        let appList = (loadSpecifiers(named: "GlobalAppList") as? [PSSpecifier]) ?? []
+        let conditions = (loadSpecifiers(named: "GlobalAndServices") as? [PSSpecifier]) ?? []
+
+        // The app-list cells are stored nested under `Global[appList]`, while
+        // the condition cells (`WhenToPush` / `WhatNetwork`) *are* the global
+        // defaults and keep their flat top-level keys.
+        SpecifierRouting.route(appList, to: PreferencesStorage.self, scope: .global)
+
+        let all = appList + conditions
+        for specifier in all
+        where specifier.cellType == .linkCell && specifier.name == "Global App List".localized {
+            specifier.name = AppListTitle.titled(
+                AppListTitle.baseName(of: specifier.name), count: AppListStorage.global().count
+            )
+            // A non-retaining back-reference: a strong one would retain the page.
+            specifier.setProperty(
+                NSValue(nonretainedObject: self), forKey: SpecifierRouting.PropertyKey.listReference
+            )
+            break
+        }
+
+        builtSpecifiers = NSMutableArray(array: all)
+        installSpecifiers(builtSpecifiers!)
+    }
+}
