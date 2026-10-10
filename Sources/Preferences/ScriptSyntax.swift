@@ -25,11 +25,18 @@ enum ScriptSyntax {
         case string
         case comment
         case number
-        /// A name being *read*: an object key, a member after a dot, a property
-        /// of an injected object (`pref.key`).
+        /// A name being *read*: a member after a dot, or a property of an
+        /// injected object (`pref.key`, `res.status`).
         case property
         /// A name being *called*: `push(`, `fetch(`, `res.json(`.
         case function
+        /// A name the platform provides: `JSON`, `Math`, `Object`, `Error`,
+        /// `parseInt`, `console`.
+        ///
+        /// GitHub draws these orange, and it is the one class that makes a page of
+        /// code look coloured rather than merely tinted — the eye reads orange as
+        /// "not mine", which is exactly what a provided name is.
+        case builtin
     }
 
     /// A coloured run, in UTF-16 units so the range can be handed straight to
@@ -71,6 +78,28 @@ enum ScriptSyntax {
     /// same lookahead as any other name, and listed here only so the intent is
     /// written down: `push` and `keep` are the two the contract is about.
     static let runtimeFunctions: Set<String> = ["push", "fetch", "keep"]
+
+    /// The platform's own names, taken from highlight.js's list for JavaScript so
+    /// that this agrees with the theme it imitates.
+    ///
+    /// Only the ones a script has any use for: `window`, `document`, `module` and
+    /// `self` are not reachable here, and colouring names that cannot appear would
+    /// be colouring nothing.
+    static let builtInNames: Set<String> = [
+        // Fundamental objects and their friends.
+        "Object", "Function", "Boolean", "Symbol", "Number", "BigInt", "Math",
+        "Date", "String", "RegExp", "Array", "Map", "Set", "WeakMap", "WeakSet",
+        "JSON", "Promise", "Proxy", "Reflect", "Intl",
+        // Errors.
+        "Error", "EvalError", "RangeError", "ReferenceError", "SyntaxError",
+        "TypeError", "URIError",
+        // Functions.
+        "eval", "isFinite", "isNaN", "parseFloat", "parseInt", "decodeURI",
+        "decodeURIComponent", "encodeURI", "encodeURIComponent", "escape",
+        "unescape",
+        // Timers, which a hook has no business using but may be tempted by.
+        "setInterval", "setTimeout", "clearInterval", "clearTimeout",
+    ]
 
     // MARK: - Scanning
 
@@ -333,6 +362,8 @@ enum ScriptSyntax {
             if keywords.contains(name) {
                 emit(start, index, .keyword)
                 lastWasKeywordAllowingRegex = keywordsAllowingRegex.contains(name)
+            } else if builtInNames.contains(name) {
+                emit(start, index, .builtin)
             } else if runtimeNames.contains(name) {
                 emit(start, index, .property)
             } else if runtimeFunctions.contains(name), nextMeaningfulCharacter == openParen {
@@ -590,65 +621,63 @@ extension UITextView {
     }
 }
 
-/// The colours, taken from GitHub's own syntax themes.
+/// The colours, taken from GitHub's own syntax theme.
 ///
-/// Not invented: these are the values from highlight.js's `github` and
-/// `github-dark` stylesheets — the pair of palettes the site itself uses — so the
-/// code in these editors looks like code the user has read everywhere else.
-/// Inventing a palette is how an editor ends up looking almost right.
+/// These are GitHub's `prettylights` values — the palette its website actually
+/// uses, as shipped with highlight.js. The first attempt took a *different*
+/// stylesheet of the same name, an older base16 variant that came with a
+/// third-party library; it looked nearly right and read flat, which is the whole
+/// difference between a theme and a lookalike.
 ///
-/// The kinds are coarser than GitHub's: that theme distinguishes thirteen token
-/// classes, and this scanner produces six. Where a kind covers several of theirs,
-/// the colour is the one that carries the meaning a reader is looking for —
-/// `push` shares a colour with `Math.floor` rather than with a keyword, because
-/// both are names being *called*, which is what a reader is scanning for.
+/// The classes are assigned the way GitHub assigns them, including the one that
+/// carries most of the effect: names the platform provides (`JSON`, `Math`,
+/// `Error`, `parseInt`) are orange, so a reader sees at a glance what is the
+/// script's own and what is given.
 enum ScriptPalette {
 
     /// The palette for one appearance.
-    ///
-    /// A plain struct rather than six closures, so the values can be read off a
-    /// theme file and compared at a glance.
     struct Theme {
         let keyword: UIColor
         let string: UIColor
         let comment: UIColor
         let number: UIColor
         let function: UIColor
+        let builtin: UIColor
         let plain: UIColor
 
         init(
-            keyword: String, string: String, comment: String,
-            number: String, function: String, plain: String
+            keyword: String, string: String, comment: String, number: String,
+            function: String, builtin: String, plain: String
         ) {
             self.keyword = UIColor(hex: keyword)
             self.string = UIColor(hex: string)
             self.comment = UIColor(hex: comment)
             self.number = UIColor(hex: number)
             self.function = UIColor(hex: function)
+            self.builtin = UIColor(hex: builtin)
             self.plain = UIColor(hex: plain)
         }
     }
 
-    /// `github` — the light theme.
-    ///
-    /// Its default foreground is #333 rather than black, which is what keeps a
-    /// page of code from looking heavier than the UI around it.
+    /// `github` — the light theme. `#24292e` foreground, not black.
     static let light = Theme(
-        keyword: "#a71d5d",     // hljs-keyword
-        string: "#183691",      // hljs-string, hljs-regexp
-        comment: "#969896",     // hljs-comment
-        number: "#0086b3",      // hljs-number, hljs-literal, hljs-attr
-        function: "#795da3",    // hljs-title.function_
-        plain: "#333333"        // hljs-level default
+        keyword: "#d73a49",     // prettylights-syntax-keyword
+        string: "#032f62",      // prettylights-syntax-string
+        comment: "#6a737d",     // prettylights-syntax-comment
+        number: "#005cc5",      // prettylights-syntax-constant
+        function: "#6f42c1",    // prettylights-syntax-entity
+        builtin: "#e36209",     // prettylights-syntax-variable
+        plain: "#24292e"
     )
 
-    /// `github-dark` — the dark theme, from GitHub's own CSS.
+    /// `github-dark` — the same palette for a dark page.
     static let dark = Theme(
         keyword: "#ff7b72",
         string: "#a5d6ff",
         comment: "#8b949e",
         number: "#79c0ff",
         function: "#d2a8ff",
+        builtin: "#ffa657",
         plain: "#c9d1d9"
     )
 
@@ -660,8 +689,12 @@ enum ScriptPalette {
             case .string: return theme.string
             case .comment: return theme.comment
             case .number: return theme.number
+            // An object key is GitHub's `hljs-attr`, which shares the constant
+            // colour with numbers — the same blue a reader already associates
+            // with "a literal value".
             case .property: return theme.number
             case .function: return theme.function
+            case .builtin: return theme.builtin
             }
         }
     }
