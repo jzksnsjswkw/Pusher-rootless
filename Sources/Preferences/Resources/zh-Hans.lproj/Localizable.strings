@@ -498,4 +498,4 @@
 "Restore Defaults" = "恢复默认";
 "Restore" = "恢复";
 "Every notification setting goes back to its default. Services that follow these settings follow them, so their behaviour changes too. A service with its own settings here is unaffected." = "所有通知设置将恢复为默认值。遵循这些设置的服务也会随之改变。已有自己设置的服务不受影响。";
-"Original Repository" = "原仓库（GitHub）";
+"Original Repository / GitHub" = "原仓库 / GitHub";

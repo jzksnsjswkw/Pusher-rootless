@@ -86,7 +86,7 @@
 			<key>icon</key>
 			<string>github</string>
 			<key>label</key>
-			<string>Original Repository</string>
+			<string>Original Repository / GitHub</string>
 		</dict>
 		<dict>
 			<key>action</key>
