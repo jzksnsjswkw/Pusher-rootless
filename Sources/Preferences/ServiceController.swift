@@ -400,13 +400,18 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         if let warning = PSSpecifier.groupSpecifier(withName: "") {
             warning.setProperty(
                 ("This instance's service was deleted, so it cannot send anything. "
-                    + "Its settings are kept, and a new instance of another service "
-                    + "can be made from the Instances page.").localized,
+                    + "Its settings are kept below, without the labels and groups the "
+                    + "service used to give them, and a new instance of another "
+                    + "service can be made from the Instances page.").localized,
                 forKey: "footerText"
             )
             all.append(warning)
         }
 
+        // The values that are still on the instance, by key. The declaration that
+        // gave them titles and groups went with the service, so what is left is
+        // the key — which is still the name the script read it by.
+        all.append(contentsOf: declaredConfigSpecifiers())
         all.append(contentsOf: appFilterSpecifiers())
 
         // The log row comes from the shared tail, so the link keeps pointing at
@@ -465,7 +470,14 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     /// the service arranged them, so a page and the script that reads the same
     /// fields describe them the same way.
     func declaredConfigSpecifiers() -> [PSSpecifier] {
-        let fields = ConfigFields.declared(byDefinition: serviceType)
+        var fields = ConfigFields.declared(byDefinition: serviceType)
+        if fields.isEmpty {
+            // The service is gone, so nothing declares these any more — but the
+            // values are still on the instance. Rendered from the values, so the
+            // settings the user filled in remain visible and editable instead of
+            // the page looking as though they had been lost.
+            fields = ConfigFields.savedFields(forInstance: serviceInstanceID)
+        }
         guard !fields.isEmpty else { return [] }
 
         var specifiers: [PSSpecifier] = []

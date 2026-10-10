@@ -268,6 +268,44 @@ public enum ConfigFields {
         }
     }
 
+    // MARK: Values recovered without a declaration
+
+    /// The fields an instance's stored values imply, when the service that
+    /// declared them no longer exists.
+    ///
+    /// This is what is left after a service is deleted: the values are still on
+    /// the instance — deliberately, so they can be carried to another service —
+    /// but the declarations that named and grouped them are gone with the service.
+    /// A page built from the declarations would therefore show nothing at all,
+    /// which reads as the settings having been lost.
+    ///
+    /// So the fields are reconstructed from the values themselves: the storage key
+    /// becomes the label, and the *kind* of the value says whether it was a switch
+    /// or a text field. What cannot be recovered is the human title, the group and
+    /// the note — those were only ever written down in the declaration — so a
+    /// field shows its key, which is also the name the script read it by and so
+    /// still means something to whoever wrote it.
+    public static func savedFields(forInstance id: String) -> [ConfigField] {
+        guard !id.isEmpty else { return [] }
+        let stored = PrefsStore.instance(id).dict(PrefKey.configValues) ?? Prefs()
+        // Sorted, not in storage order: a dictionary has none, so any order would
+        // be arbitrary — and arbitrary is the one thing a settings page must not
+        // be, since it would put the fields somewhere different after a relaunch.
+        return stored.raw.keys.sorted().compactMap { key in
+            guard !key.isEmpty else { return nil }
+            let value = stored[key]
+            let isSwitch = value is NSNumber || value is Bool
+            return ConfigField(
+                key: key,
+                title: key,
+                kind: isSwitch ? .toggle : .text,
+                group: "",
+                note: "",
+                defaultValue: isSwitch ? false : ""
+            )
+        }
+    }
+
     // MARK: Values
 
     /// What an instance holds for each field, as the script reads it.
