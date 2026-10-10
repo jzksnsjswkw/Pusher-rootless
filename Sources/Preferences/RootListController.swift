@@ -104,6 +104,16 @@ public final class RootListController: ListController {
         openURL("https://github.com/jzksnsjswkw/Pusher-rootless")
     }
 
+    /// The tweak this one is built from.
+    ///
+    /// A separate row rather than a note in the footer: the code here has
+    /// diverged (Swift, an instance model, JS services), so someone looking for
+    /// how the original behaves should land on the original rather than on a
+    /// description of it.
+    @objc public func openUpstreamGitHub() {
+        openURL("https://github.com/NoahSaso/Pusher")
+    }
+
     // MARK: - Helpers
 
     /// The navigation controller whose bar is visible.
