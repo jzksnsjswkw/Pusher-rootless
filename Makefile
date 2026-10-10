@@ -21,6 +21,16 @@ endif
 # @loader_path/.jbroot rpath and AltList.framework fails to load at runtime
 # ("Library not loaded: @rpath/AltList.framework/AltList").
 
+# The rootful build uses the 14.5 SDK, which predates several iOS 15 additions
+# this code names: the Swift concurrency modules, the `Sendable` protocol and
+# four system colors. One compile-time flag drives every `#if`, so the source
+# stays scheme-blind (see Sources/Shared/Compatibility.swift).
+ifneq ($(findstring 14.5,$(TARGET)),)
+	SWIFTFLAGS += -Xfrontend -disable-implicit-concurrency-module-import
+	SWIFTFLAGS += -Xfrontend -disable-implicit-string-processing-module-import
+	SWIFTFLAGS += -DLEGACY_SDK
+endif
+
 include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = Pusher
