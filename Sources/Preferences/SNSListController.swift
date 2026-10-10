@@ -44,6 +44,66 @@ public final class SNSListController: ListController {
         instanceID = specifier?.string(SpecifierRouting.PropertyKey.instanceID)
         isServiceMode = instanceID != nil
 
+        // The same controller serves both, and without this the global one arrives
+        // titled by whatever row pushed it — or by nothing, since a link cell's own
+        // label does not become the pushed page's title.
+        title = (isServiceMode
+            ? "Notification Settings".localized
+            : "Default Notification Settings".localized)
+
+        if !isServiceMode {
+            navigationItem.rightBarButtonItem = UIBarButtonItem(
+                title: "Reset".localized, style: .plain, target: self,
+                action: #selector(confirmReset(_:))
+            )
+        }
+
+        installSpecifiers(buildSpecifiers())
+    }
+
+    // MARK: - Restoring the global defaults
+
+    /// Asks before restoring, because it discards work.
+    ///
+    /// A confirmation rather than an undo: there is no undo for a page's worth of
+    /// settings, and an accidental tap on a navigation bar is easy.
+    @objc private func confirmReset(_ sender: UIBarButtonItem) {
+        let alert = UIAlertController(
+            title: "Restore Defaults".localized,
+            message: ("Every notification setting goes back to its default. Services "
+                + "that follow these settings follow them, so their behaviour "
+                + "changes too. A service with its own settings here is "
+                + "unaffected.").localized,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel".localized, style: .cancel))
+        alert.addAction(UIAlertAction(title: "Restore".localized, style: .destructive) {
+            [weak self] _ in
+            self?.restoreDefaults()
+        })
+        alert.popoverPresentationController?.barButtonItem = sender
+        present(alert, animated: true)
+    }
+
+    /// Removes the stored global notification settings, which *is* the default.
+    ///
+    /// Removed rather than written back as the default values: the two read the
+    /// same, and an absent key is the one form that also lets a future change to a
+    /// default take effect on this device. The same reasoning the per-instance
+    /// synchronize button uses.
+    private func restoreDefaults() {
+        // Both spellings: a short one left behind by an older build would keep
+        // answering after the current one was cleared, and look like a setting the
+        // user had chosen.
+        for key in [
+            PrefKey.snsIsAnd, PrefKey.SNSAlias.isAnd,
+            PrefKey.snsRequireANWithOR, PrefKey.SNSAlias.requireANWithOR,
+        ] + SNSCondition.allCases.map({ PrefKey.snsPrefix + $0.rawValue }) {
+            PrefsStore.setValue(nil, forKey: key)
+        }
+
+        // Rebuilt rather than patched row by row: the point is that every row now
+        // shows a default, which is a question only the store answers.
         installSpecifiers(buildSpecifiers())
     }
 

@@ -492,3 +492,9 @@
 "OR (any)" = "OR（任一）";
 "Each app has custom notification settings that determine where their notifications are allowed to show (in Settings → Notifications). This menu lets you require that either all (AND) or at least one (OR) of the options below is enabled in the app's settings." = "每个应用都有自己的通知设置，决定其通知允许在哪里显示（设置 → 通知）。此页面用于要求下方选项中「全部满足」（AND）或「至少满足一个」（OR）才转发通知。";
 "When using OR, you will probably want to require that Allow Notifications is enabled as well. The device keeps the other settings (Lock Screen, Badges, …) even when an app's notifications are turned off entirely, so OR alone would let those apps through. Leave this on unless you have a reason not to." = "使用 OR 时，通常还应要求「允许通知」处于开启状态。因为即使某个应用的通知被完全关闭，系统仍会保留其余设置（锁定屏幕、标记等），仅用 OR 会让这些应用也通过。除非有特别理由，建议保持开启。";
+"Default Notification Settings" = "默认通知设置";
+"Notification Settings" = "通知设置";
+"Reset" = "恢复默认";
+"Restore Defaults" = "恢复默认";
+"Restore" = "恢复";
+"Every notification setting goes back to its default. Services that follow these settings follow them, so their behaviour changes too. A service with its own settings here is unaffected." = "所有通知设置将恢复为默认值。遵循这些设置的服务也会随之改变。已有自己设置的服务不受影响。";
