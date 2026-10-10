@@ -1,14 +1,18 @@
 # Pusher-rootless
 
-rootless version of [NoahSaso/Pusher](https://github.com/NoahSaso/Pusher)  
-无根版本的 [NoahSaso/Pusher](https://github.com/NoahSaso/Pusher)
+[简体中文](Docs/zh-Hans/README.md)
 
-支持 iOS 15-16（roothide 设备也支持）。
-内置 Bark / 飞书 / 企业微信 / Pushover / Pushbullet / IFTTT / Pusher Receiver / Webhook 等服务，支持自定义服务、每应用覆盖、设备 / 声音列表、SNS 通知条件与中文界面。
+Rootless version of [NoahSaso/Pusher](https://github.com/NoahSaso/Pusher).
 
-## 构建
+Supports iOS 15–16, roothide devices included. Built-in services: Bark, Feishu,
+WeChat Work, Pushover, Pushbullet, IFTTT, Pusher Receiver and a generic webhook —
+plus user-defined services, per-app overrides, device & sound lists, notification
+settings conditions and a Chinese interface.
 
-依赖：Theos + `com.opa334.altlist`（来自 [AltList](https://github.com/opa334/AltList)）。
+## Build
+
+You need Theos and `com.opa334.altlist` from
+[AltList](https://github.com/opa334/AltList).
 
 ```bash
 # rootless
@@ -17,33 +21,37 @@ THEOS_PACKAGE_SCHEME=rootless make clean package
 THEOS_PACKAGE_SCHEME=roothide make clean package
 ```
 
-安装到设备（需先在 Makefile 里配置 `THEOS_DEVICE_IP` / `THEOS_DEVICE_PORT`）：
+Install to a device (set `THEOS_DEVICE_IP` / `THEOS_DEVICE_PORT` in the Makefile
+first):
 
 ```bash
 # rootless
 THEOS_PACKAGE_SCHEME=rootless make clean do
-# roothide:
+# roothide
 THEOS_PACKAGE_SCHEME=roothide make clean do
 ```
 
-代码全部为 Swift（仅 `Sources/Hooks/*.xm` 是 Logos 钩子，因为
-`%hook` / `%orig` / `%init` 没有 Swift 等价物）。新增内置服务只需两步：写好
-类型，然后在 `Sources/Core/ServiceRegistry.swift` 的 `builtInServices` 里加一行。
+The code is all Swift; only `Sources/Hooks/*.xm` is Logos, because `%hook` /
+`%orig` / `%init` have no Swift equivalent. Adding a built-in service is two
+steps: write the type, then add a line to `addableServices` in
+`Sources/Core/ServiceRegistry.swift`.
 
-目录结构：
+Layout:
 
 ```
 Sources/
-├── Core/                 推送流水线（与 UI 无关）
-│   ├── Services/         各推送服务（Bark / 飞书 / 企业微信 / …）
-│   └── Runtime/          Objective-C 运行时桥接（私有 API、方法 hook）
-├── Shared/               偏好存储与日志
-├── Hooks/                Logos 钩子 + 桥接头文件
-├── Preferences/          设置界面（含 Resources/ 下的 plist 与图片）
-└── Flipswitch/           控制中心开关
+├── Core/                 the push pipeline (no UI)
+│   ├── Services/         one file per push service (Bark / Feishu / WeChat / …)
+│   └── Runtime/          ObjC runtime bridging (private APIs, method hooks)
+├── Shared/               preference storage and logs
+├── Hooks/                Logos hooks + bridging header
+├── Preferences/          the settings UI (plists and images under Resources/)
+└── Flipswitch/           the control-center switch
 ```
 
-## 文档
+## Docs
 
-- [新推送服务开发文档](Docs/新推送服务开发文档.md)
-- 界面文案集中在 `Preferences/Resources/zh-Hans.lproj/Localizable.strings`，plist 里的英文标签会在设置界面自动本地化。
+- [Writing a new push service](Docs/en/new-push-service.md)
+- UI strings live in
+  `Sources/Preferences/Resources/zh-Hans.lproj/Localizable.strings`; English
+  labels in the plists are localized automatically in the settings UI.
