@@ -337,8 +337,10 @@ public final class SNSListController: ListController {
             // engine reads them flat, so a value written nested changed nothing
             // about which notifications were forwarded.
             PrefsStore.setValue(normalized, forKey: key)
+            clearAlias(of: key, instance: nil)
         } else {
             PreferencesStorage.setValue(normalized, forInstanceSpecifier: specifier)
+            clearAlias(of: key, instance: instanceID)
         }
 
         mirrorCompanions(of: specifier, value: normalized)
@@ -354,10 +356,40 @@ public final class SNSListController: ListController {
     public override func readPreferenceValue(_ specifier: PSSpecifier) -> Any? {
         guard let key = specifier.string(SpecifierRouting.PropertyKey.key) else { return nil }
         if let own = override(forKey: key) { return own }
-        // Not overridden: the value in effect is the *global* one, read from the
-        // flat top-level keys the engine reads. Showing a compiled-in default here
-        // instead would mean the page disagreed with what actually happens.
+
+        // Not overridden, and this is a segment: read back the **sentinel**, so the
+        // row shows "Default" selected.
+        //
+        // Showing the global's value instead looked friendlier and was wrong: the
+        // cell would then display AND (because the global says AND), and the moment
+        // any *other* switch changed, the AND/OR mirror would write that displayed
+        // AND into the service as an override — silently converting "following the
+        // global" into "chose AND". The row must show what the service holds, which
+        // is nothing.
+        if condition(forKey: key)?.segment != nil {
+            return override(forKey: key) ?? NSNumber(value: segmentCellDefault)
+        }
+
+        // Every other condition shows the value in effect, which for a service that
+        // has not chosen is the global one — read from the flat top-level keys the
+        // engine reads, so the row and the engine cannot disagree.
         return globalValue(forKey: key)
+    }
+
+    /// Removes a key's older spelling once the current one has been written.
+    ///
+    /// Only ever *removes*. A service that still holds the short name from an older
+    /// build would otherwise keep it forever, and since a reader consults the
+    /// current name first, the stale one would sit there invisible — until a
+    /// "Default" was chosen, which clears the current name and would expose the old
+    /// value as if the user had just chosen it.
+    private func clearAlias(of key: String, instance: String?) {
+        guard let alias = PrefKey.SNSAlias.short(key) else { return }
+        if let instance {
+            PrefsStore.updateInstance(instance) { object in object.removeValue(forKey: alias) }
+        } else {
+            PrefsStore.setValue(nil, forKey: alias)
+        }
     }
 
     /// The service's own value for a condition, under either spelling.
@@ -418,16 +450,25 @@ public final class SNSListController: ListController {
         guard specifier.string(SpecifierRouting.PropertyKey.key) == PrefKey.snsIsAnd
         else { return }
 
-        // "Allow Notifications" is mirrored onto the AND flag.
-        if let allow = cell(forCondition: PrefKey.snsPrefix + SNSCondition.allowNotifications.rawValue) {
-            allow.performSetter(withValue: value)
+        // Choosing "Default" removes the choice, and removing a choice mirrors
+        // nothing: there is no AND/OR to propagate, and treating the absent value as
+        // "not AND" would switch on "Require Allow Notifications with OR" as a side
+        // effect of asking for the default.
+        guard let value else { return }
+        let isAnd = (value as? NSNumber)?.boolValue ?? false
+
+        // "Allow Notifications" is mirrored onto the AND flag: requiring the
+        // permission is what AND means in practice.
+        if let allow = cell(
+            forCondition: PrefKey.snsPrefix + SNSCondition.allowNotifications.rawValue
+        ) {
+            allow.performSetter(withValue: NSNumber(value: isAnd))
             reloadSpecifier(allow, animated: true)
         }
         // Turning AND *off* puts OR in play, where requiring the permission is what
         // keeps the filter from matching apps whose notifications are off entirely.
-        let isAnd = (value as? NSNumber)?.boolValue ?? false
         if !isAnd, let requireAN = cell(forCondition: PrefKey.snsRequireANWithOR) {
-            requireAN.performSetter(withValue: true)
+            requireAN.performSetter(withValue: NSNumber(value: true))
             reloadSpecifier(requireAN, animated: true)
         }
     }
