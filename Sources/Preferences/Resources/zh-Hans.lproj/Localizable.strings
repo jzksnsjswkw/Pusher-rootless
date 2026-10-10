@@ -297,7 +297,7 @@
 "A hook cannot send anything: there is no push(). It decides whether to continue and may rewrite the notification's text." = "钩子无法发送任何内容：没有 push()。它决定是否继续，并可以改写通知文本。";
 "This prompt describes this API. Add what you want below — the AI writes the code, it does not decide what you need." = "这段提示词描述了本 API。请在下方补充你想要的效果——AI 只负责写代码，不会替你决定需要什么。";
 "What should it do?" = "你希望它做什么？";
-"Read the notification's fields and decide. bullet.icon and bullet.image are present only when the notification carries them." = "读取通知字段并作出判断。bullet.icon 与 bullet.image 仅在通知确实携带时才存在。";
+"Read the notification's fields and decide. bullet.icon and bullet.image are undefined unless the service asks for the icon or the image." = "读取通知字段并作出判断。除非服务勾选了包含图标/图片，否则 bullet.icon 与 bullet.image 为 undefined。";
 "Call push() to forward the notification; without it nothing is sent." = "调用 push() 才会转发通知；不调用则什么都不发。";
 "Call keep() to let the notification through; returning without it drops it." = "调用 keep() 才会放行通知；不调用则丢弃它。";
 "Rewriting bullet.title/subtitle/message changes what is sent." = "改写 bullet.title/subtitle/message 会改变发出的内容。";
@@ -313,8 +313,8 @@
 "the notification subtitle, may be empty" = "通知副标题，可能为空";
 "the notification body" = "通知正文";
 "a formatted timestamp" = "格式化时间";
-"base64 PNG of the app icon, when there is one" = "应用图标的 base64 PNG（存在时）";
-"base64 PNG of the attachment, when there is one" = "附件图片的 base64 PNG（存在时）";
+"base64 PNG of the app icon, when there is one" = "应用图标的 base64 PNG（仅在服务包含图标时存在，否则为 undefined）";
+"base64 PNG of the attachment, when there is one" = "通知附件的 base64 PNG（仅在服务包含图片且附件可解码时存在，否则为 undefined）";
 "base64 PNG of the app icon" = "应用图标的 base64 PNG";
 "base64 of the attachment image" = "附件图片的 base64";
 "where to send it" = "发送目标地址";

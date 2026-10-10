@@ -130,17 +130,35 @@ public enum JavaScriptService: PushService {
     /// the same words.
     static func payload(context: BulletinContext, config: ServiceConfig) -> [String: Any] {
         var data = baseInfoDict(context: context, config: config)
-        // `baseInfoDict` already resolves the icon and attachment when the
-        // options ask for them; the script gets the notification regardless, so
-        // those fields are present whenever they could be produced at all.
-        data["deviceName"] = UIDevice.current.name
-        data["appID"] = context.appID
-        data["appName"] = context.appName
-        data["title"] = context.title ?? ""
-        data["subtitle"] = context.subtitle ?? ""
-        data["message"] = context.message ?? ""
-        data["date"] = dateString(context.date, config: config)
-        return data
+
+        // `baseInfoDict` writes `icon` and `image` only when the instance asked
+        // for them, which leaves them *absent*. A script reading an absent
+        // property already gets `undefined`, so this changes nothing — except in
+        // the one case it does: `baseInfoDict` sets `image` to `true` to say "there
+        // was an attachment but it could not be decoded", and a script doing
+        // `if (bullet.image)` would then take a boolean for the base64 string it
+        // expects and send `true` to the endpoint.
+        //
+        // So both fields are stated explicitly: the value when there is one, and
+        // `undefined` when the option is off. What the script reads is then what
+        // the guide says, which is the property that matters — the declaration is
+        // the contract.
+        var fields = data
+        fields["icon"] = shouldIncludeIcon(config: config) ? (data["icon"] ?? nil) : nil
+        fields["image"] = shouldIncludeImage(config: config)
+            ? (data["image"] as? String ?? nil)
+            : nil
+
+        // The remaining fields are set here rather than in `baseInfoDict` because
+        // they are the *script's* view rather than a payload's: `deviceName` is
+        // already there, and these are the same values under their own names.
+        fields["appID"] = context.appID
+        fields["appName"] = context.appName
+        fields["title"] = context.title ?? ""
+        fields["subtitle"] = context.subtitle ?? ""
+        fields["message"] = context.message ?? ""
+        fields["date"] = dateString(context.date, config: config)
+        return fields
     }
 
     // MARK: - Settings
