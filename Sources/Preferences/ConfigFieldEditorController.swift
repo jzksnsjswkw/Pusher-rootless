@@ -60,6 +60,17 @@ public final class ConfigFieldEditorController: ListController {
         installSpecifiers(buildSpecifiers())
     }
 
+    /// Rebuilds the page from the field it is editing.
+    ///
+    /// Without this the framework's own plist-derived array — ten cells of
+    /// Pushover's settings, this page having no plist of its own — replaces the
+    /// real one whenever the app is backgrounded, and the page comes back showing
+    /// a stranger's settings. Every code-built page needs this hook; this one was
+    /// missing it.
+    public override func rebuildSpecifiers() -> NSMutableArray? {
+        buildSpecifiers()
+    }
+
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         save()
