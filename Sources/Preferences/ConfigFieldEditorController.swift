@@ -78,8 +78,17 @@ public final class ConfigFieldEditorController: ListController {
 
     // MARK: - Cells
 
+    /// The cells being built, so a lookup during the build does not have to go
+    /// through the framework's `specifiers` property.
+    private var builtCells: NSMutableArray = NSMutableArray()
+
     private func buildSpecifiers() -> NSMutableArray {
         var all: [PSSpecifier] = []
+        // Registered before anything can look a cell up: `refreshKeyProblem` runs
+        // partway through this build, and it looks in here rather than asking the
+        // framework.
+        builtCells = NSMutableArray()
+        defer { builtCells = NSMutableArray(array: all) }
 
         // ── What the script reads it by ─────────────────────────────────────
         let identity = PSSpecifier.groupSpecifier(withName: "Name".localized)
@@ -99,8 +108,13 @@ public final class ConfigFieldEditorController: ListController {
         // is what comes and goes.
         let footer = PSSpecifier.emptyGroup()
         footer?.identifier = Self.footerIdentifier
-        if let footer { all.append(footer) }
-        refreshKeyProblem()
+        if let footer {
+            all.append(footer)
+            // Handed the cell directly: it has just been made, so there is
+            // nothing to look up — and looking one up mid-build is what used to
+            // recurse.
+            footer.setProperty(keyProblemText(), forKey: "footerText")
+        }
 
         // ── How it is presented ─────────────────────────────────────────────
         let presentation = PSSpecifier.groupSpecifier(withName: "Presentation".localized)
@@ -260,9 +274,22 @@ public final class ConfigFieldEditorController: ListController {
     /// The row is a group cell, so its footer is the message — which is where a
     /// Preferences page puts a problem with the row above it.
     private func refreshKeyProblem() {
-        guard let footer = specifier(forID: Self.footerIdentifier) else { return }
+        guard let footer = builtSpecifier(forID: Self.footerIdentifier) else { return }
         footer.setProperty(keyProblemText(), forKey: "footerText")
         reloadSpecifier(footer, animated: false)
+    }
+
+    /// A cell from the array this page is building, looked up **without** asking
+    /// the framework.
+    ///
+    /// `specifier(forID:)` reads `self.specifiers`, whose getter treats any array
+    /// it did not install as the framework having substituted one — and during
+    /// `buildSpecifiers` nothing has been installed yet, so that is always true.
+    /// The getter would therefore call back into `buildSpecifiers`, which comes
+    /// back here, and the page would recurse until the stack ran out. Looking in
+    /// the array being built is both correct and side-effect free.
+    private func builtSpecifier(forID identifier: String) -> PSSpecifier? {
+        (builtCells as? [PSSpecifier])?.first { $0.identifier == identifier }
     }
 
     private func keyProblemText() -> String? {

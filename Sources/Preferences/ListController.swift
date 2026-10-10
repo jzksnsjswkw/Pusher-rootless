@@ -88,6 +88,21 @@ open class ListController: PSListController, TintableController {
     /// array I built" from "the array the framework substituted".
     private weak var installedSpecifiers: NSMutableArray?
 
+    /// Set while this getter is rebuilding, so a rebuild that reads
+    /// `self.specifiers` cannot start another one.
+    ///
+    /// A page that looks a cell up by identifier *while building* — which is a
+    /// natural thing to do, a group cell's footer depending on a switch above it
+    /// — would otherwise ask the framework for its cells, get the array it has
+    /// not installed yet, and have this getter conclude that the framework had
+    /// substituted one. It would then rebuild, look the cell up again, and recurse
+    /// until the stack ran out.
+    ///
+    /// Returning the framework's array during a rebuild is the safe answer: the
+    /// page is mid-construction, so there is nothing installed to find, and a
+    /// lookup that fails is what the caller already handles.
+    private var isRebuilding = false
+
     /// The page's cells, reloading them when the framework has substituted its
     /// own plist-derived array for the one this page built.
     ///
@@ -97,8 +112,14 @@ open class ListController: PSListController, TintableController {
     public override var specifiers: NSMutableArray! {
         get {
             let current = super.specifiers
-            if current !== installedSpecifiers, let rebuilt = rebuildSpecifiers() {
-                super.specifiers = rebuilt
+            guard !isRebuilding else { return current }
+            if current !== installedSpecifiers {
+                isRebuilding = true
+                defer { isRebuilding = false }
+                if let rebuilt = rebuildSpecifiers() {
+                    super.specifiers = rebuilt
+                    installedSpecifiers = rebuilt
+                }
             }
             return super.specifiers
         }
