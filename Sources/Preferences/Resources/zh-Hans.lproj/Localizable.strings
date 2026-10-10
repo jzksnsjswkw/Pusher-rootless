@@ -482,5 +482,4 @@
 "Used by %d instances" = "被 %d 个实例使用";
 "\"%@\" uses a service this device does not have and the document does not carry, so services are included." = "「%@」使用的服务本机没有、文档也未包含，因此会一并导入服务。";
 "%d of the chosen services are not on this device and not in the document, so services are included." = "所选服务中有 %d 个本机没有、文档也未包含，因此会一并导入服务。";
-"\"%@\" uses a service, which is included so the file works on another device." = "「%@」使用了服务，将一并导出，以便该文件在另一台设备上可直接使用。";
-"%d of the chosen services use a script, so services are included and the file works on another device." = "所选的 %d 个服务使用了自定义服务，因此会一并导出服务，以便该文件在另一台设备上可直接使用。";
+"Only the instances are written. An instance that uses a service needs that service on the other device already — it cannot be obtained from this file." = "仅写入实例。使用服务的实例需要另一台设备上已有该服务——该服务无法从本文件获得。";
