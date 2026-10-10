@@ -190,6 +190,7 @@ public final class SNSListController: ListController {
                                 forKey: SpecifierRouting.PropertyKey.defaultValue)
             }
             cell.setValues(values, titles: titles)
+            stampIdentity(on: cell)
             return cell
         }
 
@@ -201,7 +202,26 @@ public final class SNSListController: ListController {
         cell.setProperty(condition.key, forKey: SpecifierRouting.PropertyKey.key)
         cell.setProperty(NSNumber(value: condition.defaultValue),
                         forKey: SpecifierRouting.PropertyKey.defaultValue)
+        stampIdentity(on: cell)
         return cell
+    }
+
+    /// Puts the page's identity on a freshly built cell.
+    ///
+    /// `PreferencesStorage` finds the instance to write to from this property, so a
+    /// cell without it is a cell whose writes are dropped in silence — the switch
+    /// moves, the value goes nowhere, and re-entering shows it back where it was.
+    ///
+    /// Set here rather than after the fact because the cells are built in code: the
+    /// framework would have stamped it for a plist-loaded cell, and there is no
+    /// longer a plist to do that.
+    private func stampIdentity(on cell: PSSpecifier) {
+        // Told like every other page's cells: the observers that redraw a service
+        // page after a change key on this, and a switch here changes what the
+        // filter will do on the next notification.
+        cell.setProperty(Pusher.prefsNotification, forKey: "PostNotification")
+        guard let instanceID else { return }
+        cell.setProperty(instanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
     }
 
     // MARK: - The synchronize button
