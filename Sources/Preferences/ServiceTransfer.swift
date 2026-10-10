@@ -132,10 +132,20 @@ enum ServiceTransfer {
         }
 
         // One thing and nothing else to consider: asking which ones would be a
-        // screen with a single row on it.
+        // screen with a single row on it. Skipped when that one thing uses a
+        // service — then carrying the service is not a choice, and the export has
+        // to include it for the document to work anywhere else.
+        let needsServices = scope == .instances && !items.isEmpty && {
+            let defined = Set(CustomServiceStore.definitions().map(\.id))
+            return items.contains { item in
+                ServiceInstanceStore.instances()
+                    .first { $0.name == item.name }
+                    .map { defined.contains($0.type) } ?? false
+            }
+        }()
         let companionAvailable = companionCount(scope: scope) > 0
-        if items.count == 1, !companionAvailable {
-            deliver(names: [items[0].name], includeCompanion: false,
+        if items.count == 1, !companionAvailable || needsServices {
+            deliver(names: items.map(\.name), includeCompanion: needsServices,
                     scope: scope, from: controller)
             return
         }
@@ -164,7 +174,34 @@ enum ServiceTransfer {
                         + "on the other device.").localized
                     : ("Only the instances are written. An instance using a service "
                         + "needs that service to be on the other device already.").localized
-            }
+            },
+            // Exporting an instance that uses a service without that service would
+            // produce a document that cannot work anywhere but here — the
+            // recipient has no way to obtain the script, since it exists only on
+            // this device. So the switch is forced on whenever the selection
+            // includes such an instance, and says why.
+            companionEvaluation: scope == .instances ? { names in
+                let chosen = Set(names)
+                let defined = Set(CustomServiceStore.definitions().map(\.id))
+                let scriptInstances = ServiceInstanceStore.instances()
+                    .filter { chosen.contains($0.name) && defined.contains($0.type) }
+                guard !scriptInstances.isEmpty else {
+                    return CompanionOutcome(isOn: true, isRequired: false, reason: nil)
+                }
+                return CompanionOutcome(
+                    isOn: true,
+                    isRequired: true,
+                    reason: scriptInstances.count == 1
+                        ? String(
+                            format: ("\"%@\" uses a service, which is included so the "
+                                + "file works on another device.").localized,
+                            scriptInstances[0].name)
+                        : String(
+                            format: ("%d of the chosen services use a script, so "
+                                + "services are included and the file works on another "
+                                + "device.").localized, scriptInstances.count)
+                )
+            } : nil
         ) { names, includeCompanion in
             deliver(names: names, includeCompanion: includeCompanion,
                     scope: scope, from: controller)
