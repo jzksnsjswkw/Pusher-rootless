@@ -488,3 +488,7 @@
 "Service deleted" = "服务已删除";
 "This instance's service was deleted, so it cannot send anything. Its settings are kept below, without the labels and groups the service used to give them, and a new instance of another service can be made from the Instances page." = "该实例的服务已被删除，因此无法发送任何内容。它的设置保留在下方（不再有服务原先提供的标签与分组），你可以在「实例」页新建一个其它服务的实例。";
 "Format" = "格式化";
+"AND (all)" = "AND（全部）";
+"OR (any)" = "OR（任一）";
+"Each app has custom notification settings that determine where their notifications are allowed to show (in Settings → Notifications). This menu lets you require that either all (AND) or at least one (OR) of the options below is enabled in the app's settings." = "每个应用都有自己的通知设置，决定其通知允许在哪里显示（设置 → 通知）。此页面用于要求下方选项中「全部满足」（AND）或「至少满足一个」（OR）才转发通知。";
+"When using OR, you will probably want to require that Allow Notifications is enabled as well. The device keeps the other settings (Lock Screen, Badges, …) even when an app's notifications are turned off entirely, so OR alone would let those apps through. Leave this on unless you have a reason not to." = "使用 OR 时，通常还应要求「允许通知」处于开启状态。因为即使某个应用的通知被完全关闭，系统仍会保留其余设置（锁定屏幕、标记等），仅用 OR 会让这些应用也通过。除非有特别理由，建议保持开启。";

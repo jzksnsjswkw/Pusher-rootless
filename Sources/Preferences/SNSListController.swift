@@ -80,7 +80,7 @@ public final class SNSListController: ListController {
                     + "their notifications are allowed to show (in Settings → Notifications). "
                     + "This menu lets you require that either all (AND) or at least one (OR) of "
                     + "the options below is enabled in the app's settings.").localized,
-                segment: (titles: ["AND", "OR"], values: [true, false])
+                segment: (titles: ["AND (all)", "OR (any)"], values: [true, false])
             ),
             Condition(
                 label: "Require Allow Notifications with OR".localized,
@@ -190,6 +190,9 @@ public final class SNSListController: ListController {
                                 forKey: SpecifierRouting.PropertyKey.defaultValue)
             }
             cell.setValues(values, titles: titles)
+            // Localized here, because the pass that does it for plist cells runs in
+            // `loadSpecifiers` and this page no longer loads one.
+            localize(cell)
             stampIdentity(on: cell)
             return cell
         }
@@ -202,6 +205,7 @@ public final class SNSListController: ListController {
         cell.setProperty(condition.key, forKey: SpecifierRouting.PropertyKey.key)
         cell.setProperty(NSNumber(value: condition.defaultValue),
                         forKey: SpecifierRouting.PropertyKey.defaultValue)
+        localize(cell)
         stampIdentity(on: cell)
         return cell
     }

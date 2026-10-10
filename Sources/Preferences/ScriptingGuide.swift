@@ -24,8 +24,8 @@ enum ScriptingGuide {
 
                 .heading("bullet — the notification".localized),
                 .text(("Read the notification's fields and decide. bullet.icon and "
-                    + "bullet.image are present only when the notification "
-                    + "carries them.").localized),
+                    + "bullet.image are undefined unless the service asks for the "
+                    + "icon or the image.").localized),
                 .code(JavaScriptAPI.scriptBullet),
 
                 .heading("Functions".localized),
