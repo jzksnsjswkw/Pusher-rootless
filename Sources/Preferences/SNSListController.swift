@@ -418,16 +418,22 @@ public final class SNSListController: ListController {
         guard let key = specifier.string(SpecifierRouting.PropertyKey.key) else { return nil }
         if let own = override(forKey: key) { return own }
 
-        // Not overridden, and this is a segment: read back the **sentinel**, so the
-        // row shows "Default" selected.
+        // A service's segment reads back the **sentinel** when it has no override,
+        // so the row shows "Default" selected.
         //
-        // Showing the global's value instead looked friendlier and was wrong: the
-        // cell would then display AND (because the global says AND), and the moment
-        // any *other* switch changed, the AND/OR mirror would write that displayed
-        // AND into the service as an override — silently converting "following the
+        // Showing the global's value instead looked helpful and was wrong: the cell
+        // would then display AND (because the global says AND), and the moment any
+        // *other* switch changed, the AND/OR mirror would write that displayed AND
+        // into the service as an override — silently converting "following the
         // global" into "chose AND". The row must show what the service holds, which
         // is nothing.
-        if condition(forKey: key)?.segment != nil {
+        //
+        // The global page has no third state — its segment *is* the value — so the
+        // sentinel must never reach it: `indexOfObject:` would not find -1 in its
+        // two-element values array and the control would draw nothing selected,
+        // which is what "AND cannot be changed to OR" looked like. The store held
+        // OR the whole time.
+        if isServiceMode, condition(forKey: key)?.segment != nil {
             return override(forKey: key) ?? NSNumber(value: segmentCellDefault)
         }
 
