@@ -94,39 +94,39 @@ public final class SNSListController: ListController {
             ),
             Condition(
                 label: "Allow Notifications".localized,
-                key: SNSCondition.allowNotifications.rawValue,
+                key: PrefKey.snsPrefix + SNSCondition.allowNotifications.rawValue,
                 defaultValue: true
             ),
             Condition(
                 label: "Lock Screen".localized,
-                key: SNSCondition.lockScreen.rawValue,
+                key: PrefKey.snsPrefix + SNSCondition.lockScreen.rawValue,
                 defaultValue: false,
                 groupFooter: "Shows Previews works when it is set to Always or When Unlocked."
                     .localized
             ),
             Condition(
                 label: "Notification Center".localized,
-                key: SNSCondition.notificationCenter.rawValue,
+                key: PrefKey.snsPrefix + SNSCondition.notificationCenter.rawValue,
                 defaultValue: false
             ),
             Condition(
                 label: "Banners".localized,
-                key: SNSCondition.banners.rawValue,
+                key: PrefKey.snsPrefix + SNSCondition.banners.rawValue,
                 defaultValue: false
             ),
             Condition(
                 label: "Badges".localized,
-                key: SNSCondition.badges.rawValue,
+                key: PrefKey.snsPrefix + SNSCondition.badges.rawValue,
                 defaultValue: false
             ),
             Condition(
                 label: "Sounds".localized,
-                key: SNSCondition.sounds.rawValue,
+                key: PrefKey.snsPrefix + SNSCondition.sounds.rawValue,
                 defaultValue: false
             ),
             Condition(
                 label: "Shows Previews".localized,
-                key: SNSCondition.showsPreviews.rawValue,
+                key: PrefKey.snsPrefix + SNSCondition.showsPreviews.rawValue,
                 defaultValue: false
             ),
         ]
@@ -250,28 +250,22 @@ public final class SNSListController: ListController {
     /// With Global" that would remove nothing is the worse of the two
     /// contradictions. What the button is named is what it must be true of.
     private var isSynchronized: Bool {
-        guard let instanceID else { return true }
-        let stored = PrefsStore.instance(instanceID)
-        let global = PrefsStore.global()
-        // Through the same resolution the page reads with, so a value that is
-        // absent on both sides counts as equal rather than as a difference.
+        guard isServiceMode else { return true }
+        // Through the same two readers the page displays with, so what the button
+        // says and what the rows show cannot disagree.
         return conditions.allSatisfy { condition in
-            resolved(condition.key, instance: stored) == resolved(condition.key, instance: global)
+            (override(forKey: condition.key) == nil)
+                || asBool(override(forKey: condition.key)) == asBool(globalValue(forKey: condition.key))
         }
     }
 
-    /// One condition's effective value, as a comparable scalar.
+    /// A stored value as the boolean the engine will read it as.
     ///
-    /// Booleans throughout: the segment's `true`/`false` and the sentinel for
-    /// "follow the global" are the only values these keys take, and comparing an
-    /// `NSNumber` to a `Bool` is how two equal settings come out as different.
-    private func resolved(_ key: String, instance: Prefs) -> Bool {
-        guard let value = instance[key] else {
-            // Nothing stored: the condition's own default, which is also what the
-            // global page shows for a switch it has never been given.
-            return conditions.first { $0.key == key }?.defaultValue ?? false
-        }
-        return Prefs([key: value]).bool(key, default: false)
+    /// Comparing an `NSNumber` to a `Bool` is how two equal settings come out as
+    /// different, and these keys only ever hold booleans.
+    private func asBool(_ value: Any?) -> Bool? {
+        guard let value else { return nil }
+        return Prefs(["v": value]).bool("v", default: false)
     }
 
     /// The synchronize button and its footer, built but not installed.
@@ -325,27 +319,29 @@ public final class SNSListController: ListController {
     /// framework knows.
     @objc(setPreferenceValue:specifier:)
     public override func setPreferenceValue(_ value: Any?, specifier: PSSpecifier) {
-        guard isServiceMode else {
-            PreferencesStorage.setValue(value, forGlobalSpecifier: specifier)
-            // The global page has no synchronize button, but its change *is* the new
-            // global, so a service's copy opened later reads it — nothing to do here
-            // beyond keeping the two companions in step.
-            mirrorCompanions(of: specifier, value: value)
-            return
-        }
+        guard let key = specifier.string(SpecifierRouting.PropertyKey.key) else { return }
 
         // The "Default" segment's sentinel means "follow the global", and storing it
         // would not: `NSNumber(-1).boolValue` is true, so a service following the
-        // global would read as AND whatever the global says. Folded to nil here,
-        // which is the store's own spelling of "no override".
+        // global would read as AND whatever the global says. Folded to nil before
+        // anything is written — nil being the store's own spelling of "no override".
         let normalized: Any? = (value as? NSNumber)?.intValue == segmentCellDefault
             ? nil : value
 
-        PreferencesStorage.setValue(normalized, forInstanceSpecifier: specifier)
+        if !isServiceMode {
+            // The global page writes the **flat top-level** keys.
+            //
+            // Not `PreferencesStorage.setValue(forGlobalSpecifier:)`, which writes
+            // the nested `Global` dictionary: that is where the app list and the
+            // device conditions live, and the SNS keys have never been there. The
+            // engine reads them flat, so a value written nested changed nothing
+            // about which notifications were forwarded.
+            PrefsStore.setValue(normalized, forKey: key)
+        } else {
+            PreferencesStorage.setValue(normalized, forInstanceSpecifier: specifier)
+        }
+
         mirrorCompanions(of: specifier, value: normalized)
-        // Decided from what was just stored rather than assumed: an edit that puts
-        // the value back where the global has it leaves nothing to synchronize, and
-        // the button has to say so.
         refreshSynchronizeButton()
     }
 
@@ -356,12 +352,46 @@ public final class SNSListController: ListController {
     /// actually happens rather than against a blank cell.
     @objc(readPreferenceValue:)
     public override func readPreferenceValue(_ specifier: PSSpecifier) -> Any? {
-        if isServiceMode, let instanceID,
-           let key = specifier.string(SpecifierRouting.PropertyKey.key),
-           let own = PrefsStore.instance(instanceID)[key] {
-            return own
+        guard let key = specifier.string(SpecifierRouting.PropertyKey.key) else { return nil }
+        if let own = override(forKey: key) { return own }
+        // Not overridden: the value in effect is the *global* one, read from the
+        // flat top-level keys the engine reads. Showing a compiled-in default here
+        // instead would mean the page disagreed with what actually happens.
+        return globalValue(forKey: key)
+    }
+
+    /// The service's own value for a condition, under either spelling.
+    ///
+    /// The two SNS switches were written under a short name by one build and a
+    /// long one by another, and the original read both. A service configured
+    /// under either must keep working, so both are consulted — the current
+    /// spelling first.
+    private func override(forKey key: String) -> Any? {
+        guard isServiceMode, let instanceID else { return nil }
+        let stored = PrefsStore.instance(instanceID)
+        for candidate in [key, PrefKey.SNSAlias.short(key)] where candidate != nil {
+            if let value = stored[candidate!] { return value }
         }
-        return PreferencesStorage.readValue(forGlobalSpecifier: specifier)
+        return nil
+    }
+
+    /// A condition's global value, from the flat top-level keys.
+    ///
+    /// Not `PrefsStore.global()`, which is the nested `Global` dictionary: the SNS
+    /// keys have never lived there, and reading them from it made every comparison
+    /// fall through to a default — so the synchronize button reported the same
+    /// answer no matter what the global was set to.
+    private func globalValue(forKey key: String) -> Any? {
+        let top = PrefsStore.snapshot()
+        for candidate in [key, PrefKey.SNSAlias.short(key)] where candidate != nil {
+            if let value = top[candidate!] { return value }
+        }
+        return condition(forKey: key)?.defaultValue as Any?
+    }
+
+    /// The declaration for a condition key, if it is one.
+    private func condition(forKey key: String) -> Condition? {
+        conditions.first { $0.key == key }
     }
 
     /// Re-reads the button's state from the store.
@@ -389,7 +419,7 @@ public final class SNSListController: ListController {
         else { return }
 
         // "Allow Notifications" is mirrored onto the AND flag.
-        if let allow = cell(forCondition: SNSCondition.allowNotifications.rawValue) {
+        if let allow = cell(forCondition: PrefKey.snsPrefix + SNSCondition.allowNotifications.rawValue) {
             allow.performSetter(withValue: value)
             reloadSpecifier(allow, animated: true)
         }

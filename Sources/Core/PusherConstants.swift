@@ -202,10 +202,36 @@ public enum PrefKey {
     public static let snsPrefix = "SNS-"
 
     // SNS filter mode: how an instance's conditions combine.
+    //
+    // Two spellings each, because the app has used both and the older one is
+    // still what some builds wrote: the Objective-C original wrote the long name
+    // and read the short one as a fallback (see the reader in `PushConfig`), so
+    // a configuration from either era must still be understood. The long name is
+    // what gets written from now on, since it is what the original's *global*
+    // keys were called and the two live side by side in one preference domain.
     /// Whether every selected condition must hold (AND) rather than any (OR).
-    public static let snsIsAnd = "snsIsAnd"
+    public static let snsIsAnd = "SufficientNotificationSettingsIsAnd"
     /// When combining with OR, whether "Allow Notifications" is still required.
-    public static let snsRequireANWithOR = "snsRequireANWithOR"
+    public static let snsRequireANWithOR = "SNSORRequireAllowNotifications"
+
+    /// The older, shorter spellings, read as fallbacks.
+    ///
+    /// Only the two switches ever had two names; the per-condition toggles have
+    /// always been `SNS-<condition>`. `short(_:)` maps between them so a reader
+    /// never has to hold both spellings in mind.
+    public enum SNSAlias {
+        public static let isAnd = "snsIsAnd"
+        public static let requireANWithOR = "snsRequireANWithOR"
+
+        /// The older name for a key, or `nil` when it never had one.
+        public static func short(_ key: String) -> String? {
+            switch key {
+            case PrefKey.snsIsAnd: return isAnd
+            case PrefKey.snsRequireANWithOR: return requireANWithOR
+            default: return nil
+            }
+        }
+    }
     /// The resolved SNS condition keys for one service (normalized at load
     /// time, not a raw plist key).
     public static let sns = "sns"

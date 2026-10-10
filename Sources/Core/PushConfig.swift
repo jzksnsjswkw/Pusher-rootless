@@ -137,6 +137,20 @@ public struct ConfigSnapshot {
     public var globalAppListIsBlacklist = true
     public var globalAppList: [String] = []
 
+    /// The global SNS defaults every instance falls back to.
+    ///
+    /// Kept as the flat set the page edits rather than as resolved keys, because
+    /// "which conditions are on globally" and "which are on for this service" are
+    /// different questions that happen to share a shape.
+    public var snsIsAnd = true
+    public var snsRequireANWithOR = true
+    public var globalSNSConditions: Set<SNSCondition> = [.allowNotifications]
+
+    /// Whether a condition is on globally.
+    public func snsCondition(_ condition: SNSCondition) -> Bool {
+        globalSNSConditions.contains(condition)
+    }
+
     /// Every configured instance, in the user's order, enabled or not.
     public var instances: [ServiceInstance] = []
 
@@ -178,6 +192,33 @@ public enum ConfigLoader {
         let global = prefs.dict(PrefKey.global) ?? Prefs()
         snapshot.globalAppListIsBlacklist = global.bool(PrefKey.appListIsBlacklist, default: true)
         snapshot.globalAppList = global.stringArray(PrefKey.appList)
+
+        // The global SNS settings, in the two places they have been kept.
+        //
+        // The switches are the *flat top-level* keys the original's page wrote —
+        // both spellings — while the conditions live both flat and inside `Global`
+        // (the app's own page wrote them nested at one point). Read flat first,
+        // then nested, so a configuration from either era answers the same.
+        snapshot.snsIsAnd = snsToggle(
+            PrefKey.snsIsAnd, alias: PrefKey.SNSAlias.isAnd,
+            in: prefs, fallback: true
+        )
+        snapshot.snsRequireANWithOR = snsToggle(
+            PrefKey.snsRequireANWithOR, alias: PrefKey.SNSAlias.requireANWithOR,
+            in: prefs, fallback: true
+        )
+        var conditions: Set<SNSCondition> = []
+        for condition in SNSCondition.allCases {
+            let key = PrefKey.snsPrefix + condition.rawValue
+            if prefs[key] != nil {
+                if prefs.bool(key, default: false) { conditions.insert(condition) }
+            } else if global[key] != nil {
+                if global.bool(key, default: false) { conditions.insert(condition) }
+            } else if condition.defaultValue {
+                conditions.insert(condition)
+            }
+        }
+        snapshot.globalSNSConditions = conditions
 
         // One pass over the stored instances: each is normalized against its
         // own descriptor, and the enabled ones form the fan-out order.
@@ -248,9 +289,21 @@ public enum ConfigLoader {
         raw[PrefKey.whatNetwork] = stored.resolvedInt(
             PrefKey.whatNetwork, default: snapshot.whatNetwork.rawValue
         )
-        raw[PrefKey.snsIsAnd] = stored.bool(PrefKey.snsIsAnd, default: true)
-        raw[PrefKey.snsRequireANWithOR] = stored.bool(PrefKey.snsRequireANWithOR, default: true)
-        raw[PrefKey.sns] = snsKeys(from: stored)
+        // Both spellings are read, the long one first, and the *global* value is
+        // the fallback rather than a hard-coded `true`. That is the original's
+        // chain (`SufficientNotificationSettingsIsAnd` ?: `snsIsAnd` ?: global)
+        // and it is what makes a service that never chose follow the global —
+        // before this, an instance silently used AND whatever the user had set
+        // globally.
+        raw[PrefKey.snsIsAnd] = snsToggle(
+            PrefKey.snsIsAnd, alias: PrefKey.SNSAlias.isAnd,
+            in: stored, fallback: snapshot.snsIsAnd
+        )
+        raw[PrefKey.snsRequireANWithOR] = snsToggle(
+            PrefKey.snsRequireANWithOR, alias: PrefKey.SNSAlias.requireANWithOR,
+            in: stored, fallback: snapshot.snsRequireANWithOR
+        )
+        raw[PrefKey.sns] = snsKeys(from: stored, global: snapshot)
 
         // Only enabled devices/sounds survive normalization, so the payload
         // builders never have to filter them.
@@ -278,12 +331,27 @@ public enum ConfigLoader {
         return ServiceConfig(name: instance.id, type: instance.type, raw: Prefs(raw))
     }
 
+    /// One SNS toggle, read under either spelling, defaulting to the global.
+    private static func snsToggle(
+        _ key: String, alias: String, in stored: Prefs, fallback: Bool
+    ) -> Bool {
+        for candidate in [key, alias] where stored[candidate] != nil {
+            return stored.bool(candidate, default: fallback)
+        }
+        return fallback
+    }
+
     /// The set SNS condition names an instance is gated on.
-    private static func snsKeys(from stored: Prefs) -> [String] {
+    ///
+    /// A condition the instance has not chosen falls back to the **global** one,
+    /// not to a compiled-in default. That distinction is the whole point of the
+    /// page: a service that follows the global has to keep following it when the
+    /// global changes.
+    private static func snsKeys(from stored: Prefs, global: ConfigSnapshot) -> [String] {
         SNSCondition.allCases.compactMap { condition in
             let key = PrefKey.snsPrefix + condition.rawValue
             guard stored[key] != nil else {
-                return condition.defaultValue ? condition.rawValue : nil
+                return global.snsCondition(condition) ? condition.rawValue : nil
             }
             return stored.bool(key) ? condition.rawValue : nil
         }
