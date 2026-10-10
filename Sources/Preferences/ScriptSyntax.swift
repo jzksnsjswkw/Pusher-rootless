@@ -37,13 +37,25 @@ enum ScriptSyntax {
         /// code look coloured rather than merely tinted — the eye reads orange as
         /// "not mine", which is exactly what a provided name is.
         case builtin
+        /// Ordinary code: identifiers, operators, whitespace, punctuation.
+        ///
+        /// Only produced by ``tokens(in:)``, which is why it has no colour of its
+        /// own — it is the editor's text colour.
+        case plain
     }
 
     /// A coloured run, in UTF-16 units so the range can be handed straight to
     /// TextKit.
+    ///
+    /// Carries its own text as well as its range. The range is what colouring
+    /// needs; the text is what the *formatter* needs, and it has to be the same
+    /// tokenisation — a formatter working from its own idea of where a template
+    /// literal ends would disagree with the colouring about the same file, which
+    /// is how a "format" button corrupts a script.
     struct Span {
         let range: NSRange
         let kind: Kind
+        let text: String
     }
 
     // MARK: - Vocabulary
@@ -108,8 +120,55 @@ enum ScriptSyntax {
     /// Nothing is emitted for ordinary code: the editor's own text colour is
     /// already right for identifiers, operators and punctuation, and emitting
     /// spans only for what differs keeps the attribute pass short.
+    /// Every coloured run in `text`, in order, with the gaps left out.
+    ///
+    /// For colouring: the editor's own text colour already covers whatever is not
+    /// here, and a span per gap would be work for nothing.
     static func spans(in text: String) -> [Span] {
-        var scanner = Scanner(units: Array(text.utf16))
+        scan(text)
+    }
+
+    /// Every run in `text`, in order, **including** the ones that are ordinary
+    /// code.
+    ///
+    /// For formatting, which needs every character exactly once: the gaps are
+    /// emitted as ``Kind/plain`` so that joining the tokens reproduces the input
+    /// byte for byte. That property is what the formatter's tests check, because
+    /// a formatter that can lose a character is worse than no formatter.
+    static func tokens(in text: String) -> [Span] {
+        let scanned = scan(text)
+        guard !scanned.isEmpty else {
+            return text.isEmpty ? [] : [
+                // Before the first token.
+                Span(range: NSRange(location: 0, length: (text as NSString).length),
+                     kind: .plain, text: text)
+            ]
+        }
+
+        let ns = text as NSString
+        var all: [Span] = []
+        var cursor = 0
+        for span in scanned {
+            if span.range.location > cursor {
+                let gap = NSRange(location: cursor, length: span.range.location - cursor)
+                all.append(Span(range: gap, kind: .plain, text: ns.substring(with: gap)))
+            }
+            all.append(span)
+            cursor = NSMaxRange(span.range)
+        }
+        if cursor < ns.length {
+            let gap = NSRange(location: cursor, length: ns.length - cursor)
+            all.append(Span(range: gap, kind: .plain, text: ns.substring(with: gap)))
+        }
+        return all
+    }
+
+    private static func scan(_ text: String) -> [Span] {
+        // The units and the string are paired: the scanner works in UTF-16 so its
+        // ranges are TextKit's, and a token's text is the substring over exactly
+        // that range.
+        let ns = text as NSString
+        var scanner = Scanner(units: Array(text.utf16), text: ns)
         scanner.run()
         return scanner.spans
     }
@@ -117,6 +176,8 @@ enum ScriptSyntax {
     /// A single left-to-right pass.
     private struct Scanner {
         let units: [UInt16]
+        /// The whole text, for slicing a token's characters back out.
+        let text: NSString
         var index = 0
         var spans: [Span] = []
 
@@ -128,7 +189,10 @@ enum ScriptSyntax {
         /// `return /re/` is a literal, `count /re/` is division.
         var lastWasKeywordAllowingRegex = false
 
-        init(units: [UInt16]) { self.units = units }
+        init(units: [UInt16], text: NSString) {
+            self.units = units
+            self.text = text
+        }
 
         var count: Int { units.count }
         func at(_ i: Int) -> UInt16 { i < count ? units[i] : 0 }
@@ -233,8 +297,18 @@ enum ScriptSyntax {
                 }
                 if c == dollar, at(index + 1) == openBrace {
                     emit(literalStart, index, .string)
+                    // The `${` is emitted as part of the template rather than left
+                    // as a gap: it is template syntax, and a gap would be ordinary
+                    // text to anything reading the token stream — which is how the
+                    // formatter came to treat an interpolation's braces as a block
+                    // and indent the expression inside a string.
+                    emit(index, index + 2, .string)
                     index += 2
                     skipExpression()
+                    // Its closing `}` likewise.
+                    if index <= count, index > 0, units[index - 1] == closeBrace {
+                        emit(index - 1, index, .string)
+                    }
                     literalStart = index
                     continue
                 }
@@ -428,7 +502,8 @@ enum ScriptSyntax {
 
         private mutating func emit(_ start: Int, _ end: Int, _ kind: Kind) {
             guard end > start else { return }
-            spans.append(Span(range: NSRange(location: start, length: end - start), kind: kind))
+            let range = NSRange(location: start, length: end - start)
+            spans.append(Span(range: range, kind: kind, text: text.substring(with: range)))
         }
 
         // MARK: Characters
@@ -695,6 +770,7 @@ enum ScriptPalette {
             case .property: return theme.number
             case .function: return theme.function
             case .builtin: return theme.builtin
+            case .plain: return theme.plain
             }
         }
     }

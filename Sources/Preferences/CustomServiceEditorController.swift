@@ -602,6 +602,10 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
                 target: self, action: #selector(runScript)
             ),
             UIBarButtonItem(
+                title: "Format".localized, style: .plain,
+                target: self, action: #selector(formatScript)
+            ),
+            UIBarButtonItem(
                 title: "Guide".localized, style: .plain,
                 target: self, action: #selector(showScriptingGuide)
             ),
@@ -1254,6 +1258,24 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         sheet.addAction(UIAlertAction(title: "Cancel".localized, style: .cancel))
         sheet.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItems?.last
         present(sheet, animated: true)
+    }
+
+    /// Tidies the script's whitespace, leaving its own layout where it can.
+    ///
+    /// Nothing is said when there is nothing to do: pressing the button on an
+    /// already-tidy script should not produce an alert about it, and a change the
+    /// user cannot see does not need announcing. What they *can* see is the
+    /// indentation arriving, which is the point of the button.
+    @objc private func formatScript() {
+        guard let formatted = ScriptFormatter.format(textView.text ?? "") else { return }
+        guard formatted != textView.text else { return }
+
+        textView.text = formatted
+        // The line numbers are a gutter that has to be told: the text changed
+        // without a keystroke, so the delegate was never called.
+        gutterNeedsRebuild = true
+        updateGutter()
+        save()
     }
 
     private func insert(_ code: String) {

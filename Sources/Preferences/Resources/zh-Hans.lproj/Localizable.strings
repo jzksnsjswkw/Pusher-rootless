@@ -487,3 +487,4 @@
 "%d instances use this. They keep their settings and stop sending until they are given another service." = "%d 个实例正在使用它。这些实例会保留自己的设置，在重新指定服务之前不再发送。";
 "Service deleted" = "服务已删除";
 "This instance's service was deleted, so it cannot send anything. Its settings are kept below, without the labels and groups the service used to give them, and a new instance of another service can be made from the Instances page." = "该实例的服务已被删除，因此无法发送任何内容。它的设置保留在下方（不再有服务原先提供的标签与分组），你可以在「实例」页新建一个其它服务的实例。";
+"Format" = "格式化";

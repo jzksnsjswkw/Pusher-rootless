@@ -70,6 +70,8 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
         navigationItem.rightBarButtonItems = [
             UIBarButtonItem(title: "Run".localized, style: .plain,
                             target: self, action: #selector(runHook)),
+            UIBarButtonItem(title: "Format".localized, style: .plain,
+                            target: self, action: #selector(formatHook)),
             UIBarButtonItem(title: "Guide".localized, style: .plain,
                             target: self, action: #selector(showGuide)),
         ]
@@ -276,6 +278,17 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         moveGutter()
+    }
+
+    /// Tidies the hook's whitespace, the same way the script editor does.
+    @objc private func formatHook() {
+        guard let formatted = ScriptFormatter.format(textView.text ?? "") else { return }
+        guard formatted != textView.text else { return }
+
+        textView.text = formatted
+        gutterNeedsRebuild = true
+        updateGutter()
+        save()
     }
 
     /// The guide, presented over the editor: the API is a thing a user consults
