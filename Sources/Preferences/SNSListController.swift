@@ -189,10 +189,28 @@ public final class SNSListController: ListController {
                 cell.setProperty(NSNumber(value: segmentCellDefault),
                                 forKey: SpecifierRouting.PropertyKey.defaultValue)
             }
-            cell.setValues(values, titles: titles)
-            // Localized here, because the pass that does it for plist cells runs in
-            // `loadSpecifiers` and this page no longer loads one.
-            localize(cell)
+
+            // `values` and `titleDictionary`, which is what a segment cell reads.
+            //
+            // Not `setValues:titles:`, which writes `validValues`/`validTitles`:
+            // those are a *different pair of properties*, and `PSSegmentTableCell`
+            // fills its own `_values` from `specifier.values` in
+            // `refreshCellContentsWithSpecifier:`. With `values` absent its
+            // `controlValue` returns nil for every selection, so the setter was
+            // handed nil, the store dropped the write, and the synchronize button
+            // saw no divergence — a segmented control that moved and changed
+            // nothing.
+            // Localized here rather than by `localize(_:)`, which works from
+            // `validTitles` — a property this cell no longer uses, so the pass
+            // would find nothing to translate and leave the titles in English.
+            titles = titles.map(\.localized)
+            cell.setProperty(values, forKey: "values")
+            var dictionary: [AnyHashable: String] = [:]
+            for (index, value) in values.enumerated() {
+                guard index < titles.count, let key = value as? AnyHashable else { continue }
+                dictionary[key] = titles[index]
+            }
+            cell.setProperty(dictionary, forKey: "titleDictionary")
             stampIdentity(on: cell)
             return cell
         }
@@ -325,8 +343,15 @@ public final class SNSListController: ListController {
             return
         }
 
-        PreferencesStorage.setValue(value, forInstanceSpecifier: specifier)
-        mirrorCompanions(of: specifier, value: value)
+        // The "Default" segment's sentinel means "follow the global", and storing it
+        // would not: `NSNumber(-1).boolValue` is true, so a service following the
+        // global would read as AND whatever the global says. Folded to nil here,
+        // which is the store's own spelling of "no override".
+        let normalized: Any? = (value as? NSNumber)?.intValue == segmentCellDefault
+            ? nil : value
+
+        PreferencesStorage.setValue(normalized, forInstanceSpecifier: specifier)
+        mirrorCompanions(of: specifier, value: normalized)
         // Decided from what was just stored rather than assumed: an edit that puts
         // the value back where the global has it leaves nothing to synchronize, and
         // the button has to say so.
