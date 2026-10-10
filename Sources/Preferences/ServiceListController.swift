@@ -324,11 +324,20 @@ extension ServiceListController: UITableViewDataSource, UITableViewDelegate {
         let cell = tableView.dequeueReusableCell(withIdentifier: Self.cellIdentifier, for: indexPath)
         guard let instance = instance(at: indexPath) else { return cell }
 
-        cell.textLabel?.text = Localization.instanceDisplayName(instance)
-        cell.detailTextLabel?.text = nil
-        cell.imageView?.image = indexPath.row < logos.count
+        // A content configuration rather than `textLabel`: the marked row needs a
+        // second line, and a plain `UITableViewCell` has no detail label to put it
+        // in — assigning to one would silently do nothing.
+        var content = UIListContentConfiguration.subtitleCell()
+        content.text = Localization.instanceDisplayName(instance)
+        if instance.hasMissingService {
+            content.secondaryText = "Service deleted".localized
+            content.secondaryTextProperties.color = .systemRed
+        }
+        content.image = indexPath.row < logos.count
             ? logos[indexPath.row]
             : icons[instance.type]
+        content.imageProperties.maximumSize = CGSize(width: 29, height: 29)
+        cell.contentConfiguration = content
         cell.accessoryType = .disclosureIndicator
 
         // The switch is the row's own accessory, so it is rebuilt each time

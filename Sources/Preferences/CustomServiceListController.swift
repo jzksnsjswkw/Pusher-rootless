@@ -166,9 +166,12 @@ public final class CustomServiceListController: PlainViewController, ServiceTran
         let alert = UIAlertController(
             title: "Delete Service".localized,
             message: String(
-                format: "%d services use this. They will keep their settings but "
-                    .localized + "stop sending until they are given another type."
-                    .localized,
+                // One `.localized` on the whole sentence: see the note in the
+                // scripting guide's scanner — a localisation applied to a
+                // fragment, or to the result of a concatenation, looks up a key
+                // no table contains.
+                format: ("%d instances use this. They keep their settings and stop "
+                    + "sending until they are given another service.").localized,
                 used
             ),
             preferredStyle: .alert

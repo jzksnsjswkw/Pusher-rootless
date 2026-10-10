@@ -209,7 +209,6 @@
 "Defaults for New Services" = "新服务的默认选项";
 "Services You Defined" = "你定义的服务";
 "Service" = "服务";
-"%d services use this. They will keep their settings but stop sending until they are given another type." = "%d 个服务正在使用它。它们的设置会保留，但在换绑其它类型之前不会再发送。";
 "The script runs for every notification. Call push(req) to send one, call it more than once to send several, or not at all to skip this notification." = "脚本会针对每条通知运行。调用 push(req) 发送一条；调用多次可发送多条，不调用则跳过这条通知。";
 "Services you add from this type start with these, and can still change them individually." = "从该类型添加的服务会以这些为初始值，之后仍可单独修改。";
 "Each one becomes a service type you can add on the Services page." = "每一个都会成为可在“服务”页添加的服务类型。";
@@ -485,3 +484,6 @@
 "API Key" = "密钥";
 "Connection" = "连接";
 "The instances that use them are added too." = "使用它们的实例也会被添加。";
+"%d instances use this. They keep their settings and stop sending until they are given another service." = "%d 个实例正在使用它。这些实例会保留自己的设置，在重新指定服务之前不再发送。";
+"Service deleted" = "服务已删除";
+"This instance's service was deleted, so it cannot send anything. Its settings are kept, and a new instance of another service can be made from the Instances page." = "该实例的服务已被删除，因此无法发送任何内容。它的设置会保留，你可以在「实例」页新建一个其它服务的实例。";

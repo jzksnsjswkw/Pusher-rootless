@@ -280,6 +280,17 @@ public final class PushEngine: NSObject {
     ) {
         let id = instance.id
         guard let serviceConfig = config.config(forID: id) else { return }
+        // An instance whose service was deleted has no descriptor of its own —
+        // `service(named:)` hands back the generic webhook, which would build a
+        // request from settings that are not a webhook's. Said out loud and
+        // skipped, so the log explains the silence instead of the instance
+        // appearing to work.
+        if instance.hasMissingService {
+            let label = "Service deleted, not sent"
+            PusherLog.debug("[S:\(id),A:\(context.appID)] \(label)")
+            PushLog.add(service: id, context: context, label: label)
+            return
+        }
         let serviceType = instance.descriptor
         // The log is keyed by instance id, so two instances of one service keep
         // separate logs.

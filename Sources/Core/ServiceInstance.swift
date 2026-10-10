@@ -48,6 +48,18 @@ public struct ServiceInstance {
     public var isScript: Bool {
         JavaScriptService.serviceName == type
     }
+
+    /// Whether the service this instance was made from no longer exists.
+    ///
+    /// An instance outlives its service, deliberately: deleting a service leaves
+    /// the destinations alone rather than destroying settings the user may want to
+    /// carry to another service. But an instance with no service cannot send —
+    /// it has no script and no built-in kind to build a request from — so it needs
+    /// to be marked, on its own row and on its own page, or it reads as an
+    /// ordinary service that has silently stopped working.
+    public var hasMissingService: Bool {
+        ServiceRegistry.knownService(named: type) == nil
+    }
 }
 
 // MARK: - Instance identifiers

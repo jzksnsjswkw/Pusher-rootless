@@ -57,6 +57,12 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
                                    name: serviceType, isEnabled: false, config: Prefs())
         )
         label.font = .boldSystemFont(ofSize: 17)
+        // The title bar says it too. A page whose only cells are a warning and a
+        // log link should not need reading to find out why, and the title is what
+        // the user sees while the page animates in.
+        if ServiceRegistry.knownService(named: serviceType) == nil {
+            label.textColor = .systemRed
+        }
 
         // Sized to match a list row's icon and drawn as the same 29-point tile,
         // so the page's title and the row that opened it show one picture at one
@@ -277,6 +283,14 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     }
 
     func buildSpecifiers() -> NSMutableArray {
+        // An instance whose service was deleted has nothing to configure: its
+        // cells come from a service that no longer exists, so the page would show
+        // either a stranger's fields or none at all. It gets the warning and the
+        // actions that still make sense.
+        if ServiceRegistry.knownService(named: serviceType) == nil {
+            return NSMutableArray(array: missingServiceSpecifiers())
+        }
+
         // Which cells describe this instance is a property of its *type*: a
         // built-in service has its own plist, and every user-defined type — the
         // generic webhook and each script a user wrote — is configured like a
@@ -371,6 +385,40 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
 
         all.append(contentsOf: testPushSection())
         return NSMutableArray(array: all)
+    }
+
+    /// The page for an instance whose service was deleted.
+    ///
+    /// Kept deliberately short. The point is not to offer a repair — the user
+    /// makes a new instance for that, from the service they now want — but to
+    /// explain why nothing works and to keep the two things that remain useful:
+    /// the app filter and the log, which say what this instance did before its
+    /// service went away.
+    private func missingServiceSpecifiers() -> [PSSpecifier] {
+        var all: [PSSpecifier] = []
+
+        if let warning = PSSpecifier.groupSpecifier(withName: "") {
+            warning.setProperty(
+                ("This instance's service was deleted, so it cannot send anything. "
+                    + "Its settings are kept, and a new instance of another service "
+                    + "can be made from the Instances page.").localized,
+                forKey: "footerText"
+            )
+            all.append(warning)
+        }
+
+        all.append(contentsOf: appFilterSpecifiers())
+
+        // The log row comes from the shared tail, so the link keeps pointing at
+        // the same controller and carries the same routing properties as on a
+        // normal page — a hand-built row would be a second definition of the same
+        // row.
+        all.append(contentsOf: globalTailSpecifiers().filter {
+            AppListTitle.baseName(of: $0.name ?? "") == "Log".localized
+        })
+
+        all.append(contentsOf: hookSpecifiers())
+        return all
     }
 
     /// Whether this instance is a user-defined webhook.
