@@ -129,7 +129,7 @@ public enum JavaScriptService: PushService {
     /// so a script and a built-in service describe the same notification with
     /// the same words.
     static func payload(context: BulletinContext, config: ServiceConfig) -> [String: Any] {
-        var data = baseInfoDict(context: context, config: config)
+        let data = baseInfoDict(context: context, config: config)
 
         // `baseInfoDict` writes `icon` and `image` only when the instance asked
         // for them, which leaves them *absent*. A script reading an absent
