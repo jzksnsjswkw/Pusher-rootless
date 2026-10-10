@@ -143,6 +143,15 @@ public enum ServiceImporter {
         return result
     }
 
+    /// The keys an imported instance never takes from the document, whatever it
+    /// says: they are written from the resolution above, so a document cannot
+    /// point an instance at the exporting device's service or rename it over a
+    /// name clash that was already avoided.
+    private static let nonTransferableKeys: Set<String> = [
+        PrefKey.instanceID, PrefKey.instanceType, PrefKey.instanceName,
+        PrefKey.serviceEnabled,
+    ]
+
     /// Writes one instance's settings onto the instance that was just created.
     private static func write(_ instance: ServiceExport.ExportedInstance, to id: String) {
         PrefsStore.updateInstance(id) { object in
@@ -151,7 +160,8 @@ public enum ServiceImporter {
             // mention keeps what the type would have given it.
             if let settings = instance.settings {
                 for (key, value) in settings
-                where ServiceExportFilter.shouldExportInstanceKey(key) {
+                where ServiceExportFilter.shouldExportInstanceKey(key)
+                    && !nonTransferableKeys.contains(key) {
                     object[key] = value
                 }
             }

@@ -480,3 +480,5 @@
 "Also import the instances that use them" = "同时导入使用它们的实例";
 "Not used by any instance yet" = "尚未被任何实例使用";
 "Used by %d instances" = "被 %d 个实例使用";
+"\"%@\" uses a service this device does not have and the document does not carry, so services are included." = "「%@」使用的服务本机没有、文档也未包含，因此会一并导入服务。";
+"%d of the chosen services are not on this device and not in the document, so services are included." = "所选服务中有 %d 个本机没有、文档也未包含，因此会一并导入服务。";

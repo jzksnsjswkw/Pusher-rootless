@@ -106,13 +106,24 @@ public enum ServiceExporter {
         let prefs = Prefs(instance.config.raw)
         let script = definitions[instance.type]
 
-        // Everything the instance holds that is configuration. The app list and
-        // the declared settings' values are lifted out below into their own
-        // fields, so they are excluded here rather than written twice.
+        // Everything the instance holds that is configuration, minus the keys
+        // that are lifted into fields of their own above it: the app list, the
+        // declared settings' values, and — most importantly — the instance's
+        // *identity*.
+        //
+        // `type` and `name` must not be written here. `type` is a per-device
+        // service id: left in, the importer writes it over the service it just
+        // resolved by name, and the instance ends up pointing at a service that
+        // exists on the exporting device only — so its declared settings are
+        // unreachable and it reads as if the configuration had not travelled at
+        // all. `name` is the instance's own name, which the importer has already
+        // resolved (and possibly suffixed to avoid a clash).
         var settings = instance.config.raw
             .filter { ServiceExportFilter.shouldExportInstanceKey($0.key) }
             .filter { $0.key != PrefKey.appList && $0.key != PrefKey.appListIsBlacklist }
             .filter { $0.key != PrefKey.configValues }
+            .filter { $0.key != PrefKey.instanceType && $0.key != PrefKey.instanceName }
+            .filter { $0.key != PrefKey.serviceEnabled }
 
         if let stored = settings[PrefKey.customIcon] as? String,
            let image = ServiceIcon.image(fromBase64: stored) {
