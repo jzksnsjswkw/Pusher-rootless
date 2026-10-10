@@ -15,17 +15,6 @@ struct Item {
 }
 
 
-/// What ticking a set of rows means for the companion switch.
-///
-/// Produced by the page's own rules, because only it knows what a chosen row
-/// needs in order to work.
-struct CompanionOutcome {
-    var isOn: Bool
-    /// When true the switch may not be turned off, and reason says why.
-    var isRequired: Bool
-    var reason: String?
-}
-
 /// Choosing what to move, and moving it.
 ///
 /// A picker rather than "everything", because a list carries things a user may
@@ -69,15 +58,6 @@ enum ServiceTransfer {
         /// What the switch's footer says; it depends on the state, since what
         /// happens when it is on and off is exactly what a user needs told.
         var companionFooter: (Bool) -> String
-        /// When the switch may not be turned off, and why.
-        ///
-        /// Set when carrying the other kind is not a choice: an instance whose
-        /// service is neither in the document nor on this device has nothing to
-        /// send through, so it can only arrive together with its service. The
-        /// reason is shown, because a switch that refuses to move without saying
-        /// why reads as a bug.
-        /// Recomputes the switch's state from the currently ticked rows.
-        var companionEvaluation: (([String]) -> CompanionOutcome)?
         var onConfirm: ([String], Bool) -> Void
     }
 
@@ -374,21 +354,12 @@ enum ServiceTransfer {
             return
         }
 
-        // A single row with nothing to accompany it needs no screen — but only
-        // when carrying something is genuinely not at stake. On the Instances
-        // page a lone instance may still need its service, so that case goes
-        // through the picker, where the dependency is worked out.
-        let needsServices = scope == .instances && listing.items.contains { item in
-            document.instances.first { $0.name == item.name }
-                .flatMap(\.service)
-                .map { serviceName in
-                    !document.services.contains { $0.name == serviceName }
-                        && !ServiceImporter.hasService(named: serviceName)
-                } ?? false
-        }
-        if listing.items.count == 1, listing.companion.isEmpty, !needsServices {
+        // A single row with nothing to accompany it needs no screen. On the
+        // Instances page nothing can accompany an instance — its services always
+        // travel with it — so a lone instance goes straight in.
+        if listing.items.count == 1, listing.companion.isEmpty {
             apply(document: document, names: [listing.items[0].name],
-                  includeCompanion: false, scope: scope, from: controller)
+                  includeCompanion: scope == .instances, scope: scope, from: controller)
             return
         }
 
@@ -400,53 +371,18 @@ enum ServiceTransfer {
             footer: ("Services already on this device are left alone; anything new is "
                 + "added under the name shown here.").localized,
             companionLabel: companionLabel(scope: scope, forExport: false),
-            // On by default: the scripts are what makes an imported service work,
-            // and a document arriving with anything else is a deliberate choice its
-            // author made when exporting.
+            // On for the Services page, where an instance that uses a script has
+            // to be offered. On the Instances page there is no switch, and the
+            // services travel because they must.
             companionIsOn: true,
             companionFooter: { isOn in
-                if scope == .services {
-                    return isOn
-                        ? "The services that use them are added too.".localized
-                        : ("Only the services are added. Nothing uses them until you add "
-                            + "an instance yourself.").localized
-                }
-                return isOn
-                    ? ("The services the instances use are added too, so they work "
-                        + "straight away.").localized
-                    : ("Only the instances are added. An instance using a service needs "
-                        + "that service to be here already.").localized
+                // Only reached on the Services page; the Instances page has no
+                // switch, so it has no state to describe.
+                isOn
+                    ? "The instances that use them are added too.".localized
+                    : ("Only the services are added. Nothing uses them until you add "
+                        + "an instance yourself.").localized
             },
-            // On the Instances page the switch is not always a choice: an instance
-            // whose service is in neither the document nor this device has nothing
-            // to send through, so it can only come with its service.
-            companionEvaluation: scope == .instances ? { (names: [String]) -> CompanionOutcome in
-                let chosen = Set(names)
-                let needed = document.instances
-                    .filter { chosen.contains($0.name) }
-                    .compactMap(\.service)
-                    .filter { serviceName in
-                        // Not carried by the document, and not already here.
-                        !document.services.contains { $0.name == serviceName }
-                            && !ServiceImporter.hasService(named: serviceName)
-                    }
-                guard let missing = needed.first else {
-                    return CompanionOutcome(isOn: true, isRequired: false, reason: nil)
-                }
-                return CompanionOutcome(
-                    isOn: true,
-                    isRequired: true,
-                    reason: missing == needed.first && needed.count == 1
-                        ? String(
-                            format: ("\"%@\" uses a service this device does not have "
-                                + "and the document does not carry, so services are "
-                                + "included.").localized, missing)
-                        : String(
-                            format: ("%d of the chosen services are not on this device "
-                                + "and not in the document, so services are included.")
-                                .localized, needed.count)
-                )
-            } : nil
         ) { names, includeCompanion in
             apply(document: document, names: names,
                   includeCompanion: includeCompanion, scope: scope, from: controller)
@@ -478,7 +414,11 @@ enum ServiceTransfer {
                         isPreSelected: true
                     )
                 },
-                companion: document.services.map(\.name)
+                // Empty: on this page the services are not a choice. An instance
+                // whose service is missing cannot be created without it, and one
+                // whose service is here already gains nothing from a second copy —
+                // so there is nothing for a switch to decide.
+                companion: []
             )
 
         case .services:
@@ -511,12 +451,13 @@ enum ServiceTransfer {
         var selection: ServiceExport
         switch scope {
         case .instances:
-            // Services the document carries only travel when asked for. An
-            // instance that needs one resolves it against what is already here,
-            // and the importer reports it when it is nowhere to be found — which
-            // is exactly the case this switch exists for.
+            // Every service the document carries travels, always. There is nothing
+            // for a choice to decide: a service already on this device is skipped
+            // by the importer, and one that is missing is exactly what an instance
+            // needs in order to exist. An instance whose service is in neither
+            // place is reported, not silently stripped.
             selection = ServiceExport(
-                services: includeCompanion ? document.services : [],
+                services: document.services,
                 instances: document.instances.filter { chosen.contains($0.name) }
             )
         case .services:
@@ -649,9 +590,8 @@ enum ServiceTransfer {
         guard companionCount(scope: scope) > 0 else { return nil }
         switch scope {
         case .instances:
-            return forExport
-                ? "Include the services they use".localized
-                : "Also import the services".localized
+            // Import never offers it: see ``listing(for:scope:)``.
+            return forExport ? "Include the services they use".localized : nil
         case .services:
             return forExport
                 ? "Include the instances that use them".localized
@@ -673,7 +613,6 @@ enum ServiceTransfer {
             companionLabel: request.companionLabel,
             companionIsOn: request.companionIsOn,
             companionFooter: request.companionFooter,
-            companionEvaluation: request.companionEvaluation,
             onConfirm: request.onConfirm
         )
         present(controller, UINavigationController(rootViewController: picker))
@@ -715,15 +654,12 @@ final class TransferPickerController: UIViewController {
     private let footer: String
     private let companionLabel: String?
     private let companionFooter: ((Bool) -> String)?
-    private let companionEvaluation: (([String]) -> CompanionOutcome)?
     private let onConfirm: ([String], Bool) -> Void
 
     /// The names whose rows are ticked.
     private var selected: Set<String>
     /// Whether the other kind travels too.
     private var companionIsOn: Bool
-    /// Set while the switch is forced on, with the reason to show.
-    private var companionRequiredReason: String?
 
     private var tableView: UITableView!
 
@@ -735,7 +671,6 @@ final class TransferPickerController: UIViewController {
         companionLabel: String?,
         companionIsOn: Bool,
         companionFooter: ((Bool) -> String)?,
-        companionEvaluation: (([String]) -> CompanionOutcome)?,
         onConfirm: @escaping ([String], Bool) -> Void
     ) {
         self.items = items
@@ -744,14 +679,10 @@ final class TransferPickerController: UIViewController {
         self.companionLabel = companionLabel
         self.companionIsOn = companionIsOn
         self.companionFooter = companionFooter
-        self.companionEvaluation = companionEvaluation
         self.onConfirm = onConfirm
         self.selected = Set(items.filter(\.isPreSelected).map(\.name))
         super.init(nibName: nil, bundle: nil)
         self.title = title
-        // Evaluated once here as well, so a switch that has to start on starts on
-        // rather than waiting for the first tap.
-        reevaluateCompanion()
     }
 
     @available(*, unavailable)
@@ -808,34 +739,6 @@ final class TransferPickerController: UIViewController {
         navigationItem.rightBarButtonItem?.isEnabled = !selected.isEmpty
     }
 
-    /// Recomputes whether the switch may be off, from what is ticked.
-    ///
-    /// The rule only exists on the Instances page: a *service* has no such
-    /// dependency, since nothing has to accompany it.
-    private func reevaluateCompanion() {
-        guard let companionEvaluation else { return }
-        let names = items.filter { selected.contains($0.name) }.map(\.name)
-        let outcome = companionEvaluation(names)
-        companionRequiredReason = outcome.isRequired ? outcome.reason : nil
-        if outcome.isRequired {
-            // Forced on rather than refused when tapped: the switch states a fact
-            // about the selection, and a control that argues with the user about
-            // something they cannot change is worse than one that just shows it.
-            companionIsOn = true
-        } else if outcome.isOn, !companionIsOn {
-            // A selection change that only *makes it possible* leaves the user's
-            // own last choice alone.
-        }
-        refreshCompanionSection()
-    }
-
-    /// Redraws the switch's row so its state and footer match the selection.
-    private func refreshCompanionSection() {
-        guard hasCompanionSection, tableView != nil else { return }
-        UIView.performWithoutAnimation {
-            tableView.reloadSections(IndexSet(integer: 1), with: .none)
-        }
-    }
 }
 
 extension TransferPickerController: UITableViewDataSource, UITableViewDelegate {
@@ -854,10 +757,7 @@ extension TransferPickerController: UITableViewDataSource, UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         if section == 0 { return footer }
-        // The demand takes precedence: when there is no choice to make, what
-        // would happen if it were off is beside the point.
-        if let companionRequiredReason { return companionRequiredReason }
-        // Otherwise the switch's own explanation, which changes with it: what
+        // The switch's own explanation, which changes with it: what
         // happens when it is on and off is exactly what a user needs told.
         return companionFooter?(companionIsOn)
     }
@@ -875,7 +775,6 @@ extension TransferPickerController: UITableViewDataSource, UITableViewDelegate {
             // is taken, so there is nothing to write through a target.
             let toggle = UISwitch()
             toggle.isOn = companionIsOn
-            toggle.isEnabled = companionRequiredReason == nil
             toggle.addTarget(self, action: #selector(companionChanged(_:)), for: .valueChanged)
             cell.accessoryView = toggle
             return cell
@@ -897,15 +796,11 @@ extension TransferPickerController: UITableViewDataSource, UITableViewDelegate {
     }
 
     @objc private func companionChanged(_ sender: UISwitch) {
-        // A forced switch has nothing to store: it is showing a fact about what is
-        // ticked, not holding a preference, so it is put back where it was.
-        guard companionRequiredReason == nil else {
-            sender.setOn(true, animated: true)
-            return
-        }
         companionIsOn = sender.isOn
         // The footer describes what the switch does, so it changes with it.
-        refreshCompanionSection()
+        UIView.performWithoutAnimation {
+            tableView.reloadSections(IndexSet(integer: 1), with: .none)
+        }
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -919,9 +814,6 @@ extension TransferPickerController: UITableViewDataSource, UITableViewDelegate {
         }
         tableView.reloadRows(at: [indexPath], with: .none)
         refreshActionButton()
-        // Ticking a row can change whether the switch is a choice at all, so it
-        // is recomputed rather than left as it was.
-        reevaluateCompanion()
     }
 }
 
