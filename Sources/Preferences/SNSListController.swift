@@ -190,27 +190,18 @@ public final class SNSListController: ListController {
                                 forKey: SpecifierRouting.PropertyKey.defaultValue)
             }
 
-            // `values` and `titleDictionary`, which is what a segment cell reads.
-            //
-            // Not `setValues:titles:`, which writes `validValues`/`validTitles`:
-            // those are a *different pair of properties*, and `PSSegmentTableCell`
-            // fills its own `_values` from `specifier.values` in
-            // `refreshCellContentsWithSpecifier:`. With `values` absent its
-            // `controlValue` returns nil for every selection, so the setter was
-            // handed nil, the store dropped the write, and the synchronize button
-            // saw no divergence — a segmented control that moved and changed
-            // nothing.
             // Localized here rather than by `localize(_:)`, which works from
-            // `validTitles` — a property this cell no longer uses, so the pass
-            // would find nothing to translate and leave the titles in English.
+            // `validTitles` — a property this cell does not read.
             titles = titles.map(\.localized)
-            cell.setProperty(values, forKey: "values")
-            var dictionary: [AnyHashable: String] = [:]
-            for (index, value) in values.enumerated() {
-                guard index < titles.count, let key = value as? AnyHashable else { continue }
-                dictionary[key] = titles[index]
-            }
-            cell.setProperty(dictionary, forKey: "titleDictionary")
+
+            // `setValues:titles:` — the real Objective-C setter, which is what
+            // fills the ivars the cell reads. `setProperty:forKey:` would not:
+            // that writes the specifier's `properties` **dictionary**, and a
+            // segment cell reads `[specifier values]` and
+            // `[specifier titleDictionary]`, which are ivars at two other offsets.
+            // Writing the dictionary left both empty, so the control had no
+            // segments at all — which is what a missing option list looks like.
+            cell.setValues(values, titles: titles)
             stampIdentity(on: cell)
             return cell
         }
