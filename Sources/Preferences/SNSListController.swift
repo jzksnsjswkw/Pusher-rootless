@@ -55,7 +55,10 @@ public final class SNSListController: ListController {
         let servicePrefs = PrefsStore.instance(instanceID)
         for specifier in specifiers {
             specifier.setProperty(instanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
-            specifier.setProperty(true, forKey: SpecifierRouting.PropertyKey.isCustomApp)
+            // Deliberately *not* `isCustomApp`: that flag means "a per-app
+            // override", and this page has no app ID, so routing a value through it
+            // would drop every write on the floor — the exact class of silent
+            // failure this page has already been through once.
 
             if isSynchronized, let key = specifier.string(SpecifierRouting.PropertyKey.key) {
                 // The plist key is the display name, so the stored key is the
@@ -68,6 +71,38 @@ public final class SNSListController: ListController {
         }
 
         insertSynchronizeControls(isSynchronized: isSynchronized)
+    }
+
+    /// Rebuilds the page when the framework discards its cells.
+    ///
+    /// A service's copy carries two cells this page inserts *after* loading the
+    /// plist — the synchronize button and its footer — so the plain plist array
+    /// the framework substitutes on returning from the background would come back
+    /// without them. The button would simply vanish, which is what it did.
+    public override func rebuildSpecifiers() -> NSMutableArray? {
+        // Nothing to do for the global page: it inserts nothing, so the array the
+        // framework derives is already complete.
+        guard isServiceMode else { return nil }
+
+        // Rebuilt rather than handed back as it stands. Handing back what is there
+        // would return the framework's own plist array, which does not have the two
+        // cells this page adds — the point is to put them back.
+        guard let loaded = loadSpecifiers(named: "SNS") as? [PSSpecifier] else { return nil }
+        route(loaded)
+
+        var isSynchronized = true
+        let servicePrefs = PrefsStore.instance(instanceID ?? "")
+        for specifier in loaded {
+            guard isSynchronized,
+                  let key = specifier.string(SpecifierRouting.PropertyKey.key)
+            else { continue }
+            if servicePrefs[key] != nil { isSynchronized = false }
+        }
+
+        var all = loaded
+        let (group, button) = synchronizeControls(isSynchronized: isSynchronized)
+        all.insert(contentsOf: [group, button], at: 0)
+        return NSMutableArray(array: all)
     }
 
     /// Points each value cell at the store this page edits.
@@ -83,10 +118,19 @@ public final class SNSListController: ListController {
         where !SpecifierRouting.excludedCellTypes.contains(specifier.cellType) {
             specifier.target = self
             specifier.setProperty(instanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
-            specifier.setProperty(true, forKey: SpecifierRouting.PropertyKey.isCustomApp)
+            // Deliberately *not* `isCustomApp`: that flag means "a per-app
+            // override", and this page has no app ID, so a value routed through it
+            // would be dropped on the floor — the class of silent failure this page
+            // has already been through once.
             if isServiceMode {
-                specifier.setSetter("setValue:specifier:")
-                specifier.setGetter("readValue:")
+                // The framework's own two hooks, which is what the Objective-C
+                // version overrode. Not a pair of custom selectors: a switch cell
+                // does not call the specifier's setter at all — it calls
+                // `cellAction`, which the framework fills in from the setter *only
+                // when the cell has a target*, and a mismatch there ends in
+                // `doesNotRecognizeSelector:` on the first tap.
+                specifier.setSetter("setPreferenceValue:specifier:")
+                specifier.setGetter("readPreferenceValue:")
             } else {
                 specifier.setSetter(SpecifierRouting.Selector.setGlobal)
                 specifier.setGetter(SpecifierRouting.Selector.getGlobal)
@@ -96,6 +140,19 @@ public final class SNSListController: ListController {
 
     /// Adds the synchronize button and its explanatory footer at the top.
     private func insertSynchronizeControls(isSynchronized: Bool) {
+        let (group, button) = synchronizeControls(isSynchronized: isSynchronized)
+        insertSpecifier(group, at: 0)
+        insertSpecifier(button, at: 1)
+    }
+
+    /// The synchronize button and its footer, built but not installed.
+    ///
+    /// A pair rather than two separate calls, because the two always go together
+    /// and every place that installs one has to install both — which is exactly
+    /// the sort of thing that gets forgotten in one of them.
+    private func synchronizeControls(
+        isSynchronized: Bool
+    ) -> (group: PSSpecifier, button: PSSpecifier) {
         let group = PSSpecifier.emptyGroup()!
         group.setProperty(
             ("Synchronizes all values with the global preferences. Modifying any "
@@ -113,8 +170,7 @@ public final class SNSListController: ListController {
         button.setProperty(!isSynchronized, forKey: "enabled")
         synchronizeButton = button
 
-        insertSpecifier(group, at: 0)
-        insertSpecifier(button, at: 1)
+        return (group, button)
     }
 
     /// Removes every condition override so the service follows the globals again.
@@ -137,7 +193,8 @@ public final class SNSListController: ListController {
     /// The global page keeps the plist's native flat keys (they *are* the global
     /// defaults); a service page routes into the service's nested object and
     /// re-enables the synchronize button, since the value is now an override.
-    @objc public func setValue(_ value: Any?, specifier: PSSpecifier) {
+    @objc(setPreferenceValue:specifier:)
+    public override func setPreferenceValue(_ value: Any?, specifier: PSSpecifier) {
         if !isServiceMode {
             // The global page: these cells *are* the globals, so the ordinary
             // global accessor is right — the plist's own domain would work too,
@@ -206,7 +263,8 @@ public final class SNSListController: ListController {
     /// decided by whether the service holds the key — not by comparing values: a
     /// deliberate override that happens to equal the global is still an override,
     /// and removing it is still something the button should be able to do.
-    @objc public func readValue(_ specifier: PSSpecifier) -> Any? {
+    @objc(readPreferenceValue:)
+    public override func readPreferenceValue(_ specifier: PSSpecifier) -> Any? {
         guard isServiceMode else { return super.readPreferenceValue(specifier) }
         let id = specifier.string(SpecifierRouting.PropertyKey.instanceID) ?? ""
         let key = specifier.string(SpecifierRouting.PropertyKey.key)
