@@ -98,7 +98,8 @@ public final class SNSListController: ListController {
         for key in [
             PrefKey.snsIsAnd, PrefKey.SNSAlias.isAnd,
             PrefKey.snsRequireANWithOR, PrefKey.SNSAlias.requireANWithOR,
-        ] + SNSCondition.allCases.map({ PrefKey.snsPrefix + $0.rawValue }) {
+        ] + SNSCondition.allCases.map({ PrefKey.snsPrefix + $0.rawValue })
+        + ["SNSDiag", "SNSDiag2", "SNSWriteDiag"] {
             PrefsStore.setValue(nil, forKey: key)
         }
 
