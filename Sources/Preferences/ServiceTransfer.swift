@@ -236,14 +236,23 @@ enum ServiceTransfer {
         let chosen = Set(names)
         switch scope {
         case .instances:
-            let instanceIDs = ServiceInstanceStore.instances()
+            let chosenInstances = ServiceInstanceStore.instances()
                 .filter { chosen.contains($0.name) }
-                .map(\.id)
-            // The services come only when asked for: an instance written without
-            // its service still imports, against a service the receiving device
-            // already has.
+            let instanceIDs = chosenInstances.map(\.id)
+            // Only the services these instances actually use — not every service
+            // on the device. An instance's `type` names the service it was created
+            // from, so the set is what the chosen instances refer to, and a
+            // selection of one Bark instance no longer carries an unrelated
+            // script along with it.
+            //
+            // The switch still decides whether they come at all: an instance
+            // written without its service imports against a service the
+            // receiving device already has.
+            let usedTypes = Set(chosenInstances.map(\.type))
             let serviceIDs = includeCompanion
-                ? CustomServiceStore.definitions().map(\.id)
+                ? CustomServiceStore.definitions()
+                    .filter { usedTypes.contains($0.id) }
+                    .map(\.id)
                 : []
             return ServiceExporter.document(
                 selection: ServiceExporter.Selection(
@@ -584,6 +593,13 @@ enum ServiceTransfer {
     ///
     /// Only used on the export side: import asks the document instead, since a
     /// switch is pointless when the file carries nothing of the other kind.
+    /// Whether the "also write the other kind" switch has anything to offer.
+    ///
+    /// Only a count of what *could* be included, asked before anything has been
+    /// chosen — it decides whether the picker is worth showing at all. What is
+    /// actually written is decided per selection in ``document(names:includeCompanion:scope:)``,
+    /// which for instances means the services those instances use and nothing
+    /// else.
     private static func companionCount(scope: Scope) -> Int {
         switch scope {
         case .instances: return CustomServiceStore.definitions().count
