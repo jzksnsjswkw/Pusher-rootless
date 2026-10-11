@@ -32,12 +32,43 @@ public enum ShortcutService: PushService {
         ""
     }
 
+    /// Everything the switches on the instance page store.
+    ///
+    /// `supportsIcon`/`supportsImage` say the payload *may* carry them; without
+    /// these defaults and the two readers below, nothing ever does — the
+    /// switches would write values no code consults, and appear to work while
+    /// changing nothing.
     public static func defaultPrefs() -> [String: Any] {
-        [ShortcutPrefKey.shortcutName: ""]
+        [
+            ShortcutPrefKey.shortcutName: "",
+            PrefKey.includeIcon: false,
+            PrefKey.includeImage: true,
+            PrefKey.imageMaxWidth: Pusher.defaultMaxWidth,
+            PrefKey.imageMaxHeight: Pusher.defaultMaxHeight,
+            PrefKey.imageShrinkFactor: Pusher.defaultShrinkFactor,
+        ]
     }
 
     public static func defaultCustomAppPrefs() -> [String: Any] {
-        defaultPrefs()
+        [
+            PrefKey.includeIcon: false,
+            PrefKey.includeImage: true,
+            PrefKey.imageMaxWidth: Pusher.defaultMaxWidth,
+            PrefKey.imageMaxHeight: Pusher.defaultMaxHeight,
+            PrefKey.imageShrinkFactor: Pusher.defaultShrinkFactor,
+        ]
+    }
+
+    /// Read from the instance, exactly as the webhook does.
+    ///
+    /// The defaults above are the *type's*; the value in effect is whatever this
+    /// instance has, which is what the switches write.
+    public static func shouldIncludeIcon(config: ServiceConfig) -> Bool {
+        config.raw.bool(PrefKey.includeIcon)
+    }
+
+    public static func shouldIncludeImage(config: ServiceConfig) -> Bool {
+        config.raw.bool(PrefKey.includeImage)
     }
 
     public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
