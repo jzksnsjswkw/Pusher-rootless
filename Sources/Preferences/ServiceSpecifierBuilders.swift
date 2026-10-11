@@ -456,6 +456,17 @@ public final class ServiceSpecifierBuilders: NSObject {
            let chosen = chosenShortcut(instanceID: instanceID) {
             specifier.name = chosen
         }
+        // The picker reloads this row when it stores a choice, through the
+        // non-retaining reference stashed here — the same mechanism the app-list
+        // link uses. Without it the row keeps the name it was built with until
+        // something else rebuilds the page, which is why the choice only appeared
+        // after a background round trip.
+        if let observer = pageObserver as? PSListController {
+            specifier.setProperty(
+                NSValue(nonretainedObject: observer),
+                forKey: SpecifierRouting.PropertyKey.listReference
+            )
+        }
         return [heading, specifier]
     }
 

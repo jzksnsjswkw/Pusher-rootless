@@ -37,9 +37,21 @@ public final class ShortcutPickerController: ListController {
 
     public override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Shortcut".localized
         loadSelection()
         installSpecifiers(buildSpecifiers())
+    }
+
+    /// Restates the title, and reloads the selection.
+    ///
+    /// The title is set here rather than once in `viewDidLoad` because returning
+    /// from the background is exactly when it gets lost: this page declares no
+    /// plist name, and the framework's own reload path leaves whatever the
+    /// substituted array implies. Every other page in this project that survives
+    /// that round trip restates its title on appearance.
+    public override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        title = "Shortcut".localized
+        loadSelection()
     }
 
     /// Rebuilds on the framework's own reload, so returning from the background
@@ -154,6 +166,19 @@ public final class ShortcutPickerController: ListController {
 
         PrefsStore.updateInstance(instanceID) { object in
             object[ShortcutPrefKey.shortcutName] = name
+        }
+
+        // Redraw the row behind this page now rather than leaving it to show the
+        // old name until the page is next rebuilt.
+        if let value = specifier?.property(
+            forKey: SpecifierRouting.PropertyKey.listReference
+        ) as? NSValue,
+           let list = value.nonretainedObjectValue as? PSListController {
+            for case let row as PSSpecifier in (list.specifiers ?? []) {
+                guard row.identifier == ShortcutPrefKey.shortcutName else { continue }
+                row.name = name
+                list.reloadSpecifier(row)
+            }
         }
 
         navigationController?.popViewController(animated: true)
