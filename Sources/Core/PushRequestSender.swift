@@ -27,7 +27,16 @@ public final class RequestSender {
         context: BulletinContext
     ) {
         setRetriesLeft(Pusher.tries - 1, for: retryKey(context, service))
-        sendAttempt(request, logString: logString, service: service, context: context)
+
+        // An exception out of this block would leave the send queue and reach
+        // SpringBoard, which takes the whole process down — a service that
+        // cannot encode its payload must fail like any other send failure, not
+        // by crashing the shell. `NSJSONSerialization` is the realistic source:
+        // it throws on a value it cannot write, and a payload is assembled from
+        // whatever a service decided to put in it.
+        PusherTrap.run {
+            self.sendAttempt(request, logString: logString, service: service, context: context)
+        }
     }
 
     // MARK: - Retry bookkeeping
@@ -417,5 +426,35 @@ public final class RequestSender {
 private extension Dictionary where Key == String, Value == Any {
     func prefsDouble(_ key: String, default defaultValue: Double) -> Double {
         Prefs(self).double(key, default: defaultValue)
+    }
+}
+
+// MARK: - Catching Objective-C exceptions
+
+/// Runs a block inside an Objective-C `@try`.
+///
+/// Swift's `do`/`catch` sees only Swift errors, so an `NSException` raised by a
+/// private framework call unwinds past every `catch` in this file and into the
+/// process hosting the tweak — SpringBoard, for a push. `NSJSONSerialization` is
+/// the realistic source: it throws on a value it cannot write.
+///
+/// The trap is ObjC (`Sources/Hooks/ShortcutHooks.xm`), looked up with `dlsym`
+/// for the reason the shortcut runner is: the Preferences bundle recompiles
+/// these sources and would otherwise need a symbol it never calls.
+enum PusherTrap {
+
+    /// Runs `body`, catching an Objective-C exception rather than letting it
+    /// unwind into the host process.
+    ///
+    /// A missing hook runs the block plainly: a trap that is not loaded must not
+    /// turn a working send into a silent no-op.
+    static func run(_ body: @escaping @convention(block) () -> Void) {
+        typealias TrapFn = @convention(c) (AnyObject) -> Void
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "PusherTrapExceptions")
+        else {
+            body()
+            return
+        }
+        unsafeBitCast(symbol, to: TrapFn.self)(body as AnyObject)
     }
 }

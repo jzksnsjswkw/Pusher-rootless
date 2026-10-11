@@ -37,6 +37,7 @@ TWEAK_NAME = Pusher
 Pusher_FILES = $(shell find Sources/Core Sources/Shared -name '*.swift') \
                Sources/Hooks/PusherHooks.xm \
                Sources/Hooks/TestPush.xm \
+               Sources/Hooks/ShortcutHooks.xm \
                $(shell find Sources/Core -name "*.m")
 Pusher_SWIFT_BRIDGING_HEADER = Sources/Hooks/Pusher-Bridging-Header.h
 Pusher_CFLAGS = -fobjc-arc

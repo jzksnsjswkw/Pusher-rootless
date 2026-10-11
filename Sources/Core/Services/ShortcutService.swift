@@ -3,7 +3,7 @@ import Foundation
 /// Runs one of the user's Shortcuts, silently, with the notification as input.
 ///
 /// This is the only service that does not send an HTTP request. What it does
-/// instead is described in `ShortcutRunner.h`, which owns the private-API work;
+/// instead is described in `ShortcutRunner.m`, which owns the private-API work;
 /// this file is the part that fits into the pipeline: it names the shortcut,
 /// turns the bulletin into the payload a Shortcut can read, and hands both over.
 ///
@@ -98,18 +98,41 @@ public enum ShortcutService: PushService {
 
     /// The dictionary a Shortcut receives.
     ///
-    /// Built from the shared payload, so the field names and values are the ones
-    /// every other service sends: a user who has written a script already knows
-    /// what to expect, and an AI asked to write either one sees one vocabulary.
-    ///
-    /// Icon and image ride along when the instance asks for them, as Base64 in
-    /// the same fields every other service uses. `date` keeps whatever format the
-    /// instance configured.
+    /// Built from the shared payload, so the field names are the ones every other
+    /// service sends: a user who has written a script already knows what to
+    /// expect, and an AI asked to write either one sees one vocabulary.
     private static func payload(context: BulletinContext, config: ServiceConfig) -> [String: Any] {
-        baseInfoDict(context: context, config: config)
+        var data = baseInfoDict(context: context, config: config)
+
+        // `image` arrives as a `UIImage`. The shared dictionary carries the
+        // picture itself and each service decides how it goes on the wire — a
+        // form encoder converts it, and a JSON body cannot. A Shortcut has no URL
+        // to fetch it from, so it travels as Base64 in the same field.
+        //
+        // Leaving it as a `UIImage` was not an omission but a crash:
+        // `NSJSONSerialization` throws on a type it cannot write, and the
+        // exception left the send block, escaping into SpringBoard.
+        if let image = data["image"] as? UIImage {
+            if let base64 = PushImage.base64(image) {
+                data["image"] = base64
+            } else {
+                data.removeValue(forKey: "image")
+            }
+        } else if data["image"] is NSNumber {
+            // The "an attachment exists but could not be decoded" marker. It
+            // means nothing to a Shortcut, and a boolean where a string is
+            // expected is worse than no field at all.
+            data.removeValue(forKey: "image")
+        }
+
+        return data
     }
 
     private static func encode(_ payload: [String: Any]) -> String? {
+        guard JSONSerialization.isValidJSONObject(payload) else {
+            PusherLog.info("[Shortcut] payload is not JSON-representable")
+            return nil
+        }
         guard let data = try? JSONSerialization.data(
             withJSONObject: payload, options: [.sortedKeys]
         ) else { return nil }
