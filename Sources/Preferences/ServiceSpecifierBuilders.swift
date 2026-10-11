@@ -428,6 +428,15 @@ public final class ServiceSpecifierBuilders: NSObject {
     private static func shortcut(
         service: String, appID: String?, defaults: ServiceConfig?, pageObserver: AnyObject?
     ) -> [PSSpecifier] {
+        // The prompt is the group's header and the row shows the choice, rather
+        // than the row being labelled "Choose Shortcut" — a row named after the
+        // action says what it does but not what it is set to, so finding the
+        // current value would mean opening the picker to look for the tick.
+        let heading = PSSpecifier.preferenceSpecifierNamed(
+            "Shortcut".localized, target: nil, set: nil, get: nil,
+            detail: nil, cell: .groupCell, edit: nil
+        )!
+
         let specifier = PSSpecifier.preferenceSpecifierNamed(
             "Choose Shortcut".localized, target: PreferencesStorage.self,
             set: #selector(PreferencesStorage.setValue(_:forInstanceSpecifier:)),
@@ -436,7 +445,7 @@ public final class ServiceSpecifierBuilders: NSObject {
         )!
         configure(specifier, service: service, appID: appID,
                   key: ShortcutPrefKey.shortcutName)
-        return [specifier]
+        return [heading, specifier]
     }
 
     // MARK: - Bark

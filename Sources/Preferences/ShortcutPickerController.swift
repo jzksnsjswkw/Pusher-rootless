@@ -2,10 +2,15 @@ import UIKit
 
 /// Picks which Shortcut a service instance runs.
 ///
-/// The list comes from the device itself, so a name can only be chosen from
-/// shortcuts that exist. That matters more here than for most pickers: a
-/// mistyped name fails at push time, in the background, and the only trace is a
-/// log line — so the choice is made from a list rather than typed.
+/// The choice is made from a list rather than typed, and that matters more here
+/// than for most pickers: a name that is one character off fails at push time,
+/// in the background, with nothing but a log line to show for it.
+///
+/// The page is built in code — there is no plist — which means it must supply
+/// both things a plist page gets for free: the cells, and the array the
+/// framework re-derives when the app returns from the background. Without the
+/// second, a backgrounded page comes back showing whichever plist the framework
+/// happened to substitute.
 @objc(NSPShortcutPickerController)
 public final class ShortcutPickerController: ListController {
 
@@ -14,6 +19,9 @@ public final class ShortcutPickerController: ListController {
 
     /// The instance whose shortcut is being chosen.
     private var instanceID: String?
+
+    /// The shortcut this instance currently runs.
+    private var selected: String = ""
 
     public override init(nibName: String?, bundle: Bundle?) {
         super.init(nibName: nibName, bundle: bundle)
@@ -29,61 +37,80 @@ public final class ShortcutPickerController: ListController {
 
     public override func viewDidLoad() {
         super.viewDidLoad()
-        instanceID = specifier?.string(SpecifierRouting.PropertyKey.instanceID)
         title = "Shortcut".localized
-        names = ShortcutRunner.names()
+        loadSelection()
         installSpecifiers(buildSpecifiers())
     }
 
+    /// Rebuilds on the framework's own reload, so returning from the background
+    /// shows this page's cells rather than a substituted plist's.
     public override func rebuildSpecifiers() -> NSMutableArray? {
-        buildSpecifiers()
+        loadSelection()
+        return buildSpecifiers()
+    }
+
+    /// Reads the instance's current choice.
+    private func loadSelection() {
+        instanceID = specifier?.string(SpecifierRouting.PropertyKey.instanceID)
+        names = ShortcutRunner.names()
+        if let instanceID,
+           let stored = PrefsStore.instance(instanceID)[ShortcutPrefKey.shortcutName] as? String {
+            selected = stored
+        } else {
+            selected = ""
+        }
     }
 
     private func buildSpecifiers() -> NSMutableArray {
         var items: [PSSpecifier] = []
-        let current = currentSelection()
 
-        items.append(group(localized: "Runs this Shortcut"))
+        // The group header is the prompt, so the first row can be the choice
+        // itself rather than a button that opens another page.
+        let heading = PSSpecifier.preferenceSpecifierNamed(
+            "Runs this Shortcut".localized, target: nil, set: nil, get: nil,
+            detail: nil, cell: .groupCell, edit: nil
+        )!
+        items.append(heading)
 
         if names.isEmpty {
             let empty = PSSpecifier.preferenceSpecifierNamed(
                 "No shortcuts found".localized, target: nil, set: nil, get: nil,
                 detail: nil, cell: .groupCell, edit: nil
-            )
-            empty?.setProperty(
+            )!
+            empty.setProperty(
                 "Create one in the Shortcuts app, then come back.".localized,
                 forKey: "footerText"
             )
-            items.append(empty!)
-        } else {
-            for name in names {
-                let cell = PSSpecifier.preferenceSpecifierNamed(
-                    name, target: self,
-                    set: nil, get: nil, detail: nil,
-                    cell: .buttonCell, edit: nil
-                )
-                cell?.setProperty(name, forKey: "shortcutName")
-                if let instanceID {
-                    cell?.setProperty(instanceID,
-                                      forKey: SpecifierRouting.PropertyKey.instanceID)
-                }
-                cell?.setProperty(name == current, forKey: "checked")
-                cell?.buttonAction = #selector(choose(_:))
-                items.append(cell!)
+            items.append(empty)
+            return NSMutableArray(array: items)
+        }
+
+        // One row per shortcut, named for the shortcut itself. The chosen one
+        // carries a tick, which is how a list page says "this is the current
+        // value" without a separate field echoing it.
+        for name in names {
+            let cell = PSSpecifier.preferenceSpecifierNamed(
+                name, target: self, set: nil, get: nil,
+                detail: nil, cell: .buttonCell, edit: nil
+            )!
+            cell.identifier = name
+            cell.setProperty(name, forKey: "shortcutName")
+            cell.buttonAction = #selector(choose(_:))
+            if name == selected {
+                // `checked` is what PSTableCell draws a tick from.
+                cell.setProperty(NSNumber(value: 1), forKey: "checked")
             }
+            if let instanceID {
+                cell.setProperty(instanceID,
+                                 forKey: SpecifierRouting.PropertyKey.instanceID)
+            }
+            items.append(cell)
         }
 
         return NSMutableArray(array: items)
     }
 
-    /// The shortcut this instance currently runs, if any.
-    private func currentSelection() -> String? {
-        guard let instanceID else { return nil }
-        let stored = PrefsStore.instance(instanceID)[ShortcutPrefKey.shortcutName]
-        return stored as? String
-    }
-
-    /// Stores the choice on the instance and returns to its settings page.
+    /// Stores the choice and returns to the instance's page.
     @objc private func choose(_ sender: PSSpecifier) {
         guard let instanceID,
               let name = sender.property(forKey: "shortcutName") as? String
@@ -94,13 +121,5 @@ public final class ShortcutPickerController: ListController {
         }
 
         navigationController?.popViewController(animated: true)
-    }
-
-    /// A group cell with a localized header.
-    private func group(localized label: String) -> PSSpecifier {
-        let cell = PSSpecifier.preferenceSpecifierNamed(
-            label, target: nil, set: nil, get: nil, detail: nil, cell: .groupCell, edit: nil
-        )
-        return cell!
     }
 }
