@@ -25,6 +25,15 @@ public enum PusherLog {
     }
 }
 
+/// The same unconditional log, reachable from the ObjC shortcut runner.
+///
+/// `PusherLog` is a Swift enum, so its members have no ObjC name; the runner
+/// needs one to report a shortcut that could not be started.
+@_cdecl("PusherLogError")
+public func PusherLogError(_ message: UnsafePointer<CChar>) {
+    PusherLog.info(String(cString: message))
+}
+
 /// Formats a value for the on-device log viewer.
 ///
 /// Dictionaries and arrays are expanded with indentation so a nested request

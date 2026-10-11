@@ -155,6 +155,7 @@ public enum ServiceRegistry {
         .init(PusherReceiverService.self),
         .init(PushoverService.self),
         .init(WechatService.self),
+        .init(ShortcutService.self, displayName: "Shortcut"),
         .init(CustomService.self, displayName: "Custom Webhook"),
     ]
 

@@ -63,7 +63,38 @@ public final class RequestSender {
         return (retriesLeft[key] ?? 0) > 0
     }
 
-    // MARK: - One attempt
+    // MARK: - Shortcut delivery
+
+    /// Runs a Shortcut instead of performing an HTTP request.
+    ///
+    /// Retries are deliberately not offered. A failed HTTP request can be
+    /// repeated safely because the server saw nothing; a Shortcut that ran part
+    /// way through and then failed would, on a retry, run its actions twice —
+    /// and its actions can be anything, including sending a message. Reporting
+    /// the failure once is the honest thing to do.
+    private func sendShortcut(
+        named name: String,
+        input: String,
+        request: PushRequest,
+        logString: String,
+        service: String,
+        context: BulletinContext
+    ) {
+        PushLog.add(service: service, context: context, label: "Shortcut", object: name)
+        PusherLog.debug("\(logString) Running shortcut \"\(name)\"")
+
+        let error = ShortcutRunner.run(name: name, input: input)
+        if let error {
+            PusherLog.info("[S:\(service)] Shortcut \"\(name)\" failed: \(error)")
+            PushLog.add(service: service, context: context,
+                        label: "Shortcut failed", object: error)
+        } else {
+            PusherLog.debug("\(logString) Shortcut \"\(name)\" started")
+            PushLog.add(service: service, context: context, label: "Shortcut started")
+        }
+    }
+
+    // MARK: - One attempt (HTTP)
 
     private func sendAttempt(
         _ request: PushRequest,
@@ -71,6 +102,21 @@ public final class RequestSender {
         service: String,
         context: BulletinContext
     ) {
+        // A shortcut run is not a fetch: it has no URL, no body and no HTTP
+        // status. Sending it down the URLSession path would report a bogus
+        // "invalid URL" failure, so it is diverted before any of that begins.
+        if let shortcutName = request.state[ShortcutState.shortcutName] as? String {
+            sendShortcut(
+                named: shortcutName,
+                input: request.state[ShortcutState.input] as? String ?? "",
+                request: request,
+                logString: logString,
+                service: service,
+                context: context
+            )
+            return
+        }
+
         var body = request.infoDict
         body.removeValue(forKey: "imageShrinkFactor")
 

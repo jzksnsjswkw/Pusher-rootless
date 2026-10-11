@@ -36,7 +36,8 @@ TWEAK_NAME = Pusher
 # equivalent.
 Pusher_FILES = $(shell find Sources/Core Sources/Shared -name '*.swift') \
                Sources/Hooks/PusherHooks.xm \
-               Sources/Hooks/TestPush.xm
+               Sources/Hooks/TestPush.xm \
+               $(shell find Sources/Core -name "*.m")
 Pusher_SWIFT_BRIDGING_HEADER = Sources/Hooks/Pusher-Bridging-Header.h
 Pusher_CFLAGS = -fobjc-arc
 Pusher_FRAMEWORKS = UIKit Foundation SystemConfiguration

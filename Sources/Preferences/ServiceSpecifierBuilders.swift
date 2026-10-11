@@ -55,6 +55,7 @@ public final class ServiceSpecifierBuilders: NSObject {
         register(builder: Self.wechat, forService: WechatService.serviceName)
         register(builder: Self.bark, forService: BarkService.serviceName)
         register(builder: Self.pusherReceiver, forService: PusherReceiverService.serviceName)
+        register(builder: Self.shortcut, forService: ShortcutService.serviceName)
     }
 
     /// The cells to append to `service`'s page, ready to use.
@@ -413,6 +414,29 @@ public final class ServiceSpecifierBuilders: NSObject {
             textField("Agent ID", service: service, appID: nil, key: PrefKey.agentID),
             textField("Recipient", service: service, appID: nil, key: PrefKey.touser),
         ]
+    }
+
+
+    // MARK: - Shortcut
+
+    /// The one setting this service has: which Shortcut to run.
+    ///
+    /// A link cell rather than a text field, even though the value is a string.
+    /// A typed name has to match exactly, and a mismatch only shows up at push
+    /// time, in the background, as a line in the log — so the name is chosen from
+    /// what is actually installed.
+    private static func shortcut(
+        service: String, appID: String?, defaults: ServiceConfig?, pageObserver: AnyObject?
+    ) -> [PSSpecifier] {
+        let specifier = PSSpecifier.preferenceSpecifierNamed(
+            "Choose Shortcut".localized, target: PreferencesStorage.self,
+            set: #selector(PreferencesStorage.setValue(_:forInstanceSpecifier:)),
+            get: #selector(PreferencesStorage.readValue(forInstanceSpecifier:)),
+            detail: NSClassFromString("NSPShortcutPickerController"), cell: .linkCell, edit: nil
+        )!
+        configure(specifier, service: service, appID: appID,
+                  key: ShortcutPrefKey.shortcutName)
+        return [specifier]
     }
 
     // MARK: - Bark
