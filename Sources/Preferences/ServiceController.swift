@@ -88,6 +88,17 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
+        // Only the Shortcut service has a guide: the other instance pages send
+        // through a plist-backed request whose fields the page itself explains.
+        // Set on each appearance rather than once, because the framework rebuilds
+        // the bar as it reloads the page.
+        if serviceType == ShortcutService.serviceName {
+            navigationItem.rightBarButtonItem = UIBarButtonItem(
+                title: "Guide".localized, style: .plain,
+                target: self, action: #selector(showShortcutGuide)
+            )
+        }
+
         // The tint is derived from the icon once; recomputing it on every
         // appearance would make the page flicker between colors.
         if uiColor == nil, let icon {
@@ -104,6 +115,12 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // Re-seeded rather than compared: the page is rebuilt on every
         // appearance, so whatever was toggled elsewhere is already reflected.
         seedImageSizing()
+    }
+
+    /// The Shortcut guide, presented over this page.
+    @objc private func showShortcutGuide() {
+        view.endEditing(true)
+        ShortcutGuide.present(from: self)
     }
 
     /// Recomputes the "(N total)" suffixes on the installed cells.

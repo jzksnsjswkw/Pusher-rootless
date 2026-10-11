@@ -18,6 +18,13 @@ enum GuideSheet {
         case text(String)
         /// A monospaced block: code, or an API written as declarations.
         case code(String)
+        /// A picture, from the bundle. Sized to the sheet's width.
+        ///
+        /// A screenshot says in one glance what a paragraph of instructions
+        /// struggles to: which action to add, and what its two fields should
+        /// read. Kept in the bundle rather than drawn in code because it is a
+        /// picture of another app's interface, which changes without notice.
+        case image(String)
     }
 
     // MARK: - The copy action
@@ -121,6 +128,10 @@ enum GuideSheet {
                 stack.addArrangedSubview(label)
             case .code(let text):
                 stack.addArrangedSubview(codeView(text))
+            case .image(let name):
+                if let view = imageView(name) {
+                    stack.addArrangedSubview(view)
+                }
             }
         }
 
@@ -160,6 +171,34 @@ enum GuideSheet {
         let navigation = UINavigationController(rootViewController: host)
         navigation.modalPresentationStyle = .pageSheet
         controller.present(navigation, animated: true)
+    }
+
+    /// A bundle image at the sheet's width, keeping its aspect ratio.
+    ///
+    /// `UIImageView` in an arranged subview has no intrinsic width, so the width
+    /// comes from the stack and the height from the picture's own ratio. The
+    /// rounding is applied here rather than baked into the file: the screenshot
+    /// is of a light interface, and a rounded corner lets it sit on a dark page
+    /// as a picture instead of a bright rectangle.
+    private static func imageView(_ name: String) -> UIView? {
+        guard let image = UIImage.pusher(named: name) else { return nil }
+
+        let rounded = UIGraphicsImageRenderer(size: image.size).image { _ in
+            let rect = CGRect(origin: .zero, size: image.size)
+            let radius = image.size.height * 0.045
+            UIBezierPath(roundedRect: rect, cornerRadius: radius).addClip()
+            image.draw(in: rect)
+        }
+
+        let view = UIImageView(image: rounded)
+        view.contentMode = .scaleAspectFit
+        view.layer.cornerRadius = 6
+        view.clipsToBounds = true
+        view.isAccessibilityElement = true
+        view.accessibilityLabel = name
+        // Height follows from the width the stack gives it.
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return view
     }
 
     /// A monospaced, non-scrolling text view: the text wraps, the view grows.
