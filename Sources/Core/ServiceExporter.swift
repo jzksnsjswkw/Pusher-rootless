@@ -156,9 +156,15 @@ public enum ServiceExporter {
     /// to a friend, or to fix a script by hand.
     public static func json(from document: ServiceExport) throws -> String {
         let object = encode(document)
+        // Compact rather than indented: a document carrying icons is mostly
+        // Base64, and the indentation would be most of what a reader sees —
+        // thousands of lines of wrapped alphabet, for a file whose purpose is to
+        // be pasted into a message or handed to another device. Sorted keys stay,
+        // so the same export twice produces the same bytes and a diff is
+        // readable.
         let data = try JSONSerialization.data(
             withJSONObject: object,
-            options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            options: [.sortedKeys, .withoutEscapingSlashes]
         )
         guard let text = String(data: data, encoding: .utf8) else {
             throw ServiceImportError.malformed("The document is not valid UTF-8")
