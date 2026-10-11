@@ -84,7 +84,7 @@ enum GuideSheet {
         from controller: UIViewController,
         title: String,
         blocks: [Block],
-        prompt: @escaping (String) -> String
+        prompt: ((String) -> String)? = nil
     ) {
         let host = UIViewController()
         host.view.backgroundColor = .systemGroupedBackground
@@ -93,12 +93,17 @@ enum GuideSheet {
         let target = Target()
         target.host = host
         target.prompt = prompt
+        // The copy button is for the guides whose subject is code an AI can
+        // write. A guide whose subject is a sequence of taps in another app has
+        // nothing to hand over, and offering the button would suggest otherwise.
         host.navigationItem.rightBarButtonItems = [
-            UIBarButtonItem(title: "Copy AI Prompt".localized, style: .plain,
-                            target: target, action: #selector(Target.copyPrompt)),
+            prompt == nil
+                ? nil
+                : UIBarButtonItem(title: "Copy AI Prompt".localized, style: .plain,
+                                  target: target, action: #selector(Target.copyPrompt)),
             UIBarButtonItem(title: "Close".localized, style: .plain,
                             target: target, action: #selector(Target.close)),
-        ]
+        ].compactMap { $0 }
 
         let scrollView = UIScrollView()
         scrollView.alwaysBounceVertical = true
