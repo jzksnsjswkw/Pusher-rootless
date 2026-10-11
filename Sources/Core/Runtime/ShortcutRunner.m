@@ -11,6 +11,11 @@
 //      SpringBoard cannot read, which is what killed every attempt to run a
 //      shortcut by loading its contents.
 //
+//   1b. iOS 17 added a parameter to that initializer
+//      (`initWithWorkflowIdentifier:location:`). Both spellings are tried, so
+//      the same build works on either; see the call site for why adapting the
+//      call beats installing the old method on the system class.
+//
 //   2. `presentationMode = 3` makes the run silent: no UI, and the Shortcuts app
 //      is not brought forward.
 //
@@ -159,9 +164,26 @@ NSString *PusherRunShortcut(NSString *name, NSString *input) {
 
     Class runnerClass = NSClassFromString(@"WFWidgetWorkflowRunnerClient");
     if (!runnerClass) return @"WFWidgetWorkflowRunnerClient not found";
+
+    // Two spellings, because iOS 17 added a parameter to this initializer
+    // (`initWithWorkflowIdentifier:location:`), and a missing one returns a
+    // runner that never starts. Which is in effect is asked of the class rather
+    // than assumed from a version check: the same build has to work on both, and
+    // a version comparison would need updating for every future release anyway.
+    //
+    // Adapting the call rather than adding the old method back to the class —
+    // which is what SpringCuts' compatibility shim does — keeps the change on
+    // our side of the boundary: no method with `init` ownership semantics is
+    // installed on a system class, and on iOS 16 the first spelling still wins
+    // and nothing about this call changes.
     SEL initSelector = sel_registerName("initWithWorkflowIdentifier:");
+    BOOL needsLocation = NO;
     if (![runnerClass instancesRespondToSelector:initSelector]) {
-      return @"a shortcut cannot be run by identifier on this system";
+      initSelector = sel_registerName("initWithWorkflowIdentifier:location:");
+      needsLocation = YES;
+    }
+    if (![runnerClass instancesRespondToSelector:initSelector]) {
+      return @"WFWidgetWorkflowRunnerClient cannot be created by identifier";
     }
     // Held in a variable: assigning an +alloc result straight to
     // NSInvocation's unsafe-unretained target lets ARC release it too early.
@@ -171,6 +193,11 @@ NSString *PusherRunShortcut(NSString *name, NSString *input) {
     initInvocation.target = allocated;
     initInvocation.selector = initSelector;
     [initInvocation setArgument:&identifier atIndex:2];
+    if (needsLocation) {
+      // No location: this is not a widget placement, and the runner accepts 0.
+      long long location = 0;
+      [initInvocation setArgument:&location atIndex:3];
+    }
     [initInvocation invoke];
     __unsafe_unretained id runner = nil;
     [initInvocation getReturnValue:&runner];
