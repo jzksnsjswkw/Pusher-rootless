@@ -1,8 +1,9 @@
 // Running one of the user's Shortcuts, silently.
 //
 // There is no supported API for this, and the route that works is narrower than
-// it looks. It was found by disassembling SpringCuts (a tweak that does the same
-// thing) and then verified piece by piece on the device:
+// it looks. What follows was established by reading the private frameworks
+// themselves — the classes, the selectors, the presentation mode that silences a
+// run — and then verified step by step on the device:
 //
 //   1. `WFWidgetWorkflowRunnerClient` runs a shortcut given only its
 //      *identifier* — the daemon resolves the workflow itself, so the caller
@@ -171,11 +172,11 @@ NSString *PusherRunShortcut(NSString *name, NSString *input) {
     // than assumed from a version check: the same build has to work on both, and
     // a version comparison would need updating for every future release anyway.
     //
-    // Adapting the call rather than adding the old method back to the class —
-    // which is what SpringCuts' compatibility shim does — keeps the change on
-    // our side of the boundary: no method with `init` ownership semantics is
-    // installed on a system class, and on iOS 16 the first spelling still wins
-    // and nothing about this call changes.
+    // Adapting the call rather than adding the old method back to the class,
+    // which is what a compatibility shim published for iOS 17 does, keeps the
+    // change on our side of the boundary: no method with `init` ownership
+    // semantics is installed on a system class, and on iOS 16 the first spelling
+    // still wins and nothing about this call changes.
     SEL initSelector = sel_registerName("initWithWorkflowIdentifier:");
     BOOL needsLocation = NO;
     if (![runnerClass instancesRespondToSelector:initSelector]) {

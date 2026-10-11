@@ -6,4 +6,8 @@ obj/
 .vscode/
 .DS_Store
 Generated/
+# Binaries and disassembly kept for local analysis. Not this project's code —
+# the Shortcuts app and other people's tweaks are not ours to redistribute — and
+# large enough that no reader of a diff wants them.
+reverse/
 .sisyphus/
