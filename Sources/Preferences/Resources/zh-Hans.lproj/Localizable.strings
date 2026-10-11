@@ -500,6 +500,7 @@
 "Every notification setting goes back to its default. Services that follow these settings follow them, so their behaviour changes too. A service with its own settings here is unaffected." = "所有通知设置将恢复为默认值。遵循这些设置的服务也会随之改变。已有自己设置的服务不受影响。";
 "Original Repository / GitHub" = "原仓库 / GitHub";
 "Shortcut" = "快捷指令";
+"Custom Webhook" = "自定义 Webhook";
 "Choose Shortcut" = "快捷指令";
 "Runs this Shortcut" = "运行以下快捷指令";
 "No shortcuts found" = "没有找到快捷指令";

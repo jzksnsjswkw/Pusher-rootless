@@ -156,12 +156,17 @@ public enum ServiceRegistry {
         .init(PushoverService.self),
         .init(WechatService.self),
         .init(ShortcutService.self, displayName: "Shortcut"),
-        .init(CustomService.self, displayName: "Custom Webhook"),
+        .init(CustomService.self, displayName: customServiceDisplayName),
     ]
+
+    /// The webhook's name, in one place: it is both the add-service row and the
+    /// name the descriptor is registered under, and the localization table is
+    /// keyed by it.
+    static let customServiceDisplayName = "Custom Webhook"
 
     /// The generic webhook descriptor.
     public static let customService = ServiceDescriptor(CustomService.self,
-                                                        displayName: "Custom Webhook")
+                                                        displayName: customServiceDisplayName)
 
     /// The registry name the webhook descriptor is stored under.
     public static var customServiceName: String { CustomService.serviceName }
