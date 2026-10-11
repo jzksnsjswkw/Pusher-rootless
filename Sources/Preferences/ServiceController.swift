@@ -21,11 +21,9 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     public init(instance: ServiceInstance) {
         self.serviceInstanceID = instance.id
         self.serviceType = instance.type
-        // The service's own logo first: the title bar should show the same
-        // picture the list row does, which is what makes the logo the service's
-        // identity rather than a decoration on one screen.
-        self.icon = ServiceIcon.logo(forInstanceID: instance.id)
-            ?? ServiceArtwork.image(forType: instance.type)
+        // The same picture the list row shows: the service's, not the instance's.
+        // See `ServiceListController.reloadData`.
+        self.icon = ServiceArtwork.image(forType: instance.type)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -341,21 +339,9 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // a key that is missing means nothing is sent at all.
         all.append(contentsOf: declaredConfigSpecifiers())
 
-        // ── The logo, in the page's own identity group ───────────────────────
-        // Not among the payload options: a logo identifies the service, so it
-        // belongs beside the name it labels. For a service with a plist that is
-        // the plist's first group (the one holding Name and the type's fields);
-        // a script type's page is built in code, so it opens with a group of its
-        // own to hold it.
-        if let logoRow = ServiceSpecifierBuilders.iconRow(
-            service: serviceType, instanceID: serviceInstanceID
-        ) {
-            if let firstGroup = all.firstIndex(where: { $0.cellType == .groupCell }) {
-                all.insert(logoRow, at: firstGroup + 1)
-            } else if let group = PSSpecifier.groupSpecifier(withName: nil) {
-                all.insert(contentsOf: [group, logoRow], at: 0)
-            }
-        }
+        // No icon row here: an instance has none of its own. The icon identifies
+        // the *service* — it is the only thing that does — and the name identifies
+        // the instance. A logo is chosen on the service's own page.
 
         // Shared cells (device/sound pickers, the payload options) come from the
         // type's own builder, looked up by name so a new service needs no change
@@ -648,16 +634,6 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     public override func tableView(
         _ tableView: UITableView, didSelectRowAt indexPath: IndexPath
     ) {
-        if let specifier = specifier(at: indexPath),
-           specifier.bool(SpecifierRouting.PropertyKey.isIconRow) {
-            tableView.deselectRow(at: indexPath, animated: true)
-            view.endEditing(true)
-            push(ServiceIconController(
-                storage: .instance(id: serviceInstanceID), heading: "Icon".localized
-            ))
-            return
-        }
-
         if let specifier = specifier(at: indexPath),
            let name = specifier.property(
                forKey: SpecifierRouting.PropertyKey.hookPhase

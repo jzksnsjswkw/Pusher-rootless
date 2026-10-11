@@ -160,19 +160,6 @@ public enum ServiceIcon {
         return normalize(image, to: .standard) ?? image
     }
 
-    /// The logo of one instance, or `nil` when it has none.
-    ///
-    /// A definition's logo is the fallback, so a script's instances show the
-    /// logo the script declares until one of them chooses its own.
-    public static func logo(forInstanceID id: String) -> UIImage? {
-        let stored = PrefsStore.instance(id)
-        if let own = image(from: stored) { return conformed(own) }
-        guard let type = stored.nonEmptyString(PrefKey.instanceType),
-              let definition = CustomServiceStore.definition(id: type)
-        else { return nil }
-        return logo(forDefinitionID: definition.id)
-    }
-
     /// The logo of one definition, or `nil` when it has none.
     ///
     /// Conformed, so a definition's logo draws at the same size on its row, in

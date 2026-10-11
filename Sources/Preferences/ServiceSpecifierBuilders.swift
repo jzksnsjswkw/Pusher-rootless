@@ -208,40 +208,6 @@ public final class ServiceSpecifierBuilders: NSObject {
     ///
     /// The row shows the current choice as its icon, so the list reads the same
     /// way the notification will.
-    /// The logo row, for a service *instance*.
-    ///
-    /// Built by the page rather than by `payloadOptions`, because a logo
-    /// identifies the service: it belongs beside the name it labels, not among
-    /// the payload options. The row shows the current logo as its icon, so the
-    /// page reads the way the list row does.
-    static func iconRow(
-        service: String, instanceID: String, appID: String? = nil
-    ) -> PSSpecifier? {
-        let descriptor = ServiceRegistry.service(named: service)
-        guard descriptor.supportsIcon else { return nil }
-
-        guard let specifier = PSSpecifier.preferenceSpecifierNamed(
-            "Icon".localized, target: nil, set: nil, get: nil,
-            detail: ServiceIconController.self, cell: .linkCell, edit: nil
-        ) else { return nil }
-        specifier.setProperty(service, forKey: SpecifierRouting.PropertyKey.serviceType)
-        specifier.setProperty(instanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
-        specifier.setProperty(appID != nil, forKey: SpecifierRouting.PropertyKey.isCustomApp)
-        // Marks the row for the pages that intercept the tap: the picker needs to
-        // know *which* store to write to, and a detail controller is built
-        // through `init(nibName:bundle:)` with nowhere to pass one.
-        specifier.setProperty(true, forKey: SpecifierRouting.PropertyKey.isIconRow)
-        if let appID {
-            specifier.setProperty(appID, forKey: "customAppIDKey")
-        }
-        if let logo = appID == nil
-            ? ServiceIcon.logo(forInstanceID: instanceID)
-            : ServiceIcon.image(from: PrefsStore.customAppPrefs(service: instanceID, appID: appID!)) {
-            specifier.setProperty(logo, forKey: "iconImage")
-        }
-        return specifier
-    }
-
     /// The logo row, for a service *definition*.
     ///
     /// A definition is not an instance: its logo is stored on the definitions

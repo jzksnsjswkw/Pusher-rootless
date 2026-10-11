@@ -111,16 +111,12 @@ public class ServiceListController: PlainViewController, ServiceTransferHost {
     /// Re-reads the instances and reloads the table.
     private func reloadData() {
         instances = ServiceInstanceStore.instances()
-        // The service's own logo wins; the built-in artwork is the fallback, so
-        // a row always shows something.
-        //
-        // Keyed by instance rather than by type: two instances of one service
-        // are separate destinations and may carry different logos, which is the
-        // whole reason a logo is attached to the instance.
-        logos = instances.map { instance in
-            ServiceIcon.logo(forInstanceID: instance.id)
-                ?? ServiceArtwork.image(forType: instance.type)
-        }
+        // The icon says which *kind* of destination a row is, and the name says
+        // which one it is. So it comes from the type — including a user-defined
+        // service's own logo when it has one — and never from the instance:
+        // a per-instance icon would break the one thing the icon is for, and two
+        // instances of one service would stop looking like the same kind of thing.
+        logos = instances.map { ServiceArtwork.image(forType: $0.type) }
         servicesTable.reloadData()
         updateTransferMenu()
     }
@@ -455,8 +451,16 @@ enum ServiceArtwork {
 
     /// The icon for a service type, falling back to the shared default so a
     /// service without its own artwork still shows one.
+    ///
+    /// A user-defined service's own logo comes first: it is what its author chose
+    /// to recognise it by, and it is what the definition's row and the
+    /// add-service list already show.
     static func image(forType type: String) -> UIImage? {
-        UIImage.pusher(named: resourceName(forType: type))
+        if CustomServiceStore.definition(id: type) != nil,
+           let logo = ServiceIcon.logo(forDefinitionID: type) {
+            return logo
+        }
+        return UIImage.pusher(named: resourceName(forType: type))
             ?? UIImage.pusher(named: "DefaultService")
     }
 }
