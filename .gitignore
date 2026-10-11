@@ -1,6 +1,8 @@
 .theos/
 packages/
 obj/
+*.o
+*.d
 .vscode/
 .DS_Store
 Generated/
