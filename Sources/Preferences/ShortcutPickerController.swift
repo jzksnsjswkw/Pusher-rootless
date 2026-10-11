@@ -96,10 +96,6 @@ public final class ShortcutPickerController: ListController {
             cell.identifier = name
             cell.setProperty(name, forKey: "shortcutName")
             cell.buttonAction = #selector(choose(_:))
-            if name == selected {
-                // `checked` is what PSTableCell draws a tick from.
-                cell.setProperty(NSNumber(value: 1), forKey: "checked")
-            }
             if let instanceID {
                 cell.setProperty(instanceID,
                                  forKey: SpecifierRouting.PropertyKey.instanceID)
@@ -108,6 +104,46 @@ public final class ShortcutPickerController: ListController {
         }
 
         return NSMutableArray(array: items)
+    }
+
+    /// Draws a tick on the row that is the current choice.
+    ///
+    /// The tick belongs to the *cell*, not to the specifier: the framework's own
+    /// list picker asks each cell to check itself against the selected row, and
+    /// a `checked` property on the specifier is read by nothing. Setting it there
+    /// looked like it worked and drew nothing.
+    public override func tableView(
+        _ tableView: UITableView, cellForRowAt indexPath: IndexPath
+    ) -> UITableViewCell {
+        let cell = super.tableView(tableView, cellForRowAt: indexPath)
+        guard let specifier = cellSpecifier(at: indexPath),
+              let name = specifier.property(forKey: "shortcutName") as? String,
+              let tableCell = cell as? PSTableCell
+        else { return cell }
+        tableCell.setChecked(name == selected)
+        return cell
+    }
+
+    /// The cell's specifier, or `nil` for a row that is not one.
+    private func cellSpecifier(at indexPath: IndexPath) -> PSSpecifier? {
+        guard let rows = super.specifiers as? [PSSpecifier] else { return nil }
+        let flatIndex = indexPath.row + sectionStart(indexPath.section, in: rows)
+        guard flatIndex >= 0, flatIndex < rows.count else { return nil }
+        return rows[flatIndex]
+    }
+
+    /// The index in the flat specifier array where a section begins.
+    ///
+    /// `PSListController` keeps one flat array and derives sections from the
+    /// group cells, so a row's index in the table is not its index in the array.
+    private func sectionStart(_ section: Int, in rows: [PSSpecifier]) -> Int {
+        var seen = -1
+        for (index, specifier) in rows.enumerated() {
+            guard specifier.cellType == .groupCell else { continue }
+            seen += 1
+            if seen == section { return index + 1 }
+        }
+        return 0
     }
 
     /// Stores the choice and returns to the instance's page.

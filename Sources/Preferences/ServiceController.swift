@@ -102,7 +102,6 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // cells were built; coming back from the app list with a changed
         // selection would otherwise keep showing the old number.
         refreshTitleCounts()
-        refreshShortcutName()
 
         // Re-seeded rather than compared: the page is rebuilt on every
         // appearance, so whatever was toggled elsewhere is already reflected.
@@ -129,23 +128,6 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         }
     }
 
-
-    /// Shows the chosen Shortcut's name on the row that opens the picker.
-    ///
-    /// The row's own title is the prompt ("Choose Shortcut"), so the choice is
-    /// written into its subtitle. Without this the page would say what the
-    /// setting is called but not what it is set to, and the only way to find out
-    /// would be to open the picker and look for the tick.
-    private func refreshShortcutName() {
-        guard serviceType == ShortcutService.serviceName else { return }
-
-        let chosen = PrefsStore.instance(serviceInstanceID)[ShortcutPrefKey.shortcutName] as? String
-        for case let specifier as PSSpecifier in (super.specifiers ?? []) {
-            guard specifier.identifier == ShortcutPrefKey.shortcutName else { continue }
-            specifier.name = (chosen?.isEmpty == false ? chosen : "Choose Shortcut".localized)
-            reloadSpecifier(specifier, animated: false)
-        }
-    }
 
     // MARK: - Rows that follow the image switch
 
@@ -325,6 +307,13 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // be dead controls. Its page is the Script row followed by the shared
         // cells, which is also why there is exactly one way in to the script.
         let isScriptType = CustomServiceStore.definition(id: serviceType) != nil
+        // The Shortcut service is built in code too — it loads an empty plist —
+        // so it needs the same two groups a script type gets: the app filter and
+        // the payload options. Which apps a Shortcut applies to is the
+        // instance's business, and the icon/image switches are what makes the
+        // difference between a payload that is a few hundred bytes of text and
+        // one that carries pictures.
+        let needsBuiltGroups = isScriptType || serviceType == ShortcutService.serviceName
         let loaded: [PSSpecifier]
         var all: [PSSpecifier]
         if isScriptType {
@@ -381,14 +370,14 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // different apps. The segment cell comes with the "Default" option the
         // global tail adds to its own segments, so an untouched filter follows
         // the global app list.
-        if isScriptType {
+        if needsBuiltGroups {
             all.append(contentsOf: appFilterSpecifiers())
 
-            // A script service's page is built without a plist, so its payload
-            // options are asked for by the type's own name: the switches offered
-            // are the ones *this definition* declared, which is what makes the
-            // definition's choices meaningful rather than a default a page can
-            // quietly contradict.
+            // A page built without a plist asks for its payload options by the
+            // type's own name: for a script the switches offered are the ones
+            // *this definition* declared, which is what makes the definition's
+            // choices meaningful rather than a default a page can quietly
+            // contradict; for the Shortcut service they are its own two.
             all.append(contentsOf: ServiceSpecifierBuilders.shared.payloadOptions(
                 forType: serviceType, instanceID: serviceInstanceID, appID: nil,
                 pageObserver: self

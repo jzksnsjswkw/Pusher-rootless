@@ -15,11 +15,17 @@ import Foundation
 public enum ShortcutService: PushService {
     public static let serviceName = "Shortcut"
 
-    /// The payload is a dictionary of text fields. An icon has nowhere to go:
-    /// `WFContentItem` wraps text, and Base64 image data would be both enormous
-    /// and useless to a Shortcut, which has no way to decode it.
-    public static var supportsIcon: Bool { false }
-    public static var supportsImage: Bool { false }
+    /// Both are carried, as Base64 in the payload dictionary.
+    ///
+    /// That is a real trade: the text goes through a `WFContentItem`, and a
+    /// picture makes it tens of kilobytes that are decoded again before the
+    /// Shortcut can use them. It is worth it because a Shortcut has no other way
+    /// to reach the icon or the attachment — unlike a webhook, which can fetch
+    /// the URL the payload would otherwise have to carry. A Shortcut that wants
+    /// neither can switch them off, and a Shortcut that wants only the text
+    /// should.
+    public static var supportsIcon: Bool { true }
+    public static var supportsImage: Bool { true }
 
     /// No URL: the request is a shortcut run, not a fetch.
     public static func url(eventName: String, dbName: String, serverURL: String) -> String {
@@ -65,9 +71,9 @@ public enum ShortcutService: PushService {
     /// every other service sends: a user who has written a script already knows
     /// what to expect, and an AI asked to write either one sees one vocabulary.
     ///
-    /// Icon and image are dropped rather than sent as empty strings: the shared
-    /// payload adds them only when the instance asked for them, and this service
-    /// never does. `date` keeps whatever format the instance configured.
+    /// Icon and image ride along when the instance asks for them, as Base64 in
+    /// the same fields every other service uses. `date` keeps whatever format the
+    /// instance configured.
     private static func payload(context: BulletinContext, config: ServiceConfig) -> [String: Any] {
         baseInfoDict(context: context, config: config)
     }

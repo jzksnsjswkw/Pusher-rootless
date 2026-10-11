@@ -437,10 +437,17 @@ public final class ServiceSpecifierBuilders: NSObject {
             detail: nil, cell: .groupCell, edit: nil
         )!
 
+        // `get:` reads the shortcut the instance holds, so the cell's own text is
+        // rebuilt from the value by the framework — the same way its value is.
+        // Naming the row after the choice and re-naming it on each appearance
+        // looked equivalent and was not: the framework substitutes its own array
+        // when the app returns from the background, and the substituted cell
+        // carries the name from the specifier it was derived from, so the row
+        // reverted to whatever that said.
         let specifier = PSSpecifier.preferenceSpecifierNamed(
-            "Choose Shortcut".localized, target: PreferencesStorage.self,
-            set: #selector(PreferencesStorage.setValue(_:forInstanceSpecifier:)),
-            get: #selector(PreferencesStorage.readValue(forInstanceSpecifier:)),
+            "Choose Shortcut".localized, target: Interaction.self,
+            set: #selector(Interaction.writeShortcutName(_:specifier:)),
+            get: #selector(Interaction.readShortcutName(_:)),
             detail: NSClassFromString("NSPShortcutPickerController"), cell: .linkCell, edit: nil
         )!
         configure(specifier, service: service, appID: appID,
@@ -606,5 +613,39 @@ public final class ServiceSpecifierBuilders: NSObject {
         if let appID {
             specifier.setProperty(appID, forKey: SpecifierRouting.PropertyKey.customAppID)
         }
+    }
+}
+
+// MARK: - Rows whose text is their value
+
+/// Reads and writes the Shortcut choice for the row that opens the picker.
+///
+/// Separate from `PreferencesStorage` because that stores *values*, and this row
+/// has none: its text is the choice. Routing it through a getter is what makes
+/// the framework rebuild the text on its own passes — and it rebuilds, on
+/// returning from the background, from an array it substituted itself, whose
+/// cells are named from their specifiers. A row renamed after the fact reverts at
+/// that point; a row whose name comes from its getter does not.
+@objc final class Interaction: NSObject {
+
+    /// The shortcut name to show on the row.
+    @objc static func readShortcutName(_ specifier: PSSpecifier) -> NSString {
+        let chosen: String? = storedName(on: specifier)
+        if let chosen, !chosen.isEmpty { return chosen as NSString }
+        return "Choose Shortcut".localized as NSString
+    }
+
+    /// Writes a shortcut name onto the instance the row belongs to.
+    @objc static func writeShortcutName(_ value: Any?, specifier: PSSpecifier) {
+        PreferencesStorage.setValue(value, forInstanceSpecifier: specifier)
+    }
+
+    /// Reads the shortcut name from the instance the row belongs to.
+    private static func storedName(on specifier: PSSpecifier) -> String? {
+        if let direct = PreferencesStorage.readValue(forInstanceSpecifier: specifier) as? String {
+            return direct
+        }
+        guard let id = specifier.string(SpecifierRouting.PropertyKey.instanceID) else { return nil }
+        return PrefsStore.instance(id)[ShortcutPrefKey.shortcutName] as? String
     }
 }
