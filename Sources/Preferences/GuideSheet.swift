@@ -149,12 +149,7 @@ enum GuideSheet {
                 label.numberOfLines = 0
                 stack.addArrangedSubview(label)
             case .text(let text):
-                let label = UILabel()
-                label.text = text
-                label.font = .preferredFont(forTextStyle: .subheadline)
-                label.textColor = .secondaryLabel
-                label.numberOfLines = 0
-                stack.addArrangedSubview(label)
+                stack.addArrangedSubview(bodyView(text))
             case .code(let text):
                 stack.addArrangedSubview(codeView(text))
             case .image(let name):
@@ -223,6 +218,9 @@ enum GuideSheet {
         container.layer.cornerRadius = 10
         container.clipsToBounds = true
 
+        // A row is a button, so its labels stay plain: making them selectable
+        // would put a text-selection drag in competition with the tap that
+        // starts the download.
         let titleLabel = UILabel()
         titleLabel.text = title
         titleLabel.font = .preferredFont(forTextStyle: .body)
@@ -318,6 +316,30 @@ enum GuideSheet {
         }
     }
 
+    /// Body text, selectable.
+    ///
+    /// A `UITextView` rather than a `UILabel` because the guide is something a
+    /// user copies out of — the Shortcut has to be built by hand in another app,
+    /// and the action names, the field names and the steps are all things they
+    /// will want on the clipboard. Not scrolling, so a drag inside it selects
+    /// text and a drag outside it scrolls the sheet.
+    private static func bodyView(_ text: String) -> UITextView {
+        let view = UITextView()
+        view.text = text
+        view.font = .preferredFont(forTextStyle: .subheadline)
+        view.adjustsFontForContentSizeCategory = true
+        view.textColor = .secondaryLabel
+        view.backgroundColor = .clear
+        view.isEditable = false
+        view.isScrollEnabled = false
+        view.isSelectable = true
+        view.dataDetectorTypes = []
+        view.textContainerInset = .zero
+        view.textContainer.lineFragmentPadding = 0
+        view.setContentCompressionResistancePriority(.required, for: .vertical)
+        return view
+    }
+
     /// Bundle images at the sheet's width, keeping their aspect ratio.
     ///
     /// `UIImageView` in an arranged subview has no intrinsic width, so the width
@@ -328,7 +350,13 @@ enum GuideSheet {
     private static func imageView(_ name: String) -> UIView? {
         guard let image = UIImage.pusher(named: name) else { return nil }
 
-        let rounded = UIGraphicsImageRenderer(size: image.size).image { _ in
+        // The renderer's format is taken from the image rather than left at its
+        // default: the default follows the screen, so a @3x picture on a @2x
+        // device would be redrawn at @2x and lose detail for no reason.
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = image.scale
+        format.opaque = false
+        let rounded = UIGraphicsImageRenderer(size: image.size, format: format).image { _ in
             let rect = CGRect(origin: .zero, size: image.size)
             let radius = image.size.height * 0.045
             UIBezierPath(roundedRect: rect, cornerRadius: radius).addClip()
@@ -341,16 +369,28 @@ enum GuideSheet {
         view.clipsToBounds = true
         view.isAccessibilityElement = true
         view.accessibilityLabel = name
-        // Height follows from the width the stack gives it.
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        // The height has to be tied to the width. `scaleAspectFit` only decides
+        // how the picture is drawn inside the view — the view still claims the
+        // image's own height, so a 670pt-wide picture in a 335pt column was laid
+        // out twice as tall as it drew, with the excess showing as blank space
+        // above and below. The ratio comes from the image rather than from a
+        // number here, so replacing the picture needs no change in this file.
+        if rounded.size.width > 0 {
+            view.heightAnchor.constraint(
+                equalTo: view.widthAnchor,
+                multiplier: rounded.size.height / rounded.size.width
+            ).isActive = true
+        }
         return view
     }
 
     /// A monospaced, non-scrolling text view: the text wraps, the view grows.
     ///
-    /// Not selectable, so a drag scrolls the sheet rather than starting a text
-    /// selection — the block is there to be read, and the copy button is the way
-    /// to take the API elsewhere.
+    /// Selectable: a field list is something a user types into another app, and
+    /// the guide that has no copy-prompt button — the Shortcut one — is exactly
+    /// the one whose block is a list of names to reproduce by hand.
     private static func codeView(_ text: String) -> UITextView {
         let view = UITextView()
         view.text = text
@@ -359,7 +399,7 @@ enum GuideSheet {
         view.backgroundColor = .secondarySystemGroupedBackground
         view.layer.cornerRadius = 10
         view.isEditable = false
-        view.isSelectable = false
+        view.isSelectable = true
         view.isScrollEnabled = false
         view.textContainerInset = UIEdgeInsets(top: 12, left: 10, bottom: 12, right: 10)
         view.textContainer.lineFragmentPadding = 0
