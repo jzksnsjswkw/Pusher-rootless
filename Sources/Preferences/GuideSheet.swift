@@ -25,6 +25,24 @@ enum GuideSheet {
         /// read. Kept in the bundle rather than drawn in code because it is a
         /// picture of another app's interface, which changes without notice.
         case image(String)
+        /// A row that does something when tapped, with a line of explanation.
+        ///
+        /// The sheet has no way to report progress otherwise: fetching the
+        /// example Shortcut is a network request, and a button that appears to do
+        /// nothing for a second is a button the user presses twice.
+        case action(title: String, detail: String, run: (ActionHost) -> Void)
+    }
+
+    /// What an ``Block/action(title:detail:run:)`` row is given to work with.
+    ///
+    /// A protocol rather than the controller itself: the row needs to show
+    /// progress and an error, and nothing else, and saying so keeps the block
+    /// from quietly reaching into the sheet's view hierarchy.
+    protocol ActionHost: AnyObject {
+        /// Replaces the row's detail text, and disables it while busy.
+        func setActionBusy(_ busy: Bool, detail: String?)
+        /// Puts a message in front of the user, or reports success.
+        func presentActionAlert(title: String, message: String, share: URL?)
     }
 
     // MARK: - The copy action
@@ -34,6 +52,9 @@ enum GuideSheet {
     /// Retained as an associated object on the presented controller: a bar button
     /// item holds its target weakly, so a target created inside `present` would
     /// be released before anyone could tap it.
+    /// Rows and their targets, for the lifetime of the sheet.
+    private static var retained: [AnyObject] = []
+
     private final class Target: NSObject {
         weak var host: UIViewController?
         var prompt: ((String) -> String)?
@@ -116,6 +137,9 @@ enum GuideSheet {
         stack.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(stack)
 
+        retained.removeAll()
+        var actionRows: [RowHost] = []
+
         for block in blocks {
             switch block {
             case .heading(let text):
@@ -137,6 +161,10 @@ enum GuideSheet {
                 if let view = imageView(name) {
                     stack.addArrangedSubview(view)
                 }
+            case .action(let title, let detail, let run):
+                let row = actionView(title, detail, run)
+                actionRows.append(row)
+                stack.addArrangedSubview(row.container)
             }
         }
 
@@ -167,6 +195,10 @@ enum GuideSheet {
             ),
         ])
 
+        // The rows present their own alerts and share sheets, so they need the
+        // controller — which does not exist until the container is built.
+        actionRows.forEach { $0.attach(to: host) }
+
         // The buttons outlive this method's scope only because of this.
         objc_setAssociatedObject(host, &AssociatedKeys.target, target,
                                  .OBJC_ASSOCIATION_RETAIN)
@@ -178,7 +210,115 @@ enum GuideSheet {
         controller.present(navigation, animated: true)
     }
 
-    /// A bundle image at the sheet's width, keeping its aspect ratio.
+    /// A tappable row: a title, a line of explanation, and a chevron.
+    ///
+    /// Built from a `UIButton` in a container so that the title and the
+    /// explanation can wrap independently — a button's own label will not show
+    /// two lines at different weights.
+    private static func actionView(
+        _ title: String, _ detail: String, _ run: @escaping (ActionHost) -> Void
+    ) -> RowHost {
+        let container = UIView()
+        container.backgroundColor = .secondarySystemGroupedBackground
+        container.layer.cornerRadius = 10
+        container.clipsToBounds = true
+
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = .preferredFont(forTextStyle: .body)
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.numberOfLines = 0
+
+        let detailLabel = UILabel()
+        detailLabel.text = detail
+        detailLabel.font = .preferredFont(forTextStyle: .footnote)
+        detailLabel.adjustsFontForContentSizeCategory = true
+        detailLabel.textColor = .secondaryLabel
+        detailLabel.numberOfLines = 0
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, detailLabel])
+        stack.axis = .vertical
+        stack.spacing = 2
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(stack)
+
+        let spinner = UIActivityIndicatorView(style: .medium)
+        spinner.hidesWhenStopped = true
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(spinner)
+
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
+            stack.trailingAnchor.constraint(equalTo: spinner.leadingAnchor, constant: -8),
+            spinner.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            spinner.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
+
+        let rows = RowHost(container: container, detailLabel: detailLabel,
+                           spinner: spinner, run: run)
+        container.addGestureRecognizer(
+            UITapGestureRecognizer(target: rows, action: #selector(RowHost.tapped))
+        )
+        retained.append(rows)
+        return rows
+    }
+
+    /// Holds a row's views and runs its action.
+    ///
+    /// Retained by the sheet: a gesture recognizer holds its target weakly, so a
+    /// target created in `actionView` would be released before the tap.
+    fileprivate final class RowHost: NSObject, ActionHost {
+        let container: UIView
+        private let detailLabel: UILabel
+        private let spinner: UIActivityIndicatorView
+        private let run: (ActionHost) -> Void
+        private weak var host: UIViewController?
+        private var originalDetail: String?
+
+        init(container: UIView, detailLabel: UILabel,
+             spinner: UIActivityIndicatorView, run: @escaping (ActionHost) -> Void) {
+            self.container = container
+            self.detailLabel = detailLabel
+            self.spinner = spinner
+            self.run = run
+            self.originalDetail = detailLabel.text
+        }
+
+        func attach(to controller: UIViewController) { host = controller }
+
+        @objc func tapped() {
+            run(self)
+        }
+
+        func setActionBusy(_ busy: Bool, detail: String?) {
+            container.isUserInteractionEnabled = !busy
+            if busy { spinner.startAnimating() } else { spinner.stopAnimating() }
+            detailLabel.text = detail ?? originalDetail
+        }
+
+        func presentActionAlert(title: String, message: String, share: URL?) {
+            guard let host else { return }
+            let alert = UIAlertController(
+                title: title, message: message, preferredStyle: .alert
+            )
+            if let share {
+                alert.addAction(UIAlertAction(title: "Open".localized, style: .default) { _ in
+                    // The Shortcuts app opens its import screen for a signed
+                    // file; the share sheet is the way to hand it one.
+                    let sheet = UIActivityViewController(
+                        activityItems: [share], applicationActivities: nil
+                    )
+                    host.present(sheet, animated: true)
+                })
+            }
+            alert.addAction(UIAlertAction(title: "Close".localized, style: .cancel))
+            host.present(alert, animated: true)
+        }
+    }
+
+    /// Bundle images at the sheet's width, keeping their aspect ratio.
     ///
     /// `UIImageView` in an arranged subview has no intrinsic width, so the width
     /// comes from the stack and the height from the picture's own ratio. The

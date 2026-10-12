@@ -18,6 +18,16 @@ enum ShortcutGuide {
             from: controller,
             title: "Using a Shortcut".localized,
             blocks: [
+                .heading("The example".localized),
+                .text(("The Shortcut below already does everything this page "
+                    + "describes. Add it, then point this instance at it.").localized),
+                .action(
+                    title: "Get the example Shortcut".localized,
+                    detail: ("Signed by Apple on demand, then opened for you to "
+                        + "add.").localized,
+                    run: fetchExample
+                ),
+
                 .heading("How it runs".localized),
                 .text(("Pusher passes the notification as a dictionary and runs "
                     + "the Shortcut in the background. Nothing else is needed "
@@ -44,6 +54,35 @@ enum ShortcutGuide {
                     + "step above is present.").localized),
             ]
         )
+    }
+
+    /// Fetches the example Shortcut and offers it to the Shortcuts app.
+    ///
+    /// The file in the bundle is unsigned, because iOS cannot sign one and a
+    /// signature expires in about a year. It is signed when asked for, which is
+    /// also why this needs the network and why the row says so.
+    private static func fetchExample(_ host: GuideSheet.ActionHost) {
+        host.setActionBusy(true, detail: "Signing…".localized)
+        ShortcutSigner.signedExample { result in
+            switch result {
+            case .success(let url):
+                host.setActionBusy(false, detail: nil)
+                host.presentActionAlert(
+                    title: "Shortcut Ready".localized,
+                    message: ("Open it to add it to your Shortcuts. The Shortcuts "
+                        + "app will ask before importing, because it did not come "
+                        + "from Apple's gallery.").localized,
+                    share: url
+                )
+            case .failure(let error):
+                host.setActionBusy(false, detail: nil)
+                host.presentActionAlert(
+                    title: "Could Not Sign".localized,
+                    message: error.localizedDescription,
+                    share: nil
+                )
+            }
+        }
     }
 
     /// The field list, in the shape the script guide uses: the keys are
