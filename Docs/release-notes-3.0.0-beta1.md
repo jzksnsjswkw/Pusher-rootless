@@ -1,74 +1,35 @@
 # Pusher 3.0.0 beta 1
 
-A rewrite, not an update. The pipeline, the settings and the stored configuration
-are all new.
+**这是一个重写版本，不是升级。** 建议先记下你要用到的 token 再更新。
 
-## ⚠️ Your existing configuration will not be read
+## ⚠️ 旧版配置不会被读取
 
-**2.x settings are not migrated.** After upgrading, Pusher starts with no
-services configured, and they have to be added again.
+从 2.x 升级后，**Pusher 里没有任何服务，需要重新添加**。
 
-This is deliberate rather than an oversight. 2.x kept one configuration per
-built-in service (`BuiltInServices`, a dictionary keyed by service name) and the
-same shape for custom ones. 3.0 has no such container: a service *type* and a
-configured *instance* are different things, and the list of instances is an
-ordered array — which is what makes it possible to add Bark twice, or to give two
-Pushover accounts different app filters.
+旧版是「每个服务存一份配置」，新版是「一个可以自由添加的实例列表」——正是这个改变让你现在能把 Bark 加两次、或者给两个 Pushover 账号设不同的应用过滤。两者之间没有能自动对应的关系，硬做迁移只会得到一份谁也没写过的配置。
 
-```
-2.x                             3.0
-BuiltInServices                  Services          an array of instances
-  Bark     → { key, … }            ├─ Bark      { id, type, name, … }
-  Pushover → { token, … }          ├─ Bark      { id, type, name, … }
-CustomServices                   └─ Pushover  { id, type, name, … }
-  webhook  → { url, … }          CustomServices    an array of definitions
-                                   └─ webhook { id, name, script, … }
-```
+**升级前请记下 token**，它们在 2.x 里每个服务的页面上可见，新版读不到。
 
-A migration would have to guess which of the new concepts each old entry maps to,
-and the result would be a configuration nobody wrote. Starting clean is the
-honest version of the same outcome.
+## 新功能
 
-**Note down your tokens before upgrading.** They are visible in 2.x under each
-service, and are not readable from the new build.
+**同一个服务可以加多个。** 每个实例有自己的名称、配置、应用过滤、设备条件和日志。拖动排序决定推送顺序。
 
-## What is new
+**自定义服务分成两层。** 「服务」是定义——一段 JavaScript 决定发什么；「实例」是使用它的一个目标。一个脚本可以给多个实例用，改一次全都更新。
 
-**Services are instances.** Any service type can be added any number of times,
-each with its own name, configuration, app filter, device conditions and log.
-Drag to reorder; that order is the order they are tried.
+**JavaScript 服务。** 用 `fetch`、`localStorage` 和 `bullet` 对象自己拼请求。可以设置运行方式、超时和响应大小上限。
 
-**Custom services are two things now.** A *service* is a definition — a
-JavaScript script that decides what to send. An *instance* is a configured
-destination that uses one. One script can back several instances, and editing it
-changes all of them.
+**JavaScript 钩子（每个实例两个）。** 一个在收到通知时触发，一个在应用/设备筛选之后触发，都能改写或丢弃通知。钩子不能发送，只负责筛选。
 
-**JavaScript services.** Write the request yourself with `fetch`, `localStorage`
-and a `bullet` object holding the notification. Set per-definition defaults for
-thread and context isolation, timeout and response size limit.
+**快捷指令服务。** 静默运行你的快捷指令，把通知作为词典传进去。实例页有使用说明，并提供一个现成的快捷指令。
 
-**JavaScript hooks, per instance.** Two optional scripts — one when the
-notification arrives, one after the app and device filters — that can rewrite it
-or drop it. A hook cannot send; it decides.
+**导入导出。** 服务和实例可以导出成 JSON，在另一台设备导入。
 
-**Shortcut services.** Run one of your Shortcuts, silently, with the notification
-passed in as a dictionary. A guide on the instance page explains the one step
-that is easy to miss, and offers a ready-made Shortcut.
+## 系统要求
 
-**Import and export.** Services and instances can be written to plain JSON and
-read back on another device, with or without the definitions they use.
+iOS 15 或更高。支持 rootless 和 roothide。**不支持有根（iOS 14）**。
 
-## Requirements
+## 已知限制
 
-iOS 15 or later. Rootless and roothide jailbreaks. **Rootful (iOS 14) is not
-supported** — the Swift toolchain this is built with cannot target the 14.x SDK,
-and rootless is what the supported devices run.
-
-## Known limitations
-
-- 2.x configuration is not read (above)
-- A Shortcut service cannot carry the notification's icon or image into a run
-  unless the instance asks for them; the payload gets large quickly
-- The example Shortcut's bundled signature expires in November 2027, after which
-  the app asks a signing service for a fresh one. That service is behind
-  Cloudflare and is unreachable from some networks.
+- **不读旧版配置**（见上）
+- 快捷指令服务默认不带图标和图片，开启后数据量会明显变大
+- 内置的示例快捷指令签名 2027 年 11 月到期，之后需要联网重新签名
