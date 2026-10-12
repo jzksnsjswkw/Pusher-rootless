@@ -23,8 +23,8 @@ enum ShortcutGuide {
                     + "describes. Add it, then point this instance at it.").localized),
                 .action(
                     title: "Get the example Shortcut".localized,
-                    detail: ("Signed by Apple on demand, then opened for you to "
-                        + "add.").localized,
+                    detail: ("Opened for you to add. Only needs signing once the "
+                        + "copy in Pusher has expired.").localized,
                     run: fetchExample
                 ),
 

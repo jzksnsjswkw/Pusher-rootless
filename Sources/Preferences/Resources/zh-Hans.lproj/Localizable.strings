@@ -532,9 +532,10 @@
 "The example" = "示例";
 "The Shortcut below already does everything this page describes. Add it, then point this instance at it." = "下面这个快捷指令已经做好了本页说明的一切。添加它，然后让本实例指向它。";
 "Get the example Shortcut" = "获取示例快捷指令";
-"Signed by Apple on demand, then opened for you to add." = "按需由 Apple 签名，然后打开供你添加。";
+
 "Signing…" = "签名中…";
 "Shortcut Ready" = "快捷指令已就绪";
 "Open it to add it to your Shortcuts. The Shortcuts app will ask before importing, because it did not come from Apple's gallery." = "打开即可加入你的快捷指令。导入前系统会询问——因为它不是来自 Apple 的图库。";
 "Could Not Sign" = "签名失败";
 "Open" = "打开";
+"Opened for you to add. Only needs signing once the copy in Pusher has expired." = "打开即可添加。仅在 Pusher 内置的那份过期后才需要联网签名。";
