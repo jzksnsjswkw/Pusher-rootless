@@ -2,8 +2,16 @@ name: Release
 
 on:
   release:
+    # `published`, not `created`. The `created` action fires when a *draft* is
+    # saved; a release made straight to published — which is what `gh release
+    # create` does, and what the web form does unless a draft is saved first —
+    # only fires `published`. Listening for `created` alone is why the 3.0.0 beta
+    # release produced no build.
     types:
-      - created
+      - published
+  # So a workflow edit can be tried without cutting a release to try it with.
+  # The build runs; the upload step is skipped because there is no tag.
+  workflow_dispatch:
 
 jobs:
   build:
@@ -17,8 +25,10 @@ jobs:
 
     - name: Check cache
       id: verify-cache
+      # `::set-output` was retired in 2023; the replacement is a line on stdout
+      # written to the file named by $GITHUB_OUTPUT.
       run: |
-        echo "::set-output name=heads::`git ls-remote https://github.com/roothide/theos | head -n 1 | cut -f 1`-`git ls-remote https://github.com/xybp888/iOS-SDKs | head -n 1 | cut -f 1`"
+        echo "heads=`git ls-remote https://github.com/roothide/theos | head -n 1 | cut -f 1`-`git ls-remote https://github.com/xybp888/iOS-SDKs | head -n 1 | cut -f 1`" >> $GITHUB_OUTPUT
 
     - name: Use cache
       id: cache
@@ -49,22 +59,22 @@ jobs:
         cp -R ./.theos/obj/AltList.framework $THEOS/lib/iphone/roothide/
         cd ..
 
-    - name: Patch PSSpecifier (idempotent)
-      run: |
-        grep -q "SEL setter;" $THEOS/vendor/include/Preferences/PSSpecifier.h \
-          || sed -i '' 's/SEL action;/SEL action;\n\tSEL setter;\n\tSEL getter;/' $THEOS/vendor/include/Preferences/PSSpecifier.h
-
     - name: remove old package
       run: |
         rm -rf packages
 
+    # `<scheme> make clean` rather than `make clean`: the clean target itself
+    # depends on the scheme, and cleaning without one leaves the previous
+    # scheme's staged files in place.
     - name: Build package - rootless
       run: |
-        make clean && THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 make package
+        THEOS_PACKAGE_SCHEME=rootless make clean
+        THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 make package
 
     - name: Build package - roothide
       run: |
-        make clean && THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1 make package
+        THEOS_PACKAGE_SCHEME=roothide make clean
+        THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1 make package
 
     - name: Release
       uses: softprops/action-gh-release@v2
