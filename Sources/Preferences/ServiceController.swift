@@ -119,37 +119,20 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         seedCipherSettings()
     }
 
-    /// Colours an encryption footer red when the key is the wrong length.
+    /// Colours the encryption footer red when the key is the wrong length.
     ///
-    /// The footer is the framework's own label, made when the group cell is built,
-    /// so the colour has to be applied to that label rather than through a
-    /// specifier — and the cell it belongs to is found by the paragraph this page
-    /// put in it, which is unique and does not depend on working out which row a
-    /// group's footer is drawn on.
-    public override func tableView(
-        _ tableView: UITableView, willDisplay cell: UITableViewCell,
-        forRowAt indexPath: IndexPath
-    ) {
-        // No `super` call: `PSListController` does not implement this delegate
-        // method, so forwarding to it raises `doesNotRecognizeSelector` and takes
-        // the page down as it draws its first cell. The other page in this project
-        // that uses this hook does not call it either.
-        let notes = ServiceSpecifierBuilders.cipherNotes()
+    /// Asked as each cell is built, so reloading the encryption group is enough to
+    /// have the colour follow the key — and the caption that names the group is
+    /// what says which cell this is, since the footer's own text is the
+    /// framework's to lay out.
+    public override func footerColour(for specifier: PSSpecifier) -> UIColor? {
+        guard specifier.cellType == .groupCell,
+              specifier.name == "Encryption".localized
+        else { return nil }
         let problem = ServiceSpecifierBuilders.cipherProblem(
             stored: PrefsStore.instance(serviceInstanceID)
         )
-        let colour: UIColor = problem == nil ? .secondaryLabel : .systemRed
-
-        func recolour(_ view: UIView) -> Bool {
-            if let label = view as? UILabel, label.text == notes {
-                label.textColor = colour
-                return true
-            }
-            var found = false
-            for subview in view.subviews where recolour(subview) { found = true }
-            return found
-        }
-        _ = recolour(cell)
+        return problem == nil ? .secondaryLabel : .systemRed
     }
 
     /// The Shortcut guide, presented over this page.
@@ -253,10 +236,26 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             }
             guard previous != isOn else { return }
             showsCipherSettings = isOn
+        case BarkPrefKey.cipherKey, BarkPrefKey.cipherAlgorithm:
+            // The rows do not move, but the footer's verdict does: a key of the
+            // wrong length for the chosen algorithm is the one thing this page can
+            // tell the user before a push is sent and decryption fails. Reloading
+            // the group rebuilds its cell, which is when the colour is decided.
+            reloadCipherFooter()
+            return
         default:
             return
         }
         installSpecifiers(buildSpecifiers())
+    }
+
+    /// Redraws the encryption group so its footer's colour is decided again.
+    private func reloadCipherFooter() {
+        guard let group = (super.specifiers ?? [])
+            .compactMap({ $0 as? PSSpecifier })
+            .first(where: { $0.cellType == .groupCell && $0.name == "Encryption".localized })
+        else { return }
+        reloadSpecifier(group, animated: false)
     }
 
     /// A switch's value, which arrives as a number.
