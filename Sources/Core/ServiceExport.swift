@@ -151,9 +151,15 @@ public struct ServiceExport {
 /// `localStorage` would carry one device's memory of a conversation into
 /// another's.
 public enum ServiceExportFilter {
-    /// Instance keys that describe this device: identity, logs, caches.
+    /// Instance settings that describe this device rather than the service:
+    /// caches, tokens, and the state an instance accumulates by running.
+    ///
+    /// The instance's *identity* is not in this list and does not need to be.
+    /// Settings are read from ``PrefKey/instanceConfig``, which does not contain
+    /// the identity, so a key called `id` here is a service's own — Bark's is a
+    /// push identifier, and filtering it would silently drop a setting the user
+    /// had filled in.
     static let instanceKeys: Set<String> = [
-        PrefKey.instanceID,          // a new instance gets a new id
         PrefKey.customApps,          // per-app overrides are re-added by hand
         PrefKey.scriptStorage,       // one device's memory, not a setting
         PrefKey.hookStorage,

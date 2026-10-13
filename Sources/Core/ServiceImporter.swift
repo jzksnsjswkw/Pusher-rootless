@@ -147,11 +147,6 @@ public enum ServiceImporter {
     /// says: they are written from the resolution above, so a document cannot
     /// point an instance at the exporting device's service or rename it over a
     /// name clash that was already avoided.
-    private static let nonTransferableKeys: Set<String> = [
-        PrefKey.instanceID, PrefKey.instanceType, PrefKey.instanceName,
-        PrefKey.serviceEnabled,
-    ]
-
     /// Writes one instance's settings onto the instance that was just created.
     private static func write(_ instance: ServiceExport.ExportedInstance, to id: String) {
         PrefsStore.updateInstance(id) { object in
@@ -160,8 +155,7 @@ public enum ServiceImporter {
             // mention keeps what the type would have given it.
             if let settings = instance.settings {
                 for (key, value) in settings
-                where ServiceExportFilter.shouldExportInstanceKey(key)
-                    && !nonTransferableKeys.contains(key) {
+                where ServiceExportFilter.shouldExportInstanceKey(key) {
                     object[key] = value
                 }
             }
@@ -176,10 +170,9 @@ public enum ServiceImporter {
             if let values = instance.values, !values.isEmpty {
                 object[PrefKey.configValues] = values
             }
-            // `enabled` is identity, not a setting: written through the store's
-            // own setter rather than through a settings closure, which drops
-            // identity keys on purpose (see `ServiceInstanceStore.update`).
         }
+        // `enabled` is identity, so it is written through the store's own setter
+        // rather than through a settings closure — which has no way to reach it.
         ServiceInstanceStore.setEnabled(id, instance.enabled)
     }
 
