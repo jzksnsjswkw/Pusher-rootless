@@ -18,11 +18,14 @@ public class ServiceListController: PlainViewController, ServiceTransferHost {
 
     /// Every instance this list shows, in order.
     private var instances: [ServiceInstance] = []
-    /// Icons, keyed by instance type (not by instance — two instances of one
-    /// service share their artwork).
+    /// Artwork, keyed by instance type — not by instance, because two instances
+    /// of one service share it.
+    ///
+    /// Cached rather than resolved per row: `ServiceArtwork.image` reads the
+    /// definition store and the icon files, and a table asks for its rows far
+    /// more often than the set of types changes. Cleared in `loadInstances`,
+    /// which is the only thing that can change what the types are.
     private var icons: [String: UIImage] = [:]
-    /// One logo per row, in the table's own order.
-    private var logos: [UIImage?] = []
     private var loadedControllers: [String: ServiceController] = [:]
 
     private var servicesTable: UITableView!
@@ -116,9 +119,22 @@ public class ServiceListController: PlainViewController, ServiceTransferHost {
         // service's own logo when it has one — and never from the instance:
         // a per-instance icon would break the one thing the icon is for, and two
         // instances of one service would stop looking like the same kind of thing.
-        logos = instances.map { ServiceArtwork.image(forType: $0.type) }
+        // The type set may have changed — a definition added, deleted or
+        // renamed — so the artwork is re-read here and not per row.
+        icons.removeAll()
         servicesTable.reloadData()
         updateTransferMenu()
+    }
+
+    /// The artwork for a service type, read once and kept.
+    ///
+    /// Keyed by type rather than by row, which is what makes it survive a drag:
+    /// the rows are reordered and this does not have to be.
+    private func artwork(forType type: String) -> UIImage? {
+        if let cached = icons[type] { return cached }
+        let image = ServiceArtwork.image(forType: type)
+        if let image { icons[type] = image }
+        return image
     }
 
     /// The instance shown at one row.
@@ -329,9 +345,7 @@ extension ServiceListController: UITableViewDataSource, UITableViewDelegate {
             content.secondaryText = "Service deleted".localized
             content.secondaryTextProperties.color = .systemRed
         }
-        content.image = indexPath.row < logos.count
-            ? logos[indexPath.row]
-            : icons[instance.type]
+        content.image = artwork(forType: instance.type)
         content.imageProperties.maximumSize = CGSize(width: 29, height: 29)
         cell.contentConfiguration = content
         cell.accessoryType = .disclosureIndicator
