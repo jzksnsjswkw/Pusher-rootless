@@ -37,22 +37,6 @@ open class ListController: PSListController, TintableController {
     open override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = super.tableView(tableView, cellForRowAt: indexPath)
 
-        // Colouring a group's footer has to happen here rather than in
-        // `willDisplayCell` — `PSListController` does not implement that delegate
-        // method, and forwarding to it raises `doesNotRecognizeSelector`. A
-        // subclass that needs the colour says how through `footerColour(for:)`.
-        if let specifier = specifierForRow(indexPath),
-           let colour = footerColour(for: specifier) {
-            // Recursively: a group cell's footer sits in the cell's content view
-            // rather than as a direct subview, and the depth is the framework's to
-            // change.
-            func recolour(_ view: UIView) {
-                if let label = view as? UILabel { label.textColor = colour }
-                view.subviews.forEach(recolour)
-            }
-            recolour(cell)
-        }
-
         guard let cell = cell as? PSTableCell else { return cell }
 
         if cell.type == .linkCell, let iconView = cell.iconImageView(), let icon = iconView.image {
@@ -218,11 +202,28 @@ open class ListController: PSListController, TintableController {
         return specifiers
     }
 
-    /// The colour a specifier's footer should be drawn in, or `nil` to leave it.
+    /// The colour a section's footer should be drawn in, or `nil` to leave it.
     ///
-    /// Asked on every cell build, so a page that wants a footer to change colour
-    /// only has to reload the row it belongs to.
-    open func footerColour(for specifier: PSSpecifier) -> UIColor? { nil }
+    /// A group's explanation is not a cell — it is the section's footer view, a
+    /// `UITableViewHeaderFooterView` the framework builds — so it is reached here
+    /// rather than through the cell hooks. `viewForFooterInSection` is a delegate
+    /// method the framework does implement; `willDisplayCell` is one it does not,
+    /// and forwarding to that closed the page.
+    open func footerColour(forSection section: Int) -> UIColor? { nil }
+
+    open override func tableView(
+        _ tableView: UITableView, viewForFooterInSection section: Int
+    ) -> UIView? {
+        let view = super.tableView(tableView, viewForFooterInSection: section)
+        guard let view, let colour = footerColour(forSection: section) else { return view }
+
+        func recolour(_ subview: UIView) {
+            if let label = subview as? UILabel { label.textColor = colour }
+            subview.subviews.forEach(recolour)
+        }
+        recolour(view)
+        return view
+    }
 
     /// The specifier behind a table row.
     ///

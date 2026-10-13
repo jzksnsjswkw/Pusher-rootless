@@ -119,15 +119,15 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         seedCipherSettings()
     }
 
-    /// Colours the encryption footer red when the key is the wrong length.
+    /// Colours the encryption section's footer red when the key is wrong.
     ///
-    /// Asked as each cell is built, so reloading the encryption group is enough to
-    /// have the colour follow the key — and the caption that names the group is
-    /// what says which cell this is, since the footer's own text is the
-    /// framework's to lay out.
-    public override func footerColour(for specifier: PSSpecifier) -> UIColor? {
-        guard specifier.cellType == .groupCell,
-              specifier.name == "Encryption".localized
+    /// The section is found by the group cell that heads it, so the encryption
+    /// group can move and this still follows it — nothing here depends on which
+    /// section number it happens to be.
+    public override func footerColour(forSection section: Int) -> UIColor? {
+        guard let head = specifierForSection(section),
+              head.cellType == .groupCell,
+              head.name == "Encryption".localized
         else { return nil }
         let problem = ServiceSpecifierBuilders.cipherProblem(
             stored: PrefsStore.instance(serviceInstanceID)
@@ -249,13 +249,30 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         installSpecifiers(buildSpecifiers())
     }
 
-    /// Redraws the encryption group so its footer's colour is decided again.
+    /// The group cell that heads a table section.
+    private func specifierForSection(_ section: Int) -> PSSpecifier? {
+        let rows = (super.specifiers ?? []).compactMap { $0 as? PSSpecifier }
+        var seen = -1
+        for specifier in rows where specifier.cellType == .groupCell {
+            seen += 1
+            if seen == section { return specifier }
+        }
+        return nil
+    }
+
+    /// Redraws the encryption section so its footer's colour is decided again.
     private func reloadCipherFooter() {
-        guard let group = (super.specifiers ?? [])
-            .compactMap({ $0 as? PSSpecifier })
-            .first(where: { $0.cellType == .groupCell && $0.name == "Encryption".localized })
-        else { return }
-        reloadSpecifier(group, animated: false)
+        let rows = (super.specifiers ?? []).compactMap { $0 as? PSSpecifier }
+        var seen = -1
+        for specifier in rows where specifier.cellType == .groupCell {
+            seen += 1
+            if specifier.name == "Encryption".localized {
+                // Reloading the group is what rebuilds its footer view: the
+                // framework asks for it again on the next layout pass.
+                table?.reloadSections(IndexSet(integer: seen), with: .none)
+                return
+            }
+        }
     }
 
     /// A switch's value, which arrives as a number.
