@@ -66,8 +66,7 @@ public enum BarkService: PushService {
             algorithm: BarkCipher.Algorithm(rawValue: raw.string(BarkPrefKey.cipherAlgorithm) ?? "")
                 ?? .aes128,
             mode: BarkCipher.Mode(rawValue: raw.string(BarkPrefKey.cipherMode) ?? "") ?? .cbc,
-            key: raw.string(BarkPrefKey.cipherKey) ?? "",
-            iv: raw.string(BarkPrefKey.cipherIV) ?? ""
+            key: raw.string(BarkPrefKey.cipherKey) ?? ""
         )
     }
 
@@ -139,13 +138,13 @@ enum BarkPrefKey {
     static let markdown = "markdown"
 
     // Encryption is a group of its own, not a parameter: the ciphertext and the
-    // IV are what the encryption produces, and what the user configures is the
-    // algorithm, the mode and the two secrets.
+    // IV are what the encryption produces. The IV is not configured at all — the
+    // app has no field for one and reads it from the request, so it is generated
+    // per push; see `BarkCipher.encrypt`.
     static let cipherEnabled = "cipherEnabled"
     static let cipherAlgorithm = "cipherAlgorithm"
     static let cipherMode = "cipherMode"
     static let cipherKey = "cipherKey"
-    static let cipherIV = "cipherIV"
     static let icon = "icon"
     static let copy = "copy"
     static let level = "level"

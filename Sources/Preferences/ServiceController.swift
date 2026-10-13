@@ -160,14 +160,12 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     /// again — which is exactly what a "needs a return visit" report means.
     private var showsImageSizing: Bool?
 
-    /// The same, for the encryption fields: whether the page as built shows
-    /// them, and which mode it was built for.
+    /// The same, for the encryption fields: whether the page as built shows them.
     ///
     /// Seeded rather than left empty for the same reason: an unseeded value makes
     /// the first tap only record the state, so the fields would not appear until
     /// the page was entered again.
     private var showsCipherSettings: Bool?
-    private var cipherMode: String?
 
     deinit {
         CFNotificationCenterRemoveEveryObserver(
@@ -184,12 +182,10 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         )
     }
 
-    /// Records whether the page as built shows the encryption fields, and for
-    /// which mode — the IV row's presence depends on it.
+    /// Records whether the page as built shows the encryption fields.
     private func seedCipherSettings() {
         let stored = PrefsStore.instance(serviceInstanceID)
         showsCipherSettings = stored.bool(BarkPrefKey.cipherEnabled, default: false)
-        cipherMode = stored.string(BarkPrefKey.cipherMode) ?? BarkCipher.Mode.cbc.rawValue
     }
 
     /// Rebuilds the page when "Include Image" has been switched.
@@ -203,10 +199,10 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     ///   - value: what it changed to, taken from the write itself. Anything but
     ///     a switch cell's boolean (a cleared field, say) reads as off.
     @objc func cellDidChange(_ key: String, to value: Any?) {
-        // Three switches decide whether rows below them are shown: the image
-        // toggle governs the sizing rows, and the encryption toggle and mode
-        // govern the encryption fields. The value arrives from the write itself,
-        // so there is no second read to fall behind.
+        // Two switches decide whether rows below them are shown: the image toggle
+        // governs the sizing rows, and the encryption toggle the encryption
+        // fields. The value arrives from the write itself, so there is no second
+        // read to fall behind.
         switch key {
         case PrefKey.includeImage:
             let isOn = bool(value)
@@ -224,15 +220,6 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             }
             guard previous != isOn else { return }
             showsCipherSettings = isOn
-        case BarkPrefKey.cipherMode:
-            // ECB has no IV to chain from, so the field goes away with it — and
-            // comes back when CBC or GCM is chosen.
-            let mode = value as? String ?? ""
-            guard let previous = cipherMode, previous != mode else {
-                if cipherMode == nil { cipherMode = mode }
-                return
-            }
-            cipherMode = mode
         default:
             return
         }

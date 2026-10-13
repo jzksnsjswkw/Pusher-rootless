@@ -552,9 +552,11 @@ public final class ServiceSpecifierBuilders: NSObject {
     /// The Bark encryption settings, shown only when the switch is on.
     ///
     /// Off, the page is the parameter list and nothing else, which is the state
-    /// most instances are in. On, the four fields that decide how the request is
-    /// encrypted appear — and the IV only for the two modes that use one, since
-    /// ECB encrypts each block independently and has nothing to chain from.
+    /// most instances are in. On, the three fields that decide how the request is
+    /// encrypted appear. There is no IV field and no mode-dependent row: the app
+    /// has no setting for an IV either — it reads the one the request carries —
+    /// so a row here would be asking for something the phone cannot be told to
+    /// expect.
     ///
     /// The switch stores a flag rather than being inferred from whether a key is
     /// present: the two would disagree the moment someone turned encryption off
@@ -579,7 +581,6 @@ public final class ServiceSpecifierBuilders: NSObject {
         } else {
             stored = PrefsStore.instance(instanceID)
         }
-        let mode = BarkCipher.Mode(rawValue: stored.string(BarkPrefKey.cipherMode) ?? "") ?? .cbc
 
         // Off, the switch alone: an instance that does not encrypt should not read
         // as a form it left blank.
@@ -589,7 +590,7 @@ public final class ServiceSpecifierBuilders: NSObject {
                                          changeObserver: pageObserver)]
         }
 
-        var specifiers: [PSSpecifier] = [
+        let specifiers: [PSSpecifier] = [
             toggle("Encrypt", service: service, appID: appID,
                    key: BarkPrefKey.cipherEnabled, defaultValue: false,
                    changeObserver: pageObserver),
@@ -607,13 +608,6 @@ public final class ServiceSpecifierBuilders: NSObject {
             textField("Key", service: service, appID: appID,
                       key: BarkPrefKey.cipherKey, noAutoCorrect: true),
         ]
-        if mode.ivLength > 0 {
-            specifiers.append(textField("IV", service: service, appID: appID,
-                                        key: BarkPrefKey.cipherIV, noAutoCorrect: true))
-        }
-
-        // The explanation goes on the switch, so the group reads as one decision
-        // rather than four fields with a paragraph under them.
         return [cipherHead()] + specifiers
     }
 
@@ -635,7 +629,7 @@ public final class ServiceSpecifierBuilders: NSObject {
         + "\n"
         + "Key length: AES128 needs 16 characters, AES192 24, AES256 32."
         + "\n"
-        + "IV length: CBC needs 16 characters, GCM 12. ECB does not use one."
+        + "The IV is generated for each push and sent with it."
         + "\n"
         + "A key of the wrong length leaves the request unencrypted rather than "
         + "failing it, so the push still arrives."

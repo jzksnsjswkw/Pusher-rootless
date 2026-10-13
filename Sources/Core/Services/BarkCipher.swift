@@ -77,7 +77,6 @@ enum BarkCipher {
         var algorithm: Algorithm
         var mode: Mode
         var key: String
-        var iv: String
 
         /// Whether anything is set, which is what the enable switch stores.
         ///
@@ -88,13 +87,7 @@ enum BarkCipher {
 
         /// What is wrong with the settings, or `nil` when they are usable.
         func problem() -> Failure? {
-            guard key.count == algorithm.keyLength else {
-                return .keyLength(algorithm.keyLength)
-            }
-            if mode.ivLength > 0, iv.count != mode.ivLength {
-                return .ivLength(mode.ivLength)
-            }
-            return nil
+            key.count == algorithm.keyLength ? nil : .keyLength(algorithm.keyLength)
         }
     }
 
@@ -105,12 +98,19 @@ enum BarkCipher {
     /// readable, and the app puts the decrypted dictionary in place of the body
     /// entirely — so a plaintext field beside a ciphertext one is either ignored
     /// or, worse, shown unencrypted.
+    ///
+    /// The IV is generated here, per push, rather than configured. That is not a
+    /// preference: the app's settings screen has no IV field — it was removed, and
+    /// the IV travels in the request instead, with the app taking whatever the
+    /// request carries over anything it has stored. A fixed IV would also be the
+    /// wrong thing to want: reusing one under the same key leaks where two
+    /// plaintexts agree.
     static func encrypt(json: String, settings: Settings) throws -> [String: String] {
         if let problem = settings.problem() { throw problem }
 
         let plaintext = Data(json.utf8)
         let key = Array(settings.key.utf8)
-        let iv = settings.mode.ivLength > 0 ? Array(settings.iv.utf8) : nil
+        let iv = settings.mode.ivLength > 0 ? randomIV(length: settings.mode.ivLength) : nil
 
         let ciphertext: Data
         switch settings.mode {
@@ -128,10 +128,21 @@ enum BarkCipher {
 
         var fields = ["ciphertext": ciphertext.base64EncodedString()]
         // ECB has none to send; the app derives nothing from its absence.
-        if settings.mode.ivLength > 0 {
-            fields["iv"] = settings.iv
+        if let iv {
+            fields["iv"] = String(decoding: iv, as: UTF8.self)
         }
         return fields
+    }
+
+    /// A fresh IV, as the app generates its own: lower-case hexadecimal
+    /// characters, not arbitrary bytes.
+    ///
+    /// The alphabet matters because it is what the app's own example script uses
+    /// and what its sample output contains; an IV of random bytes would have to be
+    /// transported in some encoding, and the app decodes this field as text.
+    private static func randomIV(length: Int) -> [UInt8] {
+        let alphabet = Array("0123456789abcdef".utf8)
+        return (0..<length).map { _ in alphabet[Int.random(in: 0..<alphabet.count)] }
     }
 
     // MARK: - CBC and ECB
