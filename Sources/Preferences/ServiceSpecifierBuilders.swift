@@ -598,7 +598,8 @@ public final class ServiceSpecifierBuilders: NSObject {
                     key: BarkPrefKey.cipherAlgorithm,
                     values: BarkCipher.Algorithm.allCases.map(\.rawValue),
                     titles: BarkCipher.Algorithm.allCases.map(\.rawValue),
-                    defaultValue: BarkCipher.Algorithm.aes128.rawValue),
+                    defaultValue: BarkCipher.Algorithm.aes128.rawValue,
+                    changeObserver: pageObserver),
             segment("Mode", service: service, appID: appID,
                     key: BarkPrefKey.cipherMode,
                     values: BarkCipher.Mode.allCases.map(\.rawValue),
@@ -606,16 +607,49 @@ public final class ServiceSpecifierBuilders: NSObject {
                     defaultValue: BarkCipher.Mode.cbc.rawValue,
                     changeObserver: pageObserver),
             textField("Key", service: service, appID: appID,
-                      key: BarkPrefKey.cipherKey, noAutoCorrect: true),
+                      key: BarkPrefKey.cipherKey, noAutoCorrect: true,
+                      changeObserver: pageObserver),
         ]
         return [cipherHead()] + specifiers
     }
 
     /// The encryption group, with its explanation.
+    ///
+    /// The identifier is what lets the page find this cell again to recolour its
+    /// footer when the key or the algorithm changes; without it the footer would
+    /// say the key is wrong in the ordinary colour.
+    static let cipherHeadIdentifier = "barkCipherHead"
+
     private static func cipherHead() -> PSSpecifier {
         let head = PSSpecifier.groupSpecifier(withName: "Encryption".localized)!
+        head.identifier = cipherHeadIdentifier
         head.setProperty(Self.barkCipherNotes, forKey: "footerText")
         return head
+    }
+
+    /// What is wrong with the encryption settings, or `nil` when they are usable.
+    ///
+    /// The app requires the key to be *exactly* the algorithm's length — not a
+    /// minimum — so a key that is too long is as unusable as one that is too
+    /// short, and the app says so in those words ("请输入 16 位密钥"). Reporting
+    /// only the long case would leave the other half of the same mistake silent.
+    static func cipherProblem(stored: Prefs) -> String? {
+        guard cipherEnabled(stored: stored, fallback: nil) else { return nil }
+        let key = stored.string(BarkPrefKey.cipherKey) ?? ""
+        guard !key.isEmpty else { return nil }   // nothing typed yet is not an error
+
+        guard let algorithm = BarkCipher.Algorithm(
+            rawValue: stored.string(BarkPrefKey.cipherAlgorithm) ?? ""
+        ) else { return nil }
+
+        guard key.count == algorithm.keyLength else {
+            return String(
+                format: "The key must be exactly %d characters for %@ (currently %d)."
+                    .localized,
+                algorithm.keyLength, algorithm.rawValue, key.count
+            )
+        }
+        return nil
     }
 
     /// What the encryption settings mean, and the lengths each one needs.
@@ -623,6 +657,8 @@ public final class ServiceSpecifierBuilders: NSObject {
     /// The lengths are the app's own validation, not a suggestion: a key of the
     /// wrong length is not sent at all, and a wrong IV produces "Decryption
     /// Failed" on the phone rather than an error the sender can see.
+    static func cipherNotes() -> String { barkCipherNotes }
+
     private static let barkCipherNotes: String = (
         "Encrypts the whole request, so the server and Apple cannot read it. "
         + "Set the same values in the app under Push Encryption."
@@ -678,7 +714,8 @@ public final class ServiceSpecifierBuilders: NSObject {
         service: String,
         appID: String?,
         key: String,
-        noAutoCorrect: Bool = false
+        noAutoCorrect: Bool = false,
+        changeObserver: AnyObject? = nil
     ) -> PSSpecifier {
         let specifier = PSSpecifier.preferenceSpecifierNamed(
             title.localized, target: PreferencesStorage.self,
@@ -688,6 +725,12 @@ public final class ServiceSpecifierBuilders: NSObject {
         )!
         configure(specifier, service: service, appID: appID, key: key)
         specifier.setProperty(true, forKey: "enabled")
+        if let changeObserver {
+            specifier.setProperty(
+                NSValue(nonretainedObject: changeObserver),
+                forKey: SpecifierRouting.PropertyKey.changeObserver
+            )
+        }
         if noAutoCorrect {
             specifier.setProperty(true, forKey: "noAutoCorrect")
         }
@@ -729,6 +772,12 @@ public final class ServiceSpecifierBuilders: NSObject {
         )!
         configure(specifier, service: service, appID: appID, key: key)
         specifier.setProperty(true, forKey: "enabled")
+        if let changeObserver {
+            specifier.setProperty(
+                NSValue(nonretainedObject: changeObserver),
+                forKey: SpecifierRouting.PropertyKey.changeObserver
+            )
+        }
         specifier.setProperty(defaultValue, forKey: SpecifierRouting.PropertyKey.defaultValue)
         if let changeObserver {
             // Non-retaining: the controller owns its cells, so a cell must not
@@ -765,6 +814,12 @@ public final class ServiceSpecifierBuilders: NSObject {
         )!
         configure(specifier, service: service, appID: appID, key: key)
         specifier.setProperty(true, forKey: "enabled")
+        if let changeObserver {
+            specifier.setProperty(
+                NSValue(nonretainedObject: changeObserver),
+                forKey: SpecifierRouting.PropertyKey.changeObserver
+            )
+        }
         specifier.setValues(values, titles: titles)
         specifier.setProperty(defaultValue, forKey: SpecifierRouting.PropertyKey.defaultValue)
         if let changeObserver {

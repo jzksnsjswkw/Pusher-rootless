@@ -119,6 +119,39 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         seedCipherSettings()
     }
 
+    /// Colours an encryption footer red when the key is the wrong length.
+    ///
+    /// The footer is the framework's own label, made when the group cell is built,
+    /// so the colour has to be applied to that label rather than through a
+    /// specifier — and the cell it belongs to is found by the paragraph this page
+    /// put in it, which is unique and does not depend on working out which row a
+    /// group's footer is drawn on.
+    public override func tableView(
+        _ tableView: UITableView, willDisplay cell: UITableViewCell,
+        forRowAt indexPath: IndexPath
+    ) {
+        // No `super` call: `PSListController` does not implement this delegate
+        // method, so forwarding to it raises `doesNotRecognizeSelector` and takes
+        // the page down as it draws its first cell. The other page in this project
+        // that uses this hook does not call it either.
+        let notes = ServiceSpecifierBuilders.cipherNotes()
+        let problem = ServiceSpecifierBuilders.cipherProblem(
+            stored: PrefsStore.instance(serviceInstanceID)
+        )
+        let colour: UIColor = problem == nil ? .secondaryLabel : .systemRed
+
+        func recolour(_ view: UIView) -> Bool {
+            if let label = view as? UILabel, label.text == notes {
+                label.textColor = colour
+                return true
+            }
+            var found = false
+            for subview in view.subviews where recolour(subview) { found = true }
+            return found
+        }
+        _ = recolour(cell)
+    }
+
     /// The Shortcut guide, presented over this page.
     @objc private func showShortcutGuide() {
         view.endEditing(true)

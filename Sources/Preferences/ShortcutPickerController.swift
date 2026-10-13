@@ -128,34 +128,12 @@ public final class ShortcutPickerController: ListController {
         _ tableView: UITableView, cellForRowAt indexPath: IndexPath
     ) -> UITableViewCell {
         let cell = super.tableView(tableView, cellForRowAt: indexPath)
-        guard let specifier = cellSpecifier(at: indexPath),
+        guard let specifier = specifierForRow(indexPath),
               let name = specifier.property(forKey: "shortcutName") as? String,
               let tableCell = cell as? PSTableCell
         else { return cell }
         tableCell.setChecked(name == selected)
         return cell
-    }
-
-    /// The cell's specifier, or `nil` for a row that is not one.
-    private func cellSpecifier(at indexPath: IndexPath) -> PSSpecifier? {
-        guard let rows = super.specifiers as? [PSSpecifier] else { return nil }
-        let flatIndex = indexPath.row + sectionStart(indexPath.section, in: rows)
-        guard flatIndex >= 0, flatIndex < rows.count else { return nil }
-        return rows[flatIndex]
-    }
-
-    /// The index in the flat specifier array where a section begins.
-    ///
-    /// `PSListController` keeps one flat array and derives sections from the
-    /// group cells, so a row's index in the table is not its index in the array.
-    private func sectionStart(_ section: Int, in rows: [PSSpecifier]) -> Int {
-        var seen = -1
-        for (index, specifier) in rows.enumerated() {
-            guard specifier.cellType == .groupCell else { continue }
-            seen += 1
-            if seen == section { return index + 1 }
-        }
-        return 0
     }
 
     /// Stores the choice and returns to the instance's page.

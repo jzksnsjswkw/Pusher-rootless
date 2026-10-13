@@ -201,6 +201,27 @@ open class ListController: PSListController, TintableController {
         return specifiers
     }
 
+    /// The specifier behind a table row.
+    ///
+    /// `PSListController` keeps one flat array and derives sections from its group
+    /// cells, so a row's index in the table is not its index in that array — the
+    /// offset of the section's first row has to be added.
+    open func specifierForRow(_ indexPath: IndexPath) -> PSSpecifier? {
+        guard let rows = super.specifiers as? [PSSpecifier] else { return nil }
+        var group = -1
+        var offset = 0
+        for (index, specifier) in rows.enumerated() where specifier.cellType == .groupCell {
+            group += 1
+            if group == indexPath.section {
+                offset = index + 1
+                break
+            }
+        }
+        let row = offset + indexPath.row
+        guard group >= 0, row < rows.count else { return nil }
+        return rows[row]
+    }
+
     /// Localizes every label, footer and segment title in place.
     ///
     /// The plists hold English keys, so an untranslated build shows English
