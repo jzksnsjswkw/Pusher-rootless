@@ -250,7 +250,7 @@ public class ServiceListController: PlainViewController, ServiceTransferHost {
                 return
             }
 
-            ServiceInstanceStore.update(id: instance.id) { $0[PrefKey.instanceName] = name }
+            ServiceInstanceStore.rename(instance.id, to: name)
             // The page's title view cached the old name.
             self.loadedControllers.removeValue(forKey: instance.id)
             self.reloadData()
@@ -285,9 +285,7 @@ public class ServiceListController: PlainViewController, ServiceTransferHost {
     @objc private func toggleEnabled(_ sender: UISwitch) {
         guard sender.tag < instances.count else { return }
         let instance = instances[sender.tag]
-        ServiceInstanceStore.update(id: instance.id) {
-            $0[PrefKey.serviceEnabled] = sender.isOn
-        }
+        ServiceInstanceStore.setEnabled(instance.id, sender.isOn)
         instances[sender.tag].isEnabled = sender.isOn
     }
 

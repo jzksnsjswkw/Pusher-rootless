@@ -176,8 +176,11 @@ public enum ServiceImporter {
             if let values = instance.values, !values.isEmpty {
                 object[PrefKey.configValues] = values
             }
-            object[PrefKey.serviceEnabled] = instance.enabled
+            // `enabled` is identity, not a setting: written through the store's
+            // own setter rather than through a settings closure, which drops
+            // identity keys on purpose (see `ServiceInstanceStore.update`).
         }
+        ServiceInstanceStore.setEnabled(id, instance.enabled)
     }
 
     // MARK: - Creating a script

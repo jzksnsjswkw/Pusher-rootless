@@ -102,7 +102,10 @@ public enum ServiceInstanceStore {
                 name: prefs.nonEmptyString(PrefKey.instanceName)
                     ?? ServiceRegistry.service(named: type).displayName,
                 isEnabled: prefs.bool(PrefKey.serviceEnabled),
-                config: prefs
+                // Only the settings: the identity belongs to the instance, and
+                // handing it to the descriptor would put `id` back in a namespace
+                // a service is free to use for its own keys.
+                config: prefs.dict(PrefKey.instanceConfig) ?? Prefs()
             )
         }
     }
@@ -158,14 +161,22 @@ public enum ServiceInstanceStore {
 
     /// Serializes one instance.
     public static func encoded(_ instance: ServiceInstance) -> [String: Any] {
-        var raw = instance.config.raw
-        // The identity fields are authoritative on the instance, so they are
-        // written last and cannot be shadowed by a stale value in its config.
-        raw[PrefKey.instanceID] = instance.id
-        raw[PrefKey.instanceType] = instance.type
-        raw[PrefKey.instanceName] = instance.name
-        raw[PrefKey.serviceEnabled] = instance.isEnabled
-        return raw
+        // Settings under one key, identity beside it. A service may call one of
+        // its own settings `id` — Bark does — and there is then no chance of it
+        // meaning the instance's.
+        var config = instance.config.raw
+        config.removeValue(forKey: PrefKey.instanceID)
+        config.removeValue(forKey: PrefKey.instanceType)
+        config.removeValue(forKey: PrefKey.instanceName)
+        config.removeValue(forKey: PrefKey.serviceEnabled)
+
+        return [
+            PrefKey.instanceID: instance.id,
+            PrefKey.instanceType: instance.type,
+            PrefKey.instanceName: instance.name,
+            PrefKey.serviceEnabled: instance.isEnabled,
+            PrefKey.instanceConfig: config,
+        ]
     }
 
     // MARK: - One instance
@@ -175,14 +186,53 @@ public enum ServiceInstanceStore {
         instances().first { $0.id == id }
     }
 
-    /// Merges fields into one instance's stored object.
+    /// Merges fields into one instance's *settings*.
+    ///
+    /// The closure is handed the settings alone — the dictionary stored under
+    /// ``PrefKey/instanceConfig`` — and never sees the instance's identity, so a
+    /// service is free to use any key it likes, including `id`. What an instance
+    /// *is* is changed through ``rename(_:to:)``, ``setEnabled(_:_:)``, and the
+    /// store's own creation and removal.
     public static func update(id: String, notify: Bool = true, _ mutate: (inout [String: Any]) -> Void) {
         var stored = rawInstances()
         guard let index = stored.firstIndex(where: {
             Prefs($0).nonEmptyString(PrefKey.instanceID) == id
         }) else { return }
-        mutate(&stored[index])
+
+        var instance = stored[index]
+        var config = (instance[PrefKey.instanceConfig] as? [String: Any]) ?? [:]
+
+        mutate(&config)
+
+        // Only the identity keys and the config survive a write; anything else at
+        // this level predates the split and is dropped with it.
+        instance = instance.filter { PrefKey.instanceIdentityKeys.contains($0.key) }
+        instance[PrefKey.instanceConfig] = config
+        stored[index] = instance
         setInstances(stored, notify: notify)
+    }
+
+    /// Renames one instance.
+    ///
+    /// Separate from ``update(id:notify:_:)`` because the name is not a setting:
+    /// it identifies the instance, and a service's own keys cannot reach it.
+    public static func rename(_ id: String, to name: String) {
+        var stored = rawInstances()
+        guard let index = stored.firstIndex(where: {
+            Prefs($0).nonEmptyString(PrefKey.instanceID) == id
+        }) else { return }
+        stored[index][PrefKey.instanceName] = name
+        setInstances(stored)
+    }
+
+    /// Turns one instance on or off.
+    public static func setEnabled(_ id: String, _ enabled: Bool) {
+        var stored = rawInstances()
+        guard let index = stored.firstIndex(where: {
+            Prefs($0).nonEmptyString(PrefKey.instanceID) == id
+        }) else { return }
+        stored[index][PrefKey.serviceEnabled] = enabled
+        setInstances(stored)
     }
 
     /// Removes one instance and its log.

@@ -111,6 +111,30 @@ public enum PrefKey {
     public static let instanceType = "type"
     public static let instanceName = "name"
 
+    /// Where an instance keeps its own settings.
+    ///
+    /// Everything an instance *is* — `id`, `type`, `name`, `enabled` — is a key
+    /// of the instance object; everything it *carries* lives under this one.
+    /// They were flat, and a service that wanted a setting called `id` wrote over
+    /// the instance's own identity: Bark has a push parameter of exactly that
+    /// name, so its field read the instance's UUID and typing into it would have
+    /// renamed the instance, orphaning its log and its stored values.
+    ///
+    /// A service cannot know the framework's key names, and a service's own
+    /// vocabulary should not have to. The separation is not a convention it has to
+    /// observe; it is where the storage layer puts things.
+    public static let instanceConfig = "config"
+
+    /// The keys that belong to the instance object itself, never to its config.
+    ///
+    /// Anything else an instance object holds at this level is a leftover from
+    /// the flat layout this replaced, and is discarded on the next write. The
+    /// split arrived before the first release that used it, so there is no
+    /// configuration in the wild to carry across.
+    public static let instanceIdentityKeys: Set<String> = [
+        instanceID, instanceType, instanceName, serviceEnabled,
+    ]
+
     // Global (non-service) settings.
     public static let enabled = "Enabled"
     public static let whenToPush = "WhenToPush"

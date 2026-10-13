@@ -96,22 +96,51 @@ public enum PrefsStore {
     }
 
     /// One instance's stored object, or an empty `Prefs` when it is gone.
+    /// One instance's settings.
+    ///
+    /// The contents of ``PrefKey/instanceConfig``, and nothing else: what an
+    /// instance *is* — its id, type, name, whether it is on — lives beside it on
+    /// the instance object, and is read from the `ServiceInstance` the caller
+    /// already has.
+    ///
+    /// Keeping the two apart is what lets a service name one of its own settings
+    /// `id`, as Bark does, without reaching the instance's identity. One flat
+    /// dictionary cannot tell those apart, which is how they came to collide.
     public static func instance(_ id: String) -> Prefs {
         guard !id.isEmpty else { return Prefs() }
-        return instances()
-            .first { Prefs($0).nonEmptyString(PrefKey.instanceID) == id }
-            .map(Prefs.init) ?? Prefs()
+        guard let stored = instances().first(where: {
+            Prefs($0).nonEmptyString(PrefKey.instanceID) == id
+        }) else { return Prefs() }
+        return Prefs(stored[PrefKey.instanceConfig] as? [String: Any] ?? [:])
     }
 
-    /// Merge fields into one instance's stored object, leaving its identity and
-    /// every other instance untouched.
-    public static func updateInstance(_ id: String, notify: Bool = true, _ mutate: (inout [String: Any]) -> Void) {
+    /// Merge fields into one instance's settings, leaving its identity and every
+    /// other instance untouched.
+    ///
+    /// Identity is out of reach here by construction: the closure is handed the
+    /// config dictionary, which does not contain it. Changing what an instance is
+    /// — its name, whether it is on — is
+    /// ``ServiceInstanceStore/rename(_:to:)`` and
+    /// ``ServiceInstanceStore/setEnabled(_:_:)``.
+    public static func updateInstance(
+        _ id: String, notify: Bool = true, _ mutate: (inout [String: Any]) -> Void
+    ) {
         guard !id.isEmpty else { return }
         var stored = instances()
         guard let index = stored.firstIndex(where: {
             Prefs($0).nonEmptyString(PrefKey.instanceID) == id
         }) else { return }
-        mutate(&stored[index])
+
+        var config = (stored[index][PrefKey.instanceConfig] as? [String: Any]) ?? [:]
+        mutate(&config)
+
+        // Only the identity keys and the config survive a write. Anything else at
+        // this level predates the split; it is dropped rather than carried, since
+        // the split is part of the release that introduced it and there is no
+        // configuration in the wild that has settings in the old place.
+        var instance = stored[index].filter { PrefKey.instanceIdentityKeys.contains($0.key) }
+        instance[PrefKey.instanceConfig] = config
+        stored[index] = instance
         setValue(stored, forKey: PrefKey.services, notify: notify)
     }
 
