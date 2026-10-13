@@ -4,7 +4,6 @@
 <dict>
 	<key>items</key>
 	<array>
-		<!-- Credentials -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -12,53 +11,23 @@
 			<string>Credentials</string>
 		</dict>
 		<dict>
-			<key>cell</key>
-			<string>PSEditTextCell</string>
-			<key>detail</key>
-			<string>PSDetailController</string>
-			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>defaults</key>
+			<string>com.noahsaso.pusher</string>
+			<key>detail</key>
+			<string>PSDetailController</string>
 			<key>key</key>
 			<string>key</string>
-			<key>service</key>
-			<string>Bark</string>
 			<key>label</key>
 			<string>Key:</string>
 			<key>noAutoCorrect</key>
 			<true/>
-		</dict>
-
-		<!-- Options -->
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Options</string>
-			<key>footerText</key>
-			<string>Leave empty to use the official default server.</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSEditTextCell</string>
-			<key>detail</key>
-			<string>PSDetailController</string>
-			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
-			<key>key</key>
-			<string>serverURL</string>
 			<key>service</key>
 			<string>Bark</string>
-			<key>label</key>
-			<string>Server URL:</string>
-			<key>noAutoCorrect</key>
-			<true/>
 		</dict>
-
-		<!-- App List -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -66,14 +35,14 @@
 			<string>Apps</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.noahsaso.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSSegmentCell</string>
 			<key>default</key>
 			<true/>
 			<key>defaults</key>
 			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
@@ -92,6 +61,8 @@
 			</array>
 		</dict>
 		<dict>
+			<key>alphabeticIndexingEnabled</key>
+			<true/>
 			<key>cell</key>
 			<string>PSLinkCell</string>
 			<key>detail</key>
@@ -104,49 +75,24 @@
 			<string>Bark</string>
 			<key>useSearchBar</key>
 			<true/>
-			<key>alphabeticIndexingEnabled</key>
-			<true/>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSLinkCell</string>
-			<key>label</key>
-			<string>App Customization</string>
-			<key>icon</key>
-			<string>app_list</string>
 			<key>detail</key>
 			<string>NSPCustomizeAppsController</string>
+			<key>icon</key>
+			<string>app_list</string>
+			<key>label</key>
+			<string>App Customization</string>
 			<key>service</key>
 			<string>Bark</string>
 		</dict>
-
-		<!-- Optional Parameters -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
 			<string>Optional Parameters</string>
-			<key>footerText</key>
-			<string>Optional Bark push parameters. Leave empty to not send that parameter.
-Markdown: body as Markdown, ignores the notification's own formatting
-Group: group name to group notifications
-Icon: HTTPS icon URL, replaces the Bark icon (iOS 15+)
-Image: HTTPS image URL, shown as a large picture
-Badge: badge number, 0 clears it
-Level: critical / active / timeSensitive / passive (default active)
-Volume: 0-10, only for critical alerts (default 5)
-Call: 1 to repeat the ringtone for 30 seconds
-Sound: ringtone name
-Copy: the text to copy when the notification is copied
-AutoCopy: 1 to copy automatically on arrival
-URL: URL to open when the push is tapped
-Action: alert shows an action popup, none makes tapping do nothing
-Ciphertext: encrypted body, only the device can read it
-IV: initialisation vector for the ciphertext
-IsArchive: 1 to save the push to history
-TTL: retention time in seconds for archived pushes
-ID: update the push with the same ID, 0 to let it accumulate
-Delete: 1 to delete the push with the given ID (requires ID)</string>
 		</dict>
 	</array>
 	<key>title</key>

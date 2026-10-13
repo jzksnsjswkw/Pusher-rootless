@@ -450,11 +450,58 @@ public final class ServiceSpecifierBuilders: NSObject {
     ///
     /// The server URL is a service-wide setting, so a per-app override page
     /// shows only the message parameters.
+    /// What each optional parameter does, shown under the last of them.
+    ///
+    /// The string is the localization key, so it has to match the table entry
+    /// exactly, line breaks included — which is why it is assembled line by line
+    /// rather than written as one long literal a stray space could break.
+    private static let barkFieldNotes: String = (
+        "Optional Bark push parameters. Leave empty to not send that parameter."
+        + "\n"
+        + "Markdown: body as Markdown, ignores the notification's own formatting"
+        + "\n"
+        + "Group: group name to group notifications"
+        + "\n"
+        + "Icon: HTTPS icon URL, replaces the Bark icon (iOS 15+)"
+        + "\n"
+        + "Image: HTTPS image URL, shown as a large picture"
+        + "\n"
+        + "Badge: badge number, 0 clears it"
+        + "\n"
+        + "Level: critical / active / timeSensitive / passive (default active)"
+        + "\n"
+        + "Volume: 0-10, only for critical alerts (default 5)"
+        + "\n"
+        + "Call: 1 to repeat the ringtone for 30 seconds"
+        + "\n"
+        + "Sound: ringtone name"
+        + "\n"
+        + "Copy: the text to copy when the notification is copied"
+        + "\n"
+        + "AutoCopy: 1 to copy automatically on arrival"
+        + "\n"
+        + "URL: URL to open when the push is tapped"
+        + "\n"
+        + "Action: alert shows an action popup, none makes tapping do nothing"
+        + "\n"
+        + "Ciphertext: encrypted body, only the device can read it"
+        + "\n"
+        + "IV: initialisation vector for the ciphertext"
+        + "\n"
+        + "IsArchive: 1 to save the push to history"
+        + "\n"
+        + "TTL: retention time in seconds for archived pushes"
+        + "\n"
+        + "ID: update the push with the same ID"
+        + "\n"
+        + "Delete: 1 to delete the push with the given ID (requires ID)"
+    ).localized
+
     private static func bark(service: String, appID: String?, defaults: ServiceConfig?, pageObserver: AnyObject?) -> [PSSpecifier] {
         // Every parameter the push API takes, in the documentation's own order
         // and grouping. A field left empty is not sent, which is what makes
         // "unset" the same as "leave it to the app".
-        var fields: [(title: String, key: String)] = [
+        let fields: [(title: String, key: String)] = [
             ("Markdown:", BarkPrefKey.markdown),
             ("Group:", BarkPrefKey.group),
             ("Icon:", BarkPrefKey.icon),
@@ -468,21 +515,131 @@ public final class ServiceSpecifierBuilders: NSObject {
             ("AutoCopy:", BarkPrefKey.autoCopy),
             ("URL:", BarkPrefKey.clickURL),
             ("Action:", BarkPrefKey.action),
-            ("Ciphertext:", BarkPrefKey.ciphertext),
-            ("IV:", BarkPrefKey.iv),
             ("IsArchive:", BarkPrefKey.isArchive),
             ("TTL:", BarkPrefKey.ttl),
             ("ID:", BarkPrefKey.id),
             ("Delete:", BarkPrefKey.delete),
         ]
+        // The server URL leads, under a heading of its own, so it reads with the
+        // key above it rather than as the first of the optional parameters — which
+        // is also where the note about the default belongs, since an empty field
+        // there means "not sent" and this one has a value even when empty.
+        var specifiers: [PSSpecifier] = []
         if appID == nil {
-            fields.insert(("Server URL:", PrefKey.serverURL), at: 0)
+            specifiers.append(PSSpecifier.groupSpecifier(withName: nil)!)
+            specifiers.append(textField("Server URL:", service: service, appID: appID,
+                                        key: PrefKey.serverURL, noAutoCorrect: true))
         }
-        return fields.map {
+        specifiers.append(contentsOf: cipherSpecifiers(
+            service: service, appID: appID, defaults: defaults, pageObserver: pageObserver
+        ))
+
+        // The explanation goes under the last field, in a group of its own with
+        // no heading. A footer belongs to its group and is drawn after that
+        // group's cells, so putting it on the "Optional Parameters" heading would
+        // print it above them instead — the group would have nothing in it, and
+        // the paragraph would sit between the heading and the first field.
+        let tail = PSSpecifier.groupSpecifier(withName: nil)!
+        tail.setProperty(Self.barkFieldNotes, forKey: "footerText")
+        specifiers.append(tail)
+
+        return specifiers + fields.map {
             textField($0.title, service: service, appID: appID,
                       key: $0.key, noAutoCorrect: true)
         } + payloadOptions(service: service, appID: appID, defaults: defaults, pageObserver: pageObserver)
     }
+
+    /// The Bark encryption settings, shown only when the switch is on.
+    ///
+    /// Off, the page is the parameter list and nothing else, which is the state
+    /// most instances are in. On, the four fields that decide how the request is
+    /// encrypted appear — and the IV only for the two modes that use one, since
+    /// ECB encrypts each block independently and has nothing to chain from.
+    ///
+    /// The switch stores a flag rather than being inferred from whether a key is
+    /// present: the two would disagree the moment someone turned encryption off
+    /// without clearing the key, and the page would show it still on.
+    private static func cipherSpecifiers(
+        service: String, appID: String?, defaults: ServiceConfig?, pageObserver: AnyObject?
+    ) -> [PSSpecifier] {
+        // Which rows to build reads the *instance's* settings, not the type's
+        // defaults: the switch belongs to this destination, and two Bark
+        // instances may encrypt differently. `defaults.name` carries the instance
+        // id — the builder is handed it on the way in.
+        let instanceID = defaults?.name ?? ""
+        let stored: Prefs
+        if let appID {
+            // A per-app page shows what that app inherits: its own override if it
+            // has one, the instance's value otherwise. Same fallback the storage
+            // layer applies when it reads a cell.
+            let override = PrefsStore.customAppPrefs(service: instanceID, appID: appID)
+            stored = override.raw[BarkPrefKey.cipherEnabled] != nil
+                ? override
+                : PrefsStore.instance(instanceID)
+        } else {
+            stored = PrefsStore.instance(instanceID)
+        }
+        let mode = BarkCipher.Mode(rawValue: stored.string(BarkPrefKey.cipherMode) ?? "") ?? .cbc
+
+        // Off, the switch alone: an instance that does not encrypt should not read
+        // as a form it left blank.
+        guard cipherEnabled(stored: stored, fallback: defaults?.raw) else {
+            return [cipherHead(), toggle("Encrypt", service: service, appID: appID,
+                                         key: BarkPrefKey.cipherEnabled, defaultValue: false,
+                                         changeObserver: pageObserver)]
+        }
+
+        var specifiers: [PSSpecifier] = [
+            toggle("Encrypt", service: service, appID: appID,
+                   key: BarkPrefKey.cipherEnabled, defaultValue: false,
+                   changeObserver: pageObserver),
+            segment("Algorithm", service: service, appID: appID,
+                    key: BarkPrefKey.cipherAlgorithm,
+                    values: BarkCipher.Algorithm.allCases.map(\.rawValue),
+                    titles: BarkCipher.Algorithm.allCases.map(\.rawValue),
+                    defaultValue: BarkCipher.Algorithm.aes128.rawValue),
+            segment("Mode", service: service, appID: appID,
+                    key: BarkPrefKey.cipherMode,
+                    values: BarkCipher.Mode.allCases.map(\.rawValue),
+                    titles: BarkCipher.Mode.allCases.map(\.rawValue),
+                    defaultValue: BarkCipher.Mode.cbc.rawValue,
+                    changeObserver: pageObserver),
+            textField("Key", service: service, appID: appID,
+                      key: BarkPrefKey.cipherKey, noAutoCorrect: true),
+        ]
+        if mode.ivLength > 0 {
+            specifiers.append(textField("IV", service: service, appID: appID,
+                                        key: BarkPrefKey.cipherIV, noAutoCorrect: true))
+        }
+
+        // The explanation goes on the switch, so the group reads as one decision
+        // rather than four fields with a paragraph under them.
+        return [cipherHead()] + specifiers
+    }
+
+    /// The encryption group, with its explanation.
+    private static func cipherHead() -> PSSpecifier {
+        let head = PSSpecifier.groupSpecifier(withName: "Encryption".localized)!
+        head.setProperty(Self.barkCipherNotes, forKey: "footerText")
+        return head
+    }
+
+    /// What the encryption settings mean, and the lengths each one needs.
+    ///
+    /// The lengths are the app's own validation, not a suggestion: a key of the
+    /// wrong length is not sent at all, and a wrong IV produces "Decryption
+    /// Failed" on the phone rather than an error the sender can see.
+    private static let barkCipherNotes: String = (
+        "Encrypts the whole request, so the server and Apple cannot read it. "
+        + "Set the same values in the app under Push Encryption."
+        + "\n"
+        + "Key length: AES128 needs 16 characters, AES192 24, AES256 32."
+        + "\n"
+        + "IV length: CBC needs 16 characters, GCM 12. ECB does not use one."
+        + "\n"
+        + "A key of the wrong length leaves the request unencrypted rather than "
+        + "failing it, so the push still arrives."
+    ).localized
 
     // MARK: - Pusher Receiver
 
@@ -588,6 +745,53 @@ public final class ServiceSpecifierBuilders: NSObject {
             )
         }
         return specifier
+    }
+
+    /// A segmented control, for a choice between a few named values.
+    ///
+    /// `setValues(_:titles:)` rather than setting the properties: the framework's
+    /// segment cell reads its choices from the specifier's own ivars, and a
+    /// `setProperty` would write to the properties dictionary instead — leaving
+    /// the control with no options at all.
+    private static func segment(
+        _ title: String,
+        service: String,
+        appID: String?,
+        key: String,
+        values: [String],
+        titles: [String],
+        defaultValue: String,
+        changeObserver: AnyObject? = nil
+    ) -> PSSpecifier {
+        let specifier = PSSpecifier.preferenceSpecifierNamed(
+            title.localized, target: PreferencesStorage.self,
+            set: #selector(PreferencesStorage.setValue(_:forInstanceSpecifier:)),
+            get: #selector(PreferencesStorage.readValue(forInstanceSpecifier:)),
+            detail: nil, cell: .segmentCell, edit: nil
+        )!
+        configure(specifier, service: service, appID: appID, key: key)
+        specifier.setProperty(true, forKey: "enabled")
+        specifier.setValues(values, titles: titles)
+        specifier.setProperty(defaultValue, forKey: SpecifierRouting.PropertyKey.defaultValue)
+        if let changeObserver {
+            specifier.setProperty(
+                NSValue(nonretainedObject: changeObserver),
+                forKey: SpecifierRouting.PropertyKey.changeObserver
+            )
+        }
+        return specifier
+    }
+
+    /// Whether the encryption fields should be shown.
+    ///
+    /// Read the same way for the page that builds the rows and the controller
+    /// that seeds its comparison, so the two cannot disagree about what was on
+    /// screen.
+    static func cipherEnabled(stored: Prefs, fallback: Prefs?) -> Bool {
+        if let value = stored.raw[BarkPrefKey.cipherEnabled] as? NSNumber {
+            return value.boolValue
+        }
+        return fallback?.bool(BarkPrefKey.cipherEnabled, default: false) ?? false
     }
 
     /// Stamps the routing properties shared by every generated cell.

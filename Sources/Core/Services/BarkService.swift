@@ -53,13 +53,23 @@ public enum BarkService: PushService {
         (BarkPrefKey.autoCopy, "autoCopy"),
         (BarkPrefKey.clickURL, "url"),
         (BarkPrefKey.action, "action"),
-        (BarkPrefKey.ciphertext, "ciphertext"),
-        (BarkPrefKey.iv, "iv"),
         (BarkPrefKey.isArchive, "isArchive"),
         (BarkPrefKey.ttl, "ttl"),
         (BarkPrefKey.id, "id"),
         (BarkPrefKey.delete, "delete"),
     ]
+
+    /// The encryption settings an instance stored, whether or not they are on.
+    private static func cipherSettings(from config: ServiceConfig) -> BarkCipher.Settings {
+        let raw = config.raw
+        return BarkCipher.Settings(
+            algorithm: BarkCipher.Algorithm(rawValue: raw.string(BarkPrefKey.cipherAlgorithm) ?? "")
+                ?? .aes128,
+            mode: BarkCipher.Mode(rawValue: raw.string(BarkPrefKey.cipherMode) ?? "") ?? .cbc,
+            key: raw.string(BarkPrefKey.cipherKey) ?? "",
+            iv: raw.string(BarkPrefKey.cipherIV) ?? ""
+        )
+    }
 
     public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
         var infoDict: [String: Any] = [
@@ -77,6 +87,21 @@ public enum BarkService: PushService {
         // `delete` is only meaningful together with an id.
         if infoDict["delete"] != nil, infoDict["id"] == nil {
             infoDict.removeValue(forKey: "delete")
+        }
+
+        // Encryption replaces the body rather than adding to it: the app puts the
+        // decrypted dictionary in the body's place, so anything sent beside the
+        // ciphertext would either be ignored or shown unencrypted — which defeats
+        // the point of turning it on.
+        let settings = cipherSettings(from: config)
+        if settings.isUsable {
+            let json = (try? JSONSerialization.data(withJSONObject: infoDict))
+                .flatMap { String(data: $0, encoding: .utf8) }
+            if let json, let encrypted = try? BarkCipher.encrypt(json: json, settings: settings) {
+                infoDict = encrypted
+            }
+            // A failure leaves the plaintext body: the push arrives readable
+            // rather than not arriving at all, and the log shows the request.
         }
 
         // The configured URL is `{server}/`; the key is the last path segment.
@@ -112,10 +137,17 @@ public enum BarkService: PushService {
 /// ignored push parameter.
 enum BarkPrefKey {
     static let markdown = "markdown"
+
+    // Encryption is a group of its own, not a parameter: the ciphertext and the
+    // IV are what the encryption produces, and what the user configures is the
+    // algorithm, the mode and the two secrets.
+    static let cipherEnabled = "cipherEnabled"
+    static let cipherAlgorithm = "cipherAlgorithm"
+    static let cipherMode = "cipherMode"
+    static let cipherKey = "cipherKey"
+    static let cipherIV = "cipherIV"
     static let icon = "icon"
     static let copy = "copy"
-    static let ciphertext = "ciphertext"
-    static let iv = "iv"
     static let level = "level"
     static let volume = "volume"
     static let badge = "badge"

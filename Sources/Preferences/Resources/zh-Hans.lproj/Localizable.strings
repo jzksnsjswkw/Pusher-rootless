@@ -539,3 +539,5 @@
 "Could Not Sign" = "签名失败";
 "Open" = "打开";
 "Opened for you to add. Only needs signing once the copy in Pusher has expired." = "打开即可添加。仅在 Pusher 内置的那份过期后才需要联网签名。";
+"Encryption" = "加密";
+"Encrypts the whole request, so the server and Apple cannot read it. Set the same values in the app under Push Encryption.\nKey length: AES128 needs 16 characters, AES192 24, AES256 32.\nIV length: CBC needs 16 characters, GCM 12. ECB does not use one.\nA key of the wrong length leaves the request unencrypted rather than failing it, so the push still arrives." = "整个请求都会被加密，服务器和 Apple 都无法读取。请在 App 的「推送加密」里填同样的值。\n密钥长度：AES128 需 16 位，AES192 需 24 位，AES256 需 32 位。\n初始向量长度：CBC 需 16 位，GCM 需 12 位，ECB 不使用初始向量。\n密钥长度不对时不会加密，但仍然会发送，通知照常到达。";

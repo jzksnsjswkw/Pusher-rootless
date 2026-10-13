@@ -46,6 +46,7 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // same store, so seeding cannot disagree with the rows that were built —
         // unlike asking the cell, which may not be findable yet.
         seedImageSizing()
+        seedCipherSettings()
 
         guard let icon else { return }
         let label = UILabel()
@@ -115,6 +116,7 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // Re-seeded rather than compared: the page is rebuilt on every
         // appearance, so whatever was toggled elsewhere is already reflected.
         seedImageSizing()
+        seedCipherSettings()
     }
 
     /// The Shortcut guide, presented over this page.
@@ -158,6 +160,15 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     /// again — which is exactly what a "needs a return visit" report means.
     private var showsImageSizing: Bool?
 
+    /// The same, for the encryption fields: whether the page as built shows
+    /// them, and which mode it was built for.
+    ///
+    /// Seeded rather than left empty for the same reason: an unseeded value makes
+    /// the first tap only record the state, so the fields would not appear until
+    /// the page was entered again.
+    private var showsCipherSettings: Bool?
+    private var cipherMode: String?
+
     deinit {
         CFNotificationCenterRemoveEveryObserver(
             CFNotificationCenterGetDarwinNotifyCenter(),
@@ -173,6 +184,14 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         )
     }
 
+    /// Records whether the page as built shows the encryption fields, and for
+    /// which mode — the IV row's presence depends on it.
+    private func seedCipherSettings() {
+        let stored = PrefsStore.instance(serviceInstanceID)
+        showsCipherSettings = stored.bool(BarkPrefKey.cipherEnabled, default: false)
+        cipherMode = stored.string(BarkPrefKey.cipherMode) ?? BarkCipher.Mode.cbc.rawValue
+    }
+
     /// Rebuilds the page when "Include Image" has been switched.
     ///
     /// Called by the storage layer the moment the value is stored, so the page
@@ -184,17 +203,45 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     ///   - value: what it changed to, taken from the write itself. Anything but
     ///     a switch cell's boolean (a cleared field, say) reads as off.
     @objc func cellDidChange(_ key: String, to value: Any?) {
-        guard key == PrefKey.includeImage else { return }
-        let isOn = (value as? NSNumber)?.boolValue ?? (value as? Bool) ?? false
-        // Seeded when the page loaded, so the first tap compares against what
-        // the page was actually built with.
-        guard let previous = showsImageSizing else {
+        // Three switches decide whether rows below them are shown: the image
+        // toggle governs the sizing rows, and the encryption toggle and mode
+        // govern the encryption fields. The value arrives from the write itself,
+        // so there is no second read to fall behind.
+        switch key {
+        case PrefKey.includeImage:
+            let isOn = bool(value)
+            guard let previous = showsImageSizing else {
+                showsImageSizing = isOn
+                return
+            }
+            guard previous != isOn else { return }
             showsImageSizing = isOn
+        case BarkPrefKey.cipherEnabled:
+            let isOn = bool(value)
+            guard let previous = showsCipherSettings else {
+                showsCipherSettings = isOn
+                return
+            }
+            guard previous != isOn else { return }
+            showsCipherSettings = isOn
+        case BarkPrefKey.cipherMode:
+            // ECB has no IV to chain from, so the field goes away with it — and
+            // comes back when CBC or GCM is chosen.
+            let mode = value as? String ?? ""
+            guard let previous = cipherMode, previous != mode else {
+                if cipherMode == nil { cipherMode = mode }
+                return
+            }
+            cipherMode = mode
+        default:
             return
         }
-        guard previous != isOn else { return }
-        showsImageSizing = isOn
         installSpecifiers(buildSpecifiers())
+    }
+
+    /// A switch's value, which arrives as a number.
+    private func bool(_ value: Any?) -> Bool {
+        (value as? NSNumber)?.boolValue ?? (value as? Bool) ?? false
     }
 
     // MARK: - Specifiers
