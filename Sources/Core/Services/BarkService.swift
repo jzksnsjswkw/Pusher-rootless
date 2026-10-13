@@ -30,19 +30,33 @@ public enum BarkService: PushService {
     public static var logImageDataProperties: [String] { [] }
 
     /// The Bark push API parameter names, keyed by preference key.
+    /// Everything the push API accepts, in the order the documentation lists it.
+    ///
+    /// `title`, `body` and `subtitle` are absent: the first two come from the
+    /// notification, and `subtitle` is handled below rather than configured —
+    /// a fixed string here would replace the notification's own subtitle.
+    ///
+    /// Keys that the two names disagree on are the ones the app renamed: the
+    /// stored `autoCopy` is `autoCopy` on the wire and `copy` is `copy`, and
+    /// `clickURL` is `url` because the storage key is shared with other services.
     private static let parameters: [(prefKey: String, apiName: String)] = [
+        (BarkPrefKey.markdown, "markdown"),
+        (BarkPrefKey.group, "group"),
+        (BarkPrefKey.icon, "icon"),
+        (BarkPrefKey.image, "image"),
+        (BarkPrefKey.badge, "badge"),
         (BarkPrefKey.level, "level"),
         (BarkPrefKey.volume, "volume"),
-        (BarkPrefKey.badge, "badge"),
         (BarkPrefKey.call, "call"),
-        (BarkPrefKey.autoCopy, "autoCopy"),
         (BarkPrefKey.sound, "sound"),
-        (BarkPrefKey.image, "image"),
-        (BarkPrefKey.group, "group"),
-        (BarkPrefKey.isArchive, "isArchive"),
-        (BarkPrefKey.ttl, "ttl"),
+        (BarkPrefKey.copy, "copy"),
+        (BarkPrefKey.autoCopy, "autoCopy"),
         (BarkPrefKey.clickURL, "url"),
         (BarkPrefKey.action, "action"),
+        (BarkPrefKey.ciphertext, "ciphertext"),
+        (BarkPrefKey.iv, "iv"),
+        (BarkPrefKey.isArchive, "isArchive"),
+        (BarkPrefKey.ttl, "ttl"),
         (BarkPrefKey.id, "id"),
         (BarkPrefKey.delete, "delete"),
     ]
@@ -52,6 +66,10 @@ public enum BarkService: PushService {
             "title": context.displayTitle,
             "body": context.displayMessage,
         ]
+        // No `subtitle`, deliberately. The notification's subtitle is already in
+        // `displayMessage` — a bulletin shows it above the body, and the composed
+        // string joins the two — so sending it again would print it twice, once
+        // on its own line and once at the top of the body.
         for (prefKey, apiName) in parameters {
             let value = config.raw.string(prefKey) ?? ""
             if !value.isEmpty { infoDict[apiName] = value }
@@ -93,6 +111,11 @@ public enum BarkService: PushService {
 /// above readable and makes a typo a compile error rather than a silently
 /// ignored push parameter.
 enum BarkPrefKey {
+    static let markdown = "markdown"
+    static let icon = "icon"
+    static let copy = "copy"
+    static let ciphertext = "ciphertext"
+    static let iv = "iv"
     static let level = "level"
     static let volume = "volume"
     static let badge = "badge"

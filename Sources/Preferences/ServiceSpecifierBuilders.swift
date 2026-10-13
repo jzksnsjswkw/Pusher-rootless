@@ -451,19 +451,27 @@ public final class ServiceSpecifierBuilders: NSObject {
     /// The server URL is a service-wide setting, so a per-app override page
     /// shows only the message parameters.
     private static func bark(service: String, appID: String?, defaults: ServiceConfig?, pageObserver: AnyObject?) -> [PSSpecifier] {
+        // Every parameter the push API takes, in the documentation's own order
+        // and grouping. A field left empty is not sent, which is what makes
+        // "unset" the same as "leave it to the app".
         var fields: [(title: String, key: String)] = [
+            ("Markdown:", BarkPrefKey.markdown),
+            ("Group:", BarkPrefKey.group),
+            ("Icon:", BarkPrefKey.icon),
+            ("Image:", BarkPrefKey.image),
+            ("Badge:", BarkPrefKey.badge),
             ("Level:", BarkPrefKey.level),
             ("Volume:", BarkPrefKey.volume),
-            ("Badge:", BarkPrefKey.badge),
             ("Call:", BarkPrefKey.call),
-            ("AutoCopy:", BarkPrefKey.autoCopy),
             ("Sound:", BarkPrefKey.sound),
-            ("Image:", BarkPrefKey.image),
-            ("Group:", BarkPrefKey.group),
-            ("IsArchive:", BarkPrefKey.isArchive),
-            ("TTL:", BarkPrefKey.ttl),
+            ("Copy:", BarkPrefKey.copy),
+            ("AutoCopy:", BarkPrefKey.autoCopy),
             ("URL:", BarkPrefKey.clickURL),
             ("Action:", BarkPrefKey.action),
+            ("Ciphertext:", BarkPrefKey.ciphertext),
+            ("IV:", BarkPrefKey.iv),
+            ("IsArchive:", BarkPrefKey.isArchive),
+            ("TTL:", BarkPrefKey.ttl),
             ("ID:", BarkPrefKey.id),
             ("Delete:", BarkPrefKey.delete),
         ]
