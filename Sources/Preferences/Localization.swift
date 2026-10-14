@@ -16,12 +16,29 @@ public enum Localization {
 
     /// A human-readable display name for a service type.
     ///
-    /// Registry names (e.g. `"Feishu"`) stay English in prefs and the log so
-    /// they remain stable identifiers; the UI shows the localized name. An
-    /// instance's own name is already user-facing and is shown as-is — see
+    /// Registry names (e.g. `"Feishu"`) stay English in prefs and the log so they
+    /// remain stable identifiers; the UI shows the localized name. An instance's
+    /// own name is already user-facing and is shown as-is — see
     /// ``instanceDisplayName(_:)``.
     public static func serviceDisplayName(_ service: String?) -> String {
         string(service ?? "")
+    }
+
+    /// A display name for a descriptor, localized only when it is a built-in.
+    ///
+    /// A user's own service is named by them, and their text is shown as it was
+    /// written. The distinction is by registry name rather than by asking whether
+    /// the descriptor came from a definition, because a definition's name is the
+    /// id an instance stores and a built-in's is the type's own — see
+    /// `ServiceRegistry`.
+    ///
+    /// Without this the picker localized every row it drew, so a service a user
+    /// had called exactly `"Custom Service"` was listed as `"自定义服务"`:
+    /// their name replaced by a translation, in the one list that exists to tell
+    /// their services apart.
+    public static func descriptorDisplayName(_ descriptor: ServiceDescriptor) -> String {
+        let isBuiltIn = ServiceRegistry.addableServices.contains { $0.name == descriptor.name }
+        return isBuiltIn ? serviceDisplayName(descriptor.displayName) : descriptor.displayName
     }
 
     /// A human-readable name for one instance.

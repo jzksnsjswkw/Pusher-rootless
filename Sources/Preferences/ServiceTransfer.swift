@@ -74,7 +74,7 @@ enum ServiceTransfer {
                     name: instance.name,
                     detail: script.map {
                         String(format: "Uses the service \"%@\"".localized, $0.name)
-                    } ?? instance.descriptor.displayName,
+                    } ?? Localization.descriptorDisplayName(instance.descriptor),
                     icon: ServiceArtwork.image(forType: instance.type),
                     isPreSelected: true
                 )

@@ -612,7 +612,7 @@ public final class ServiceTypePickerController: ListController {
 
         for descriptor in descriptors {
             let specifier = PSSpecifier.preferenceSpecifierNamed(
-                Localization.serviceDisplayName(descriptor.displayName),
+                Localization.descriptorDisplayName(descriptor),
                 target: nil, set: nil, get: nil,
                 detail: nil, cell: .linkCell, edit: nil
             )
