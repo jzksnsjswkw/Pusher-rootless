@@ -7,6 +7,8 @@
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Leave empty to use the official default server.</string>
 			<key>label</key>
 			<string>Credentials</string>
 		</dict>
@@ -27,6 +29,16 @@
 			<true/>
 			<key>service</key>
 			<string>Bark</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>key</key>
+			<string>serverURL</string>
+			<key>label</key>
+			<string>Server URL:</string>
+			<key>noAutoCorrect</key>
+			<true/>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -87,12 +99,6 @@
 			<string>App Customization</string>
 			<key>service</key>
 			<string>Bark</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Optional Parameters</string>
 		</dict>
 	</array>
 	<key>title</key>

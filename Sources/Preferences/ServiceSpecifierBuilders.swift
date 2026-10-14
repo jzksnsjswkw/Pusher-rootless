@@ -516,28 +516,24 @@ public final class ServiceSpecifierBuilders: NSObject {
             ("ID:", BarkPrefKey.id),
             ("Delete:", BarkPrefKey.delete),
         ]
-        // The server URL leads, under a heading of its own, so it reads with the
-        // key above it rather than as the first of the optional parameters — which
-        // is also where the note about the default belongs, since an empty field
-        // there means "not sent" and this one has a value even when empty.
+        // The server URL is a cell of the plist's Credentials group, beside the key
+        // — not a group of its own in code. Its own group, heading-less, put a
+        // second section between the parameters and the heading that names them,
+        // which read as a large unexplained gap; and the note about the default
+        // belongs under the key it sits with.
         var specifiers: [PSSpecifier] = []
-        if appID == nil {
-            specifiers.append(PSSpecifier.groupSpecifier(withName: nil)!)
-            specifiers.append(textField("Server URL:", service: service, appID: appID,
-                                        key: PrefKey.serverURL, noAutoCorrect: true))
-        }
         specifiers.append(contentsOf: cipherSpecifiers(
             service: service, appID: appID, defaults: defaults, pageObserver: pageObserver
         ))
 
-        // The explanation goes under the last field, in a group of its own with
-        // no heading. A footer belongs to its group and is drawn after that
-        // group's cells, so putting it on the "Optional Parameters" heading would
-        // print it above them instead — the group would have nothing in it, and
-        // the paragraph would sit between the heading and the first field.
-        let tail = PSSpecifier.groupSpecifier(withName: nil)!
-        tail.setProperty(Self.barkFieldNotes, forKey: "footerText")
-        specifiers.append(tail)
+        // The heading the parameters sit under, and the paragraph explaining them:
+        // one group, so the note is drawn after the fields it describes. A footer
+        // belongs to its group and is drawn at the end of it, so putting the note
+        // on a heading of its own — with the fields in a *later*, heading-less
+        // group — printed it above them, between the heading and the first field.
+        let head = PSSpecifier.groupSpecifier(withName: "Optional Parameters".localized)!
+        head.setProperty(Self.barkFieldNotes, forKey: "footerText")
+        specifiers.append(head)
 
         return specifiers + fields.map {
             textField($0.title, service: service, appID: appID,
