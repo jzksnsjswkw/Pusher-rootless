@@ -159,7 +159,6 @@
 "After setting up your services, remember to enable them by using the 'Edit' button in the top right of this page and dragging your services to the 'Enabled' section at the top.\n\nTap anywhere to continue." = "设置好服务后，记得点击本页右上角的“编辑”按钮，把你的服务拖到顶部的“已启用”分区。\n\n点击任意位置继续。";
 "After using the app filter, you can swipe to delete to unset it and show all apps again.\n\nTap on any truncated log to expand it.\n\n Tap and hold on a log to copy it to the clipboard.\n\nTap anywhere to continue." = "使用应用筛选后，可以左滑删除以取消筛选，重新显示所有应用。\n\n点击任意被截断的日志可展开。\n\n长按日志可复制到剪贴板。\n\n点击任意位置继续。";
 "Leave empty to use the official default server." = "留空则使用官方默认服务器。";
-"Optional Parameters" = "可选参数";
 "Level:" = "Level：";
 "Volume:" = "Volume：";
 "Badge:" = "Badge：";
@@ -173,7 +172,6 @@
 "Action:" = "Action：";
 "ID:" = "ID：";
 "Delete:" = "Delete：";
-"Optional Bark push parameters. Leave empty to not send that parameter.\nMarkdown: body as Markdown, ignores the notification's own formatting\nGroup: group name to group notifications\nIcon: HTTPS icon URL, replaces the Bark icon (iOS 15+)\nImage: HTTPS image URL, shown as a large picture\nBadge: badge number, 0 clears it\nLevel: critical / active / timeSensitive / passive (default active)\nVolume: 0-10, only for critical alerts (default 5)\nCall: 1 to repeat the ringtone for 30 seconds\nSound: ringtone name\nCopy: the text to copy when the notification is copied\nAutoCopy: 1 to copy automatically on arrival\nURL: URL to open when the push is tapped\nAction: alert shows an action popup, none makes tapping do nothing\nIsArchive: 1 to save the push to history\nTTL: retention time in seconds for archived pushes\nID: update the push with the same ID\nDelete: 1 to delete the push with the given ID (requires ID)" = "可选的 Bark 推送参数，留空则不发送该参数。\nMarkdown：正文按 Markdown 渲染，会忽略通知自身的格式\nGroup：分组名称，用于将通知分组\nIcon：HTTPS 图标 URL，替换 Bark 默认图标（需 iOS 15+）\nImage：HTTPS 图片 URL，展开通知可见大图\nBadge：角标数字，填 0 清除\nLevel：critical / active / timeSensitive / passive（默认 active）\nVolume：0-10，仅对 critical 级别生效（默认 5）\nCall：填 1 让铃声重复响 30 秒\nSound：铃声名称\nCopy：指定复制通知时复制的内容\nAutoCopy：填 1 收到时自动复制\nURL：点击推送时打开的链接\nAction：alert 打开应用时显示操作弹窗，none 点击无动作\nIsArchive：填 1 将推送保存到历史记录\nTTL：存档推送的保留时间（秒）\nID：相同 ID 会更新对应推送\nDelete: 1 to delete the push with the given ID (requires ID)";
 /* Service instance management */
 "Add Service" = "添加服务";
 "Service Type" = "服务类型";
@@ -547,27 +545,27 @@
 "The key" = "密钥";
 "Server URL" = "服务器 URL";
 "Push encryption" = "推送加密";
-"Testing it" = "测试";
 "Pusher sends through Bark's own API, so it needs your device's key — Bark pushes to a device, and the key names the device. Open Bark, and the key is the string in the test URL on its first screen." = "Pusher 通过 Bark 自己的 API 推送，所以需要你这台设备的密钥——Bark 是推给设备的，密钥就代表设备。打开 Bark，密钥是它的首屏上那段测试 URL 里的字符串。";
 "Paste everything between the server and the trailing text into **Key** above. It is letters and digits, no slashes." = "把服务器地址和末尾文字之间的那一串填入上方的**密钥**。它只含字母和数字，没有斜杠。";
 "Leave it empty to use Bark's own server, which is what the key above belongs to. Set it only if you run your own Bark server — then the key is that server's." = "留空则使用 Bark 官方服务器，上面的密钥属于它。只有你自建 Bark 服务器时才需要填写——那时密钥属于你自己的服务器。";
-"Optional, and it has to be set up on both sides. Bark can carry the whole push encrypted, so Bark's server and Apple see only ciphertext and the phone decrypts it. The settings on this page have to match the ones in Bark's **Push Encryption** screen exactly, or the phone shows \"Decryption Failed\"." = "可选项，且需要两端都配置。Bark 可以整条推送加密传输，这样 Bark 服务器和 Apple 只能看到密文，手机再解密。本页的设置必须和 Bark 里**推送加密**页的设置完全一致，否则手机会显示「解密失败」。";
 "Copy the algorithm, the mode and the key from there into the group below. Do not set an IV: Bark generates one for each push, and Pusher does the same." = "把那里的算法、模式和密钥抄到下面的分组里。不要设置初始向量：Bark 每次推送都会随机生成，Pusher 也一样。";
 "**Send Test Notification** at the bottom of this page sends a real push through this instance. If nothing arrives, the key is the first thing to check — Bark accepts a wrong one and reports the failure only on the phone." = "本页底部的**发送测试通知**会通过这个实例真实推送一次。如果没收到，先查密钥——Bark 会接受错误的密钥，只在手机上报告失败。";
 "Before you test" = "测试前";
-"Key" = "密钥";
-"Optional" = "可选";
-"Testing" = "测试";
-"If Bark is on this device, add it to the app blacklist first. Otherwise the loop never ends: Pusher forwards to Bark, Bark shows a notification, Pusher forwards that too." = "如果 Bark 装在本机，先把它加入应用黑名单，否则会无限循环：Pusher 转发给 Bark，Bark 弹出通知，Pusher 又转发这条通知。";
+"Key" = "Key";
 "Copy the middle of the test URL on Bark's first screen into **Key**." = "从 Bark 首页的测试 URL 里复制中间那段，填入**密钥**。";
-"Example: %@ is the key." = "示例：%@ 就是密钥。";
 "Leave it empty." = "留空即可。";
 "**Push encryption** — match it to the Push Encryption screen in Bark. Copy the algorithm, mode and key; leave the IV alone." = "**推送加密**——和 Bark 里「推送加密」设置成一样的。算法、模式、密钥照抄，初始向量不用填。";
 "Other parameters: bark.day.app/#/params" = "更多参数参考官方文档：bark.day.app/#/params";
 "Tap **Send Test Notification** at the bottom. If nothing arrives, check the key first." = "点最下面的**发送测试通知**。收不到，先看密钥。";
-"Copy the middle of the test URL on Bark's first screen into Key." = "从 Bark 首页的测试 URL 里复制中间那段，填入 key 中。";
-"Leave it empty, or leave the default." = "默认或直接留空。";
-"Optional. Match it to Push Encryption in Bark. Copy the algorithm, mode and key; leave the IV alone." = "可选。和 Bark 里「推送加密」设置成一样的。算法、模式、密钥照抄，初始向量不用填。";
-"More parameters: https://bark.day.app/#/params" = "更多参数参考 bark 官方文档：https://bark.day.app/#/params";
-"Tap Send Test Notification at the bottom. If nothing arrives, check the key first." = "点最下面的「发送测试通知」。收不到，先看密钥。";
-"If Bark is on this device, add it to the app blacklist. Otherwise it loops forever: Bark shows a notification, Pusher forwards it, Bark shows it again." = "若本机测试，一定要将 bark 添加进黑名单，否则会无限推送（bark 发送通知，插件转发给 bark，bark 弹通知又被插件转发，无限循环）";
+"Example" = "示例";
+"The advanced settings below are optional" = "以下为可选的高级设置";
+"If you test on this device, you must add Bark to the app blacklist. Otherwise it loops forever: Bark posts a notification, Pusher forwards it to Bark, Bark posts it again, and Pusher forwards that." = "若本机测试，一定要将 Bark 添加进黑名单，否则会无限推送（Bark 发送通知，插件转发给 Bark，Bark 弹通知又被插件转发，无限循环）";
+"Copy the middle of the test URL on Bark's first screen into Key." = "从 Bark 首页的测试 URL 里复制中间那段，填入 Key 中。";
+"Leave the default, or leave it empty." = "默认或直接留空。";
+"Bold, and without the brackets, is the key: %@" = "加粗，去掉括号（%@）就是 Key。";
+"Match it to Push Encryption in Bark." = "和 Bark 里「推送加密」设置成一样即可。";
+"Copy the algorithm, mode and key. Leave the IV alone." = "算法、模式、密钥照抄，初始向量不用填。";
+"More parameters: bark.day.app/#/params" = "更多参数参考 Bark 官方文档：https://bark.day.app/#/params";
+
+"Optional Parameters" = "可选参数";
+"Optional Bark push parameters. Leave empty to not send that parameter.\nMarkdown: body as Markdown, ignores the notification's own formatting\nGroup: group name to group notifications\nIcon: HTTPS icon URL, replaces the Bark icon (iOS 15+)\nImage: HTTPS image URL, shown as a large picture\nBadge: badge number, 0 clears it\nLevel: critical / active / timeSensitive / passive (default active)\nVolume: 0-10, only for critical alerts (default 5)\nCall: 1 to repeat the ringtone for 30 seconds\nSound: ringtone name\nCopy: the text to copy when the notification is copied\nAutoCopy: 1 to copy automatically on arrival\nURL: URL to open when the push is tapped\nAction: alert shows an action popup, none makes tapping do nothing\nIsArchive: 1 to save the push to history\nTTL: retention time in seconds for archived pushes\nID: update the push with the same ID\nDelete: 1 to delete the push with the given ID (requires ID)" = "可选的 Bark 推送参数，留空则不发送该参数。\nMarkdown：正文按 Markdown 渲染，会忽略通知自身的格式\nGroup：分组名称，用于将通知分组\nIcon：HTTPS 图标 URL，替换 Bark 默认图标（需 iOS 15+）\nImage：HTTPS 图片 URL，展开通知可见大图\nBadge：角标数字，填 0 清除\nLevel：critical / active / timeSensitive / passive（默认 active）\nVolume：0-10，仅对 critical 级别生效（默认 5）\nCall：填 1 让铃声重复响 30 秒\nSound：铃声名称\nCopy：指定复制通知时复制的内容\nAutoCopy：填 1 收到时自动复制\nURL：点击推送时打开的链接\nAction：alert 打开应用时显示操作弹窗，none 点击无动作\nIsArchive：填 1 将推送保存到历史记录\nTTL：存档推送的保留时间（秒）\nID：相同 ID 会更新对应推送\nDelete：填 1 删除对应 ID 的推送（需同时填写 ID）";

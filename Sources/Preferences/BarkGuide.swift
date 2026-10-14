@@ -2,10 +2,10 @@ import UIKit
 
 /// The guide presented from a Bark instance's page.
 ///
-/// Three pictures of another app — where the key is read off, what the
-/// credentials should look like once it is in, and the encryption switches that
-/// have to be matched. The wording is the guide's author's, kept as written: it
-/// is short by intent and every line carries something.
+/// Three pictures of another app — the key to read off, what the credentials look
+/// like once it is in, and the encryption switches that have to be matched. The
+/// wording is the guide's author's, kept as written: it is short by intent and
+/// every line carries something.
 enum BarkGuide {
 
     /// The key in the screenshots. Generated for the guide, not anyone's.
@@ -16,29 +16,31 @@ enum BarkGuide {
             from: controller,
             title: "Using Bark".localized,
             blocks: [
-                .callout(("If Bark is on this device, add it to the app blacklist. "
-                    + "Otherwise it loops forever: Bark shows a notification, "
-                    + "Pusher forwards it, Bark shows it again.").localized),
+                .callout(("If you test on this device, you must add Bark to the app "
+                    + "blacklist. Otherwise it loops forever: Bark posts a "
+                    + "notification, Pusher forwards it to Bark, Bark posts it "
+                    + "again, and Pusher forwards that.").localized),
 
                 .heading("Key".localized),
-                .text(("Copy the middle of the test URL on Bark's first screen "
-                    + "into Key.").localized),
-                .image("bark_guide"),
-                .text(String(format: "Example: %@ is the key.".localized, exampleKey)),
-                .image("bark_creds_guide"),
+                .text("Copy the middle of the test URL on Bark's first screen into Key.".localized),
 
                 .heading("Server URL".localized),
-                .text("Leave it empty, or leave the default.".localized),
+                .text("Leave the default, or leave it empty.".localized),
 
-                .heading("Optional".localized),
-                .text("Push encryption".localized),
-                .text(("Optional. Match it to Push Encryption in Bark. Copy the "
-                    + "algorithm, mode and key; leave the IV alone.").localized),
+                .heading("Example".localized),
+                .image("bark_guide"),
+                .image("bark_creds_guide"),
+                .text(String(format: ("Bold, and without the brackets, is the key: "
+                    + "%@").localized, exampleKey)),
+
+                .heading("The advanced settings below are optional".localized),
+
+                .heading("Push encryption".localized),
+                .text("Match it to Push Encryption in Bark.".localized),
                 .image("bark_crypto_guide"),
-                .text(("More parameters: https://bark.day.app/#/params").localized),
+                .text("Copy the algorithm, mode and key. Leave the IV alone.".localized),
 
-                .heading("Testing".localized),
-                .text("Tap Send Test Notification at the bottom. If nothing arrives, check the key first.".localized),
+                .text("More parameters: bark.day.app/#/params".localized),
             ]
         )
     }
