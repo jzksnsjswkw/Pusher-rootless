@@ -167,8 +167,52 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         else { return }
         let text = cipherFooterText(key: key)
         guard text != group.property(forKey: "footerText") as? String else { return }
+
+        // Stored for the next rebuild, then written straight into the footer view
+        // that is already on screen. Reloading the section instead would rebuild
+        // every cell in it — including the key field the user is typing into,
+        // which would lose focus and its keyboard on the first keystroke.
         group.setProperty(text, forKey: "footerText")
-        reloadSpecifier(group, animated: false)
+        updateCipherFooterView(text)
+    }
+
+    /// Puts the new text into the section's footer view, if it is on screen.
+    ///
+    /// The view is asked of the table rather than searched for, so nothing is
+    /// rebuilt and no first responder is disturbed. When the section is off screen
+    /// there is nothing to update — the paragraph is written from the specifier
+    /// when the view is next built.
+    private func updateCipherFooterView(_ text: String) {
+        guard let table else { return }
+        let rows = (super.specifiers ?? []).compactMap { $0 as? PSSpecifier }
+        var section = -1
+        for specifier in rows where specifier.cellType == .groupCell {
+            section += 1
+            guard specifier.identifier == ServiceSpecifierBuilders.cipherHeadIdentifier else {
+                continue
+            }
+            guard section < table.numberOfSections,
+                  let footer = table.footerView(forSection: section)
+            else { return }
+
+            func apply(_ view: UIView) {
+                if let label = view as? UILabel { label.text = text }
+                view.subviews.forEach(apply)
+            }
+            apply(footer)
+            // The footer's height depends on its text, and a footer whose height
+            // was not recomputed draws the new lines outside its own bounds.
+            // The footer's height depends on its text, so the section has to be
+            // measured again — but only its height. /
+            // re-measures without rebuilding the section's cells, which is what
+            // keeps the key field's focus.
+            footer.setNeedsLayout()
+            UIView.performWithoutAnimation {
+                table.beginUpdates()
+                table.endUpdates()
+            }
+            return
+        }
     }
 
     /// The encryption notes, led by the key's problem when there is one.
