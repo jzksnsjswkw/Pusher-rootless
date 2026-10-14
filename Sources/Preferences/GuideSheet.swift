@@ -345,10 +345,20 @@ enum GuideSheet {
         view.isEditable = false
         view.isScrollEnabled = false
         view.isSelectable = true
-        view.dataDetectorTypes = []
         view.textContainerInset = .zero
         view.textContainer.lineFragmentPadding = 0
         view.setContentCompressionResistancePriority(.required, for: .vertical)
+
+        // Links are detected and made tappable. A guide ends up quoting a
+        // documentation URL often enough that leaving it as dead text means the
+        // reader retypes it, and the detector costs nothing when there is none.
+        //
+        // The text view is inside a scroll view and is not itself scrollable, so
+        // a tap on a link reaches it and a drag still scrolls the sheet.
+        view.dataDetectorTypes = [.link]
+        view.linkTextAttributes = [
+            .foregroundColor: UIColor.systemBlue,
+        ]
         return view
     }
 
