@@ -245,8 +245,14 @@ public final class BulletinAdapter: NSObject {
     /// says it is being shown.
     static func displayMessage(subtitle: String?, message: String?, showsSubtitle: Bool) -> String {
         let head = showsSubtitle ? (subtitle ?? "") : ""
-        guard !head.isEmpty, let message, !message.isEmpty else { return head }
-        return "\(head)\n\(message)"
+        let body = message ?? ""
+        // Either may be absent, and the one that is present is the whole message.
+        // The earlier version returned `head` whenever `head` was empty, which
+        // meant a notification with a body and no subtitle — WeChat's, among
+        // others — produced an empty string and forwarded nothing.
+        if head.isEmpty { return body }
+        if body.isEmpty { return head }
+        return "\(head)\n\(body)"
     }
 
     /// Resolves an app icon through SpringBoard's icon model.
