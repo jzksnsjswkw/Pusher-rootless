@@ -157,7 +157,9 @@ enum GuideSheet {
                 stack.addArrangedSubview(codeView(text))
             case .callout(let text):
                 let label = UILabel()
-                label.attributedText = withBold(text, style: .headline, bold: true)
+                label.attributedText = withBold(
+                    text, style: .headline, bold: true, colour: true
+                )
                 label.numberOfLines = 0
                 stack.addArrangedSubview(label)
             case .image(let name):
@@ -337,10 +339,12 @@ enum GuideSheet {
         // is an attributed-string API at every call site. A guide's markup is
         // written once and read once, and one marker is easier to keep to than a
         // builder per paragraph.
-        view.attributedText = withBold(text)
-        view.font = .preferredFont(forTextStyle: .subheadline)
+        //
+        // The font and colour travel in the attributed string, not in the view's
+        // `font` / `textColor` properties: those two restyle the whole string
+        // when assigned, which removes the bold spans the parser just made.
+        view.attributedText = withBold(text, colour: true)
         view.adjustsFontForContentSizeCategory = true
-        view.textColor = .label
         view.backgroundColor = .clear
         view.isEditable = false
         view.isScrollEnabled = false
@@ -372,7 +376,8 @@ enum GuideSheet {
     /// An unpaired marker is printed as written: a guide with a typo should read
     /// oddly rather than lose text.
     private static func withBold(
-        _ text: String, style: UIFont.TextStyle = .subheadline, bold: Bool = false
+        _ text: String, style: UIFont.TextStyle = .subheadline,
+        bold: Bool = false, colour: Bool = false
     ) -> NSAttributedString {
         let size = UIFont.preferredFont(forTextStyle: style).pointSize
         let base = bold
@@ -381,7 +386,14 @@ enum GuideSheet {
         let heavy = UIFontMetrics(forTextStyle: style)
             .scaledFont(for: .systemFont(ofSize: size, weight: .bold))
 
-        let attributed = NSMutableAttributedString(string: text, attributes: [.font: base])
+        // Font and colour are attributes of the string rather than properties of
+        // the view. Setting `UITextView.font` or `.textColor` restyles the whole
+        // of an attributed string, which silently discarded every bold span —
+        // and doing so is an ordering accident that would come back the next
+        // time this view is built. A string that describes itself has no order.
+        var attributes: [NSAttributedString.Key: Any] = [.font: base]
+        if colour { attributes[.foregroundColor] = UIColor.label }
+        let attributed = NSMutableAttributedString(string: text, attributes: attributes)
         let ns = text as NSString
         var spans: [NSRange] = []
         var cursor = 0
