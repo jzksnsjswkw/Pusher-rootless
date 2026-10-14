@@ -554,3 +554,14 @@
 "Optional, and it has to be set up on both sides. Bark can carry the whole push encrypted, so Bark's server and Apple see only ciphertext and the phone decrypts it. The settings on this page have to match the ones in Bark's **Push Encryption** screen exactly, or the phone shows \"Decryption Failed\"." = "可选项，且需要两端都配置。Bark 可以整条推送加密传输，这样 Bark 服务器和 Apple 只能看到密文，手机再解密。本页的设置必须和 Bark 里**推送加密**页的设置完全一致，否则手机会显示「解密失败」。";
 "Copy the algorithm, the mode and the key from there into the group below. Do not set an IV: Bark generates one for each push, and Pusher does the same." = "把那里的算法、模式和密钥抄到下面的分组里。不要设置初始向量：Bark 每次推送都会随机生成，Pusher 也一样。";
 "**Send Test Notification** at the bottom of this page sends a real push through this instance. If nothing arrives, the key is the first thing to check — Bark accepts a wrong one and reports the failure only on the phone." = "本页底部的**发送测试通知**会通过这个实例真实推送一次。如果没收到，先查密钥——Bark 会接受错误的密钥，只在手机上报告失败。";
+"Before you test" = "测试前";
+"Key" = "密钥";
+"Optional" = "可选";
+"Testing" = "测试";
+"If Bark is on this device, add it to the app blacklist first. Otherwise the loop never ends: Pusher forwards to Bark, Bark shows a notification, Pusher forwards that too." = "如果 Bark 装在本机，先把它加入应用黑名单，否则会无限循环：Pusher 转发给 Bark，Bark 弹出通知，Pusher 又转发这条通知。";
+"Copy the middle of the test URL on Bark's first screen into **Key**." = "从 Bark 首页的测试 URL 里复制中间那段，填入**密钥**。";
+"Example: %@ is the key." = "示例：%@ 就是密钥。";
+"Leave it empty." = "留空即可。";
+"**Push encryption** — match it to the Push Encryption screen in Bark. Copy the algorithm, mode and key; leave the IV alone." = "**推送加密**——和 Bark 里「推送加密」设置成一样的。算法、模式、密钥照抄，初始向量不用填。";
+"Other parameters: bark.day.app/#/params" = "更多参数参考官方文档：bark.day.app/#/params";
+"Tap **Send Test Notification** at the bottom. If nothing arrives, check the key first." = "点最下面的**发送测试通知**。收不到，先看密钥。";

@@ -74,12 +74,20 @@ public enum BarkService: PushService {
     public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
         var infoDict: [String: Any] = [
             "title": context.displayTitle,
-            "body": context.displayMessage,
+            "body": context.message ?? "",
         ]
-        // No `subtitle`, deliberately. The notification's subtitle is already in
-        // `displayMessage` — a bulletin shows it above the body, and the composed
-        // string joins the two — so sending it again would print it twice, once
-        // on its own line and once at the top of the body.
+        // Bark has a field for the subtitle, so the three arrive as three and the
+        // notification keeps its own shape. `displayMessage` is not used here for
+        // exactly that reason: it joins the subtitle to the body for services
+        // that have only one place to put both, and Bark is not one of them —
+        // its own subtitle line would be blank while the words sat at the top of
+        // the body.
+        //
+        // Absent when there is none, which is what the API means by unset: an
+        // empty `subtitle` would draw a blank line above the body.
+        if let subtitle = context.subtitle, !subtitle.isEmpty {
+            infoDict["subtitle"] = subtitle
+        }
         for (prefKey, apiName) in parameters {
             let value = config.raw.string(prefKey) ?? ""
             if !value.isEmpty { infoDict[apiName] = value }
