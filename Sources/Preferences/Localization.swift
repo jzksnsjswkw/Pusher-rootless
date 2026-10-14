@@ -26,16 +26,19 @@ public enum Localization {
 
     /// A human-readable name for one instance.
     ///
-    /// An instance whose name is the descriptor's default is localized, so the
-    /// built-in services read naturally in every language; a name the user
-    /// edited (or that was auto-numbered to "Bark 2") is their own text and
-    /// passes through unchanged.
+    /// The name is the user's own text and is shown unchanged. It used to be
+    /// localized whenever it matched the descriptor's display name, on the theory
+    /// that a match meant the user had left the default in place — but the name
+    /// is always typed, and a user-defined service's name is theirs as much as an
+    /// instance's. Two ways that misfired: a service the user called exactly
+    /// "Custom Service" displayed as "自定义服务", and so did an instance of it,
+    /// which made the name they had chosen unreadable in the list that exists to
+    /// tell their entries apart.
+    ///
+    /// Built-in service *types* are still localized, through
+    /// ``serviceDisplayName(_:)``, which is where the add list gets its labels.
     public static func instanceDisplayName(_ instance: ServiceInstance) -> String {
-        let descriptor = instance.descriptor
-        if instance.name == descriptor.displayName {
-            return string(descriptor.displayName)
-        }
-        return instance.name
+        instance.name
     }
 }
 
