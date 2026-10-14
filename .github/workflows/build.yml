@@ -91,10 +91,29 @@ jobs:
         THEOS_PACKAGE_SCHEME=roothide make clean
         THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1 make package
 
+    # The `~` in a prerelease's version is dpkg's ordering marker — it is what
+    # makes 3.0.0~beta2 sort before 3.0.0 — and GitHub rejects it in an asset
+    # name, rewriting it to `.`. The upload then fails, because the action looks
+    # for an existing asset under the *local* name and finds the rewritten one.
+    #
+    # Renaming the file here rather than dropping the `~` from the version: the
+    # version is what apt compares, and it is not worth getting wrong for the sake
+    # of a filename.
+    - name: Normalise package names
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        cd packages
+        for f in *.deb; do
+          mv "$f" "${f//\~/.}"
+        done
+        ls -la
+
     - name: Release
       uses: softprops/action-gh-release@v3
       if: startsWith(github.ref, 'refs/tags/')
       with:
         files: ${{ github.workspace }}/packages/*.deb
+        # Re-running a release must replace its assets rather than fail on them.
+        overwrite_files: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
