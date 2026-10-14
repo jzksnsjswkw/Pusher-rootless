@@ -117,22 +117,91 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // appearance, so whatever was toggled elsewhere is already reflected.
         seedImageSizing()
         seedCipherSettings()
+        refreshCipherFooter()
     }
 
-    /// Colours the encryption section's footer red when the key is wrong.
+    /// The key field, watched as it is typed into.
     ///
-    /// The section is found by the group cell that heads it, so the encryption
-    /// group can move and this still follows it — nothing here depends on which
-    /// section number it happens to be.
-    public override func footerColour(forSection section: Int) -> UIColor? {
-        guard let head = specifierForSection(section),
-              head.cellType == .groupCell,
-              head.name == "Encryption".localized
-        else { return nil }
-        let problem = ServiceSpecifierBuilders.cipherProblem(
-            stored: PrefsStore.instance(serviceInstanceID)
-        )
-        return problem == nil ? .secondaryLabel : .systemRed
+    /// `cellDidChange` only fires when the framework calls the setter, which is
+    /// when the field loses focus — so the warning would appear only after the
+    /// user looked away. The field's own `editingChanged` is what makes it appear
+    /// as they type, which is the same reason the add-service page watches its
+    /// name field.
+    private weak var cipherKeyField: UITextField?
+
+    /// Watches the key field if it is not already watched.
+    ///
+    /// A reload builds a new cell and a new field, so the listener is re-attached
+    /// whenever the cell is shown rather than once.
+    private func observeCipherKeyField(in cell: UITableViewCell) {
+        guard let field = Self.firstTextField(in: cell) else { return }
+        guard cipherKeyField !== field else { return }
+        cipherKeyField = field
+        field.addTarget(self, action: #selector(cipherKeyChanged(_:)), for: .editingChanged)
+    }
+
+    @objc private func cipherKeyChanged(_ field: UITextField) {
+        // The live text, not the stored value: the write has not happened yet.
+        refreshCipherFooter(key: field.text ?? "")
+    }
+
+    private static func firstTextField(in view: UIView) -> UITextField? {
+        for subview in view.subviews {
+            if let field = subview as? UITextField { return field }
+            if let found = firstTextField(in: subview) { return found }
+        }
+        return nil
+    }
+
+    /// Rewrites the encryption group's explanation to state the key's problem.
+    ///
+    /// The note is *text*, not a colour. A group's footer is a
+    /// `UITableViewHeaderFooterView` the framework builds and lays out, and three
+    /// attempts to reach into it and change its colour failed for three different
+    /// reasons; the run-options page has changed a footer's wording since it was
+    /// written, and that path is known to work. What the user needs to know is
+    /// that the key is the wrong length, and a sentence says it more precisely
+    /// than a colour does.
+    private func refreshCipherFooter(key: String? = nil) {
+        guard let group = specifier(forID: ServiceSpecifierBuilders.cipherHeadIdentifier)
+        else { return }
+        let text = cipherFooterText(key: key)
+        guard text != group.property(forKey: "footerText") as? String else { return }
+        group.setProperty(text, forKey: "footerText")
+        reloadSpecifier(group, animated: false)
+    }
+
+    /// The encryption notes, led by the key's problem when there is one.
+    ///
+    /// First rather than last: the paragraph below it is four lines of reference
+    /// that is the same every time, and a warning under it is a warning the user
+    /// has to read past the text to find.
+    private func cipherFooterText(key: String? = nil) -> String {
+        let notes = ServiceSpecifierBuilders.cipherNotes()
+        guard let problem = ServiceSpecifierBuilders.cipherProblem(
+            stored: PrefsStore.instance(serviceInstanceID), key: key
+        ) else { return notes }
+        return "⚠️ " + problem + "\n\n" + notes
+    }
+
+    /// Watches the encryption key field whenever its row is displayed.
+    ///
+    /// No `super` call: `PSListController` does not implement this delegate
+    /// method, so forwarding to it raises `doesNotRecognizeSelector`. The page
+    /// filters by the cell it wants, which is why the other page using this hook
+    /// does the same.
+    public override func tableView(
+        _ tableView: UITableView, willDisplay cell: UITableViewCell,
+        forRowAt indexPath: IndexPath
+    ) {
+        guard let specifier = specifierForRow(indexPath),
+              specifier.identifier == BarkPrefKey.cipherKey
+        else { return }
+        observeCipherKeyField(in: cell)
+        // Seed the footer from what is in the field, so a page opened with a
+        // wrong key says so before anything is typed.
+        refreshCipherFooter(key: cipherKeyField?.text
+            ?? PrefsStore.instance(serviceInstanceID).string(BarkPrefKey.cipherKey))
     }
 
     /// The Shortcut guide, presented over this page.
@@ -241,38 +310,12 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             // wrong length for the chosen algorithm is the one thing this page can
             // tell the user before a push is sent and decryption fails. Reloading
             // the group rebuilds its cell, which is when the colour is decided.
-            reloadCipherFooter()
+            refreshCipherFooter()
             return
         default:
             return
         }
         installSpecifiers(buildSpecifiers())
-    }
-
-    /// The group cell that heads a table section.
-    private func specifierForSection(_ section: Int) -> PSSpecifier? {
-        let rows = (super.specifiers ?? []).compactMap { $0 as? PSSpecifier }
-        var seen = -1
-        for specifier in rows where specifier.cellType == .groupCell {
-            seen += 1
-            if seen == section { return specifier }
-        }
-        return nil
-    }
-
-    /// Redraws the encryption section so its footer's colour is decided again.
-    private func reloadCipherFooter() {
-        let rows = (super.specifiers ?? []).compactMap { $0 as? PSSpecifier }
-        var seen = -1
-        for specifier in rows where specifier.cellType == .groupCell {
-            seen += 1
-            if specifier.name == "Encryption".localized {
-                // Reloading the group is what rebuilds its footer view: the
-                // framework asks for it again on the next layout pass.
-                table?.reloadSections(IndexSet(integer: seen), with: .none)
-                return
-            }
-        }
     }
 
     /// A switch's value, which arrives as a number.
@@ -483,6 +526,16 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         }
 
         all.append(contentsOf: testPushSection())
+
+        // The encryption group's explanation depends on what is stored, so it is
+        // written here rather than only on a later reload: the page should state
+        // the key's problem the first time it is opened, not after the user
+        // touches something.
+        if let group = all.first(where: {
+            $0.identifier == ServiceSpecifierBuilders.cipherHeadIdentifier
+        }) {
+            group.setProperty(cipherFooterText(), forKey: "footerText")
+        }
         return NSMutableArray(array: all)
     }
 

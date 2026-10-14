@@ -202,29 +202,6 @@ open class ListController: PSListController, TintableController {
         return specifiers
     }
 
-    /// The colour a section's footer should be drawn in, or `nil` to leave it.
-    ///
-    /// A group's explanation is not a cell — it is the section's footer view, a
-    /// `UITableViewHeaderFooterView` the framework builds — so it is reached here
-    /// rather than through the cell hooks. `viewForFooterInSection` is a delegate
-    /// method the framework does implement; `willDisplayCell` is one it does not,
-    /// and forwarding to that closed the page.
-    open func footerColour(forSection section: Int) -> UIColor? { nil }
-
-    open override func tableView(
-        _ tableView: UITableView, viewForFooterInSection section: Int
-    ) -> UIView? {
-        let view = super.tableView(tableView, viewForFooterInSection: section)
-        guard let view, let colour = footerColour(forSection: section) else { return view }
-
-        func recolour(_ subview: UIView) {
-            if let label = subview as? UILabel { label.textColor = colour }
-            subview.subviews.forEach(recolour)
-        }
-        recolour(view)
-        return view
-    }
-
     /// The specifier behind a table row.
     ///
     /// `PSListController` keeps one flat array and derives sections from its group
