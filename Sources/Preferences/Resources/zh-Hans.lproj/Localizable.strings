@@ -543,3 +543,14 @@
 "Encrypts the whole request, so the server and Apple cannot read it. Set the same values in the app under Push Encryption.\nKey length: AES128 needs 16 characters, AES192 24, AES256 32.\nThe IV is generated for each push and sent with it.\nA key of the wrong length leaves the request unencrypted rather than failing it, so the push still arrives." = "整个请求都会被加密，服务器和 Apple 都无法读取。请在 App 的「推送加密」里填同样的值。\n密钥长度：AES128 需 16 位，AES192 需 24 位，AES256 需 32 位。\n初始向量每次推送随机生成，并随请求一起发送。\n密钥长度不对时不会加密，但仍然会发送，通知照常到达。";
 "The key must be exactly %d characters for %@ (currently %d)." = "密钥必须是 %d 位（%@），当前 %d 位。";
 "Enable" = "启用";
+"Using Bark" = "使用 Bark";
+"The key" = "密钥";
+"Server URL" = "服务器 URL";
+"Push encryption" = "推送加密";
+"Testing it" = "测试";
+"Pusher sends through Bark's own API, so it needs your device's key — Bark pushes to a device, and the key names the device. Open Bark, and the key is the string in the test URL on its first screen." = "Pusher 通过 Bark 自己的 API 推送，所以需要你这台设备的密钥——Bark 是推给设备的，密钥就代表设备。打开 Bark，密钥是它的首屏上那段测试 URL 里的字符串。";
+"Paste everything between the server and the trailing text into **Key** above. It is letters and digits, no slashes." = "把服务器地址和末尾文字之间的那一串填入上方的**密钥**。它只含字母和数字，没有斜杠。";
+"Leave it empty to use Bark's own server, which is what the key above belongs to. Set it only if you run your own Bark server — then the key is that server's." = "留空则使用 Bark 官方服务器，上面的密钥属于它。只有你自建 Bark 服务器时才需要填写——那时密钥属于你自己的服务器。";
+"Optional, and it has to be set up on both sides. Bark can carry the whole push encrypted, so Bark's server and Apple see only ciphertext and the phone decrypts it. The settings on this page have to match the ones in Bark's **Push Encryption** screen exactly, or the phone shows \"Decryption Failed\"." = "可选项，且需要两端都配置。Bark 可以整条推送加密传输，这样 Bark 服务器和 Apple 只能看到密文，手机再解密。本页的设置必须和 Bark 里**推送加密**页的设置完全一致，否则手机会显示「解密失败」。";
+"Copy the algorithm, the mode and the key from there into the group below. Do not set an IV: Bark generates one for each push, and Pusher does the same." = "把那里的算法、模式和密钥抄到下面的分组里。不要设置初始向量：Bark 每次推送都会随机生成，Pusher 也一样。";
+"**Send Test Notification** at the bottom of this page sends a real push through this instance. If nothing arrives, the key is the first thing to check — Bark accepts a wrong one and reports the failure only on the phone." = "本页底部的**发送测试通知**会通过这个实例真实推送一次。如果没收到，先查密钥——Bark 会接受错误的密钥，只在手机上报告失败。";

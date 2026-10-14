@@ -89,15 +89,26 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
-        // Only the Shortcut service has a guide: the other instance pages send
-        // through a plist-backed request whose fields the page itself explains.
+        // Two services have a guide, for the same reason: both hand the user off
+        // to another app — a Shortcut to build, a Bark key to read off Bark's own
+        // screen — and the pages here cannot show what is over there. The rest
+        // explain themselves through their plist.
+        //
         // Set on each appearance rather than once, because the framework rebuilds
         // the bar as it reloads the page.
-        if serviceType == ShortcutService.serviceName {
+        switch serviceType {
+        case ShortcutService.serviceName:
             navigationItem.rightBarButtonItem = UIBarButtonItem(
                 title: "Guide".localized, style: .plain,
                 target: self, action: #selector(showShortcutGuide)
             )
+        case BarkService.serviceName:
+            navigationItem.rightBarButtonItem = UIBarButtonItem(
+                title: "Guide".localized, style: .plain,
+                target: self, action: #selector(showBarkGuide)
+            )
+        default:
+            break
         }
 
         // The tint is derived from the icon once; recomputing it on every
@@ -246,6 +257,12 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // wrong key says so before anything is typed.
         refreshCipherFooter(key: cipherKeyField?.text
             ?? PrefsStore.instance(serviceInstanceID).string(BarkPrefKey.cipherKey))
+    }
+
+    /// The Bark guide, presented over this page.
+    @objc private func showBarkGuide() {
+        view.endEditing(true)
+        BarkGuide.present(from: self)
     }
 
     /// The Shortcut guide, presented over this page.
