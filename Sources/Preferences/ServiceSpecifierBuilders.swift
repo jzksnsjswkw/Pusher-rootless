@@ -577,13 +577,13 @@ public final class ServiceSpecifierBuilders: NSObject {
         // Off, the switch alone: an instance that does not encrypt should not read
         // as a form it left blank.
         guard cipherEnabled(stored: stored, fallback: defaults?.raw) else {
-            return [cipherHead(), toggle("Encrypt", service: service, appID: appID,
+            return [cipherHead(), toggle("Enable", service: service, appID: appID,
                                          key: BarkPrefKey.cipherEnabled, defaultValue: false,
                                          changeObserver: pageObserver)]
         }
 
         let specifiers: [PSSpecifier] = [
-            toggle("Encrypt", service: service, appID: appID,
+            toggle("Enable", service: service, appID: appID,
                    key: BarkPrefKey.cipherEnabled, defaultValue: false,
                    changeObserver: pageObserver),
             segment("Algorithm", service: service, appID: appID,

@@ -542,3 +542,4 @@
 "Encryption" = "加密";
 "Encrypts the whole request, so the server and Apple cannot read it. Set the same values in the app under Push Encryption.\nKey length: AES128 needs 16 characters, AES192 24, AES256 32.\nThe IV is generated for each push and sent with it.\nA key of the wrong length leaves the request unencrypted rather than failing it, so the push still arrives." = "整个请求都会被加密，服务器和 Apple 都无法读取。请在 App 的「推送加密」里填同样的值。\n密钥长度：AES128 需 16 位，AES192 需 24 位，AES256 需 32 位。\n初始向量每次推送随机生成，并随请求一起发送。\n密钥长度不对时不会加密，但仍然会发送，通知照常到达。";
 "The key must be exactly %d characters for %@ (currently %d)." = "密钥必须是 %d 位（%@），当前 %d 位。";
+"Enable" = "启用";
