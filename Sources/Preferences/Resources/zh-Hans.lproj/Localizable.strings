@@ -565,3 +565,9 @@
 "**Push encryption** — match it to the Push Encryption screen in Bark. Copy the algorithm, mode and key; leave the IV alone." = "**推送加密**——和 Bark 里「推送加密」设置成一样的。算法、模式、密钥照抄，初始向量不用填。";
 "Other parameters: bark.day.app/#/params" = "更多参数参考官方文档：bark.day.app/#/params";
 "Tap **Send Test Notification** at the bottom. If nothing arrives, check the key first." = "点最下面的**发送测试通知**。收不到，先看密钥。";
+"Copy the middle of the test URL on Bark's first screen into Key." = "从 Bark 首页的测试 URL 里复制中间那段，填入 key 中。";
+"Leave it empty, or leave the default." = "默认或直接留空。";
+"Optional. Match it to Push Encryption in Bark. Copy the algorithm, mode and key; leave the IV alone." = "可选。和 Bark 里「推送加密」设置成一样的。算法、模式、密钥照抄，初始向量不用填。";
+"More parameters: https://bark.day.app/#/params" = "更多参数参考 bark 官方文档：https://bark.day.app/#/params";
+"Tap Send Test Notification at the bottom. If nothing arrives, check the key first." = "点最下面的「发送测试通知」。收不到，先看密钥。";
+"If Bark is on this device, add it to the app blacklist. Otherwise it loops forever: Bark shows a notification, Pusher forwards it, Bark shows it again." = "若本机测试，一定要将 bark 添加进黑名单，否则会无限推送（bark 发送通知，插件转发给 bark，bark 弹通知又被插件转发，无限循环）";

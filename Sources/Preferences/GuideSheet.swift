@@ -18,6 +18,9 @@ enum GuideSheet {
         case text(String)
         /// A monospaced block: code, or an API written as declarations.
         case code(String)
+        /// A paragraph set bold and larger than the body: a warning, or the one
+        /// thing to read first.
+        case callout(String)
         /// A picture, from the bundle. Sized to the sheet's width.
         ///
         /// A screenshot says in one glance what a paragraph of instructions
@@ -152,6 +155,11 @@ enum GuideSheet {
                 stack.addArrangedSubview(bodyView(text))
             case .code(let text):
                 stack.addArrangedSubview(codeView(text))
+            case .callout(let text):
+                let label = UILabel()
+                label.attributedText = withBold(text, style: .headline, bold: true)
+                label.numberOfLines = 0
+                stack.addArrangedSubview(label)
             case .image(let name):
                 if let view = imageView(name) {
                     stack.addArrangedSubview(view)
@@ -325,10 +333,14 @@ enum GuideSheet {
     /// text and a drag outside it scrolls the sheet.
     private static func bodyView(_ text: String) -> UITextView {
         let view = UITextView()
-        view.text = text
+        // `**bold**`, because the guides are written as prose and the alternative
+        // is an attributed-string API at every call site. A guide's markup is
+        // written once and read once, and one marker is easier to keep to than a
+        // builder per paragraph.
+        view.attributedText = withBold(text)
         view.font = .preferredFont(forTextStyle: .subheadline)
         view.adjustsFontForContentSizeCategory = true
-        view.textColor = .secondaryLabel
+        view.textColor = .label
         view.backgroundColor = .clear
         view.isEditable = false
         view.isScrollEnabled = false
@@ -340,7 +352,47 @@ enum GuideSheet {
         return view
     }
 
-    /// Bundle images at the sheet's width, keeping their aspect ratio.
+    /// Parses `**bold**` spans into an attributed string.
+    ///
+    /// One pass over the original text, collecting the spans as it goes and
+    /// building the result afterwards. Removing the markers as they are found —
+    /// which is the obvious way — makes every later range stale, because they
+    /// were computed against the text before the deletions.
+    ///
+    /// An unpaired marker is printed as written: a guide with a typo should read
+    /// oddly rather than lose text.
+    private static func withBold(
+        _ text: String, style: UIFont.TextStyle = .subheadline, bold: Bool = false
+    ) -> NSAttributedString {
+        let size = UIFont.preferredFont(forTextStyle: style).pointSize
+        let base = bold
+            ? UIFont.systemFont(ofSize: size, weight: .bold)
+            : UIFont.preferredFont(forTextStyle: style)
+        let heavy = UIFontMetrics(forTextStyle: style)
+            .scaledFont(for: .systemFont(ofSize: size, weight: .bold))
+
+        let attributed = NSMutableAttributedString(string: text, attributes: [.font: base])
+        let ns = text as NSString
+        var spans: [NSRange] = []
+        var cursor = 0
+        while cursor < ns.length {
+            let open = ns.range(of: "**", range: NSRange(cursor..<ns.length))
+            guard open.location != NSNotFound else { break }
+            let afterOpen = open.location + open.length
+            let close = ns.range(of: "**", range: NSRange(afterOpen..<ns.length))
+            guard close.location != NSNotFound else { break }
+            spans.append(NSRange(location: afterOpen, length: close.location - afterOpen))
+            cursor = close.location + close.length
+        }
+        for span in spans.reversed() {
+            attributed.addAttribute(.font, value: heavy, range: span)
+            attributed.deleteCharacters(in: NSRange(location: span.location + span.length, length: 2))
+            attributed.deleteCharacters(in: NSRange(location: span.location - 2, length: 2))
+        }
+        return attributed
+    }
+
+/// Bundle images at the sheet's width, keeping their aspect ratio.
     ///
     /// `UIImageView` in an arranged subview has no intrinsic width, so the width
     /// comes from the stack and the height from the picture's own ratio. The

@@ -2,11 +2,10 @@ import UIKit
 
 /// The guide presented from a Bark instance's page.
 ///
-/// Three things the page cannot show: where the key is read off, what the
-/// credentials it is pasted into should end up looking like, and that forwarding
-/// Bark's own notifications back to Bark loops. The last one is a trap rather
-/// than an instruction — the loop is self-sustaining and both sides look healthy
-/// while it runs — so it leads.
+/// Three pictures of another app — where the key is read off, what the
+/// credentials should look like once it is in, and the encryption switches that
+/// have to be matched. The wording is the guide's author's, kept as written: it
+/// is short by intent and every line carries something.
 enum BarkGuide {
 
     /// The key in the screenshots. Generated for the guide, not anyone's.
@@ -17,30 +16,29 @@ enum BarkGuide {
             from: controller,
             title: "Using Bark".localized,
             blocks: [
-                .heading("Before you test".localized),
-                .text(("If Bark is on this device, add it to the app blacklist first. "
-                    + "Otherwise the loop never ends: Pusher forwards to Bark, Bark "
-                    + "shows a notification, Pusher forwards that too.").localized),
+                .callout(("If Bark is on this device, add it to the app blacklist. "
+                    + "Otherwise it loops forever: Bark shows a notification, "
+                    + "Pusher forwards it, Bark shows it again.").localized),
 
                 .heading("Key".localized),
-                .text(("Copy the middle of the test URL on Bark's first screen into "
-                    + "**Key**.").localized),
+                .text(("Copy the middle of the test URL on Bark's first screen "
+                    + "into Key.").localized),
                 .image("bark_guide"),
                 .text(String(format: "Example: %@ is the key.".localized, exampleKey)),
                 .image("bark_creds_guide"),
 
                 .heading("Server URL".localized),
-                .text("Leave it empty.".localized),
+                .text("Leave it empty, or leave the default.".localized),
 
                 .heading("Optional".localized),
-                .text(("**Push encryption** — match it to the Push Encryption screen "
-                    + "in Bark. Copy the algorithm, mode and key; leave the IV "
-                    + "alone.").localized),
+                .text("Push encryption".localized),
+                .text(("Optional. Match it to Push Encryption in Bark. Copy the "
+                    + "algorithm, mode and key; leave the IV alone.").localized),
                 .image("bark_crypto_guide"),
-                .text(("Other parameters: bark.day.app/#/params").localized),
+                .text(("More parameters: https://bark.day.app/#/params").localized),
 
                 .heading("Testing".localized),
-                .text("Tap **Send Test Notification** at the bottom. If nothing arrives, check the key first.".localized),
+                .text("Tap Send Test Notification at the bottom. If nothing arrives, check the key first.".localized),
             ]
         )
     }
