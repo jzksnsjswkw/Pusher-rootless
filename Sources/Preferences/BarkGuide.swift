@@ -30,8 +30,10 @@ enum BarkGuide {
                 .heading("Example".localized),
                 .image("bark_guide"),
                 .image("bark_creds_guide"),
-                .text(String(format: ("Bold, and without the brackets, is the key: "
-                    + "%@").localized, exampleKey)),
+                // The markers around the placeholder make the value bold: it is
+                // the thing to compare against the highlight in the picture, and
+                // the sentence around it is scaffolding.
+                .text(String(format: "**%@** is the key.".localized, exampleKey)),
 
                 .heading("The advanced settings below are optional".localized),
 
