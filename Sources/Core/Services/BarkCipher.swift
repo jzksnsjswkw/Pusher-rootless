@@ -74,16 +74,19 @@ enum BarkCipher {
 
     /// The settings the user stored, and whether they are complete.
     struct Settings {
+        var isEnabled: Bool
         var algorithm: Algorithm
         var mode: Mode
         var key: String
 
-        /// Whether anything is set, which is what the enable switch stores.
+        /// Whether a push should be encrypted with these settings.
         ///
-        /// A key is required and nothing else can stand in for it, so its
-        /// presence is what "encryption is on" means; asking for a separate
-        /// boolean would let the two disagree.
-        var isUsable: Bool { !key.isEmpty }
+        /// The switch decides, and the key has to be there for the decision to
+        /// mean anything. Reading the key alone is not enough: turning the switch
+        /// off leaves the key in storage — deliberately, so it is not retyped when
+        /// it is turned back on — and a key that is merely present would keep
+        /// encrypting every push after the user had switched it off.
+        var isUsable: Bool { isEnabled && !key.isEmpty }
 
         /// What is wrong with the settings, or `nil` when they are usable.
         func problem() -> Failure? {

@@ -630,7 +630,7 @@ public final class ServiceSpecifierBuilders: NSObject {
     /// short, and the app says so in those words ("请输入 16 位密钥"). Reporting
     /// only the long case would leave the other half of the same mistake silent.
     static func cipherProblem(stored: Prefs, key liveKey: String? = nil) -> String? {
-        guard cipherEnabled(stored: stored, fallback: nil) else { return nil }
+        guard stored.bool(BarkPrefKey.cipherEnabled, default: false) else { return nil }
         // The live text when the caller has it — mid-typing, the stored value is
         // whatever was last committed, not what is on screen.
         let key = liveKey ?? stored.string(BarkPrefKey.cipherKey) ?? ""

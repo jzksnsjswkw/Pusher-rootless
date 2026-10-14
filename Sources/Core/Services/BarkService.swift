@@ -63,6 +63,7 @@ public enum BarkService: PushService {
     private static func cipherSettings(from config: ServiceConfig) -> BarkCipher.Settings {
         let raw = config.raw
         return BarkCipher.Settings(
+            isEnabled: config.raw.bool(BarkPrefKey.cipherEnabled, default: false),
             algorithm: BarkCipher.Algorithm(rawValue: raw.string(BarkPrefKey.cipherAlgorithm) ?? "")
                 ?? .aes128,
             mode: BarkCipher.Mode(rawValue: raw.string(BarkPrefKey.cipherMode) ?? "") ?? .cbc,
