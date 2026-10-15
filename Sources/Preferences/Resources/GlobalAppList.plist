@@ -4,7 +4,6 @@
 <dict>
 	<key>items</key>
 	<array>
-		<!--  Global App List -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -12,18 +11,18 @@
 			<string>Apps</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.noahsaso.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSSegmentCell</string>
 			<key>default</key>
-			<true />
+			<true/>
 			<key>defaults</key>
 			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
-			<string>GlobalAppListIsBlacklist</string>
+			<string>appListIsBlacklist</string>
 			<key>validTitles</key>
 			<array>
 				<string>Blacklist</string>
@@ -31,11 +30,13 @@
 			</array>
 			<key>validValues</key>
 			<array>
-				<true />
-				<false />
+				<true/>
+				<false/>
 			</array>
 		</dict>
 		<dict>
+			<key>alphabeticIndexingEnabled</key>
+			<true/>
 			<key>cell</key>
 			<string>PSLinkListCell</string>
 			<key>detail</key>
@@ -45,9 +46,7 @@
 			<key>label</key>
 			<string>Global App List</string>
 			<key>useSearchBar</key>
-			<true />
-			<key>alphabeticIndexingEnabled</key>
-			<true />
+			<true/>
 		</dict>
 	</array>
 	<key>title</key>

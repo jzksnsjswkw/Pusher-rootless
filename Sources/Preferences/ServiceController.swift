@@ -562,13 +562,8 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             specifier.setProperty(serviceType, forKey: SpecifierRouting.PropertyKey.serviceType)
             // The app list controller needs to know whether this page belongs to
             // a webhook so it can seed a new override correctly.
-            // The plist's own app-list row hides with the segment on "Default",
-            // exactly as the code-built copy hides in `appFilterSpecifiers`:
-            // with the instance following the global list, a picker here would
-            // hold choices nothing reads.
             if specifier.cellType == .linkCell, specifier.name == "App List".localized {
                 specifier.setProperty(isWebhook, forKey: SpecifierRouting.PropertyKey.isWebhook)
-                if !showsAppList { continue }
             }
             // The plist's own app-list segment (Blacklist/Whitelist) gets the same
             // leading "Default" the device-condition segments get below: chosen,
@@ -597,6 +592,22 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             }
         }
         SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .instance(id: serviceInstanceID))
+
+        // The plist's own app-list row hides with the segment on "Default", the
+        // same way the code-built copy never gets appended in
+        // `appFilterSpecifiers`: with the instance following the global list, a
+        // picker here would hold choices nothing reads.
+        //
+        // Removed rather than skipped while the array was being walked. `all`
+        // holds the same specifier *objects* as `loaded`, so dropping one here
+        // drops it from the page; the walk itself only visits elements, and a
+        // `continue` in it would leave the row in the array and on the screen.
+        if !showsAppList {
+            all.removeAll {
+                $0.cellType == .linkCell
+                    && AppListTitle.baseName(of: $0.name) == "App List".localized
+            }
+        }
 
         // ── The settings this service declares ──────────────────────────────
         // Where a service's own vocabulary is filled in: the fields the service

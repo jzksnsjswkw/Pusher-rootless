@@ -70,6 +70,26 @@ public enum PushFilter {
         )
     }
 
+    /// The list that decides for this instance: its own, or the global one.
+    ///
+    /// An instance that has chosen blacklist or whitelist owns the decision —
+    /// its list, even empty, replaces the global list rather than adding to it.
+    /// Otherwise a global blacklist could never be lifted for one destination,
+    /// and an instance whose list is empty would be filtered by a list it never
+    /// asked to follow.
+    ///
+    /// "Default" — no mode stored — is the case that follows the global list.
+    public static func effectiveAppListReason(
+        config: ServiceConfig, global: ConfigSnapshot, appID: String
+    ) -> String? {
+        guard let isBlacklist = config.appListIsBlacklist else {
+            return globalAppListReason(config: global, appID: appID)
+        }
+        return appListReason(
+            appList: config.appList, isBlacklist: isBlacklist, appID: appID
+        )
+    }
+
     private static func appListReason(appList: [String], isBlacklist: Bool, appID: String) -> String? {
         let contains = appList.contains(appID)
         // Both a blacklist hit and a whitelist miss are "the app is listed when

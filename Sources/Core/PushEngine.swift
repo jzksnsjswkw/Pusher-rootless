@@ -106,15 +106,12 @@ public final class PushEngine: NSObject {
             return
         }
 
-        // The global app list is evaluated before loop prevention: a blocked app
-        // should not consume a slot in the loop-prevention window.
-        if let reason = PushFilter.globalAppListReason(config: config, appID: context.appID) {
-            PusherLog.debug("[Global] \(reason): \(context.appID)")
-            PushLog.add(service: "", context: context,
-                        label: "Blocked by global app list "
-                            + "(\(config.globalAppListIsBlacklist ? "blacklist" : "whitelist"))")
-            return
-        }
+        // The global app list is not checked here. It is a *default* an instance
+        // can override, so it has to be consulted per instance, beside the
+        // instance's own — a check that runs once for the whole notification
+        // cannot be overridden by anything, and an instance with its own empty
+        // blacklist would still be blocked by the global list it had just
+        // replaced. See `send(to:context:config:deviceState:)`.
 
         guard !isLooping(context) else {
             PusherLog.debug("Prevented loop")
@@ -328,7 +325,14 @@ public final class PushEngine: NSObject {
             // `keep({force: true})`: the hook has decided, so the filters that
             // exist to suppress unwanted pushes do not get to disagree.
             if !isForced {
-            if let reason = PushFilter.appListReason(config: serviceConfig, appID: context.appID) {
+            // The instance's own list, or the global one when it has none: the
+            // segment's "Default" is what makes the second case reachable, and
+            // an instance that set its own replaces the global list rather than
+            // adding to it — otherwise a global blacklist could never be lifted
+            // for one destination.
+            if let reason = PushFilter.effectiveAppListReason(
+                config: serviceConfig, global: config, appID: context.appID
+            ) {
                 PusherLog.debug("[S:\(service)] Blocked by app list: \(context.appID)")
                 PushLog.add(service: service, context: context, label: reason)
                 return
