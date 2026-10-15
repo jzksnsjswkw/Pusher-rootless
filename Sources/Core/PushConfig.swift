@@ -273,11 +273,12 @@ public enum ConfigLoader {
 
         let stored = instance.config
 
-        // The identity fields are always present and come from the instance.
-        raw[PrefKey.instanceID] = instance.id
-        raw[PrefKey.instanceType] = instance.type
-        raw[PrefKey.instanceName] = instance.name
-        raw[PrefKey.serviceEnabled] = instance.isEnabled
+        // The instance's identity is *not* written here. A service may name a
+        // parameter the same as an identity key — Bark's push-updating `id` does —
+        // and overwriting it replaced the user's value with the instance's UUID on
+        // every request. Nothing reads these from `raw`: the engine and the UI hold
+        // the `ServiceInstance` itself, and the store reads the array. What a
+        // service reads from `raw` is its settings, and the settings alone.
 
         // Filters, defaulted from the global settings when the instance has no
         // opinion of its own.
