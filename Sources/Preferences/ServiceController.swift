@@ -545,6 +545,27 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             if specifier.cellType == .linkCell, specifier.name == "App List".localized {
                 specifier.setProperty(isWebhook, forKey: SpecifierRouting.PropertyKey.isWebhook)
             }
+            // The plist's own app-list segment (Blacklist/Whitelist) gets the same
+            // leading "Default" the device-condition segments get below: chosen,
+            // it stores nothing and the instance follows the global list. The
+            // code-built copy of this segment — `appFilterSpecifiers`, for the
+            // services with no plist — carries it already; this is the other
+            // path, and it had been left at two states.
+            if specifier.identifier == "appListIsBlacklist" {
+                var values: [Any] = specifier.values ?? []
+                let titleDictionary = specifier.titleDictionary ?? [:]
+                var titles: [String] = ["Default".localized]
+                for value in values {
+                    guard let key = value as? AnyHashable else { continue }
+                    titles.append(titleDictionary[key] as? String ?? "")
+                }
+                values.insert(NSNumber(value: segmentCellDefault), at: 0)
+                specifier.setValues(values, titles: titles)
+                specifier.setProperty(
+                    NSNumber(value: segmentCellDefault),
+                    forKey: SpecifierRouting.PropertyKey.defaultValue
+                )
+            }
         }
         SpecifierRouting.route(loaded, to: PreferencesStorage.self, scope: .instance(id: serviceInstanceID))
 
