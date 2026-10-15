@@ -52,8 +52,15 @@ public struct ServiceConfig {
     // MARK: - Filters
 
     public var appList: [String] { raw.stringArray(PrefKey.appList) }
-    /// Defaults to `true` (blacklist) when unset.
-    public var appListIsBlacklist: Bool { raw.bool(PrefKey.appListIsBlacklist, default: true) }
+    /// `nil` is the segment's "Default" — the instance follows the global list,
+    /// which the engine has already applied by the time this is read. `true` and
+    /// `false` are the instance's own blacklist and whitelist.
+    ///
+    /// The earlier form defaulted a missing key to `true`, which made "Default"
+    /// and "blacklist" the same setting and silently ignored a global whitelist.
+    public var appListIsBlacklist: Bool? {
+        raw[PrefKey.appListIsBlacklist] as? Bool
+    }
 
     /// The SNS condition keys this instance is gated on.
     public var sns: [String] { raw.stringArray(PrefKey.sns) }
@@ -280,10 +287,15 @@ public enum ConfigLoader {
         // the `ServiceInstance` itself, and the store reads the array. What a
         // service reads from `raw` is its settings, and the settings alone.
 
-        // Filters, defaulted from the global settings when the instance has no
-        // opinion of its own.
+        // Filters. The blacklist mode is copied as stored — absent, "Default",
+        // true or false — and not defaulted here: a missing key is the segment's
+        // third state, and writing `true` over its absence collapsed "follow the
+        // global list" into "blacklist". The list itself stays as stored too; the
+        // engine skips the instance-level check entirely when no mode is set.
         raw[PrefKey.appList] = stored.stringArray(PrefKey.appList)
-        raw[PrefKey.appListIsBlacklist] = stored.bool(PrefKey.appListIsBlacklist, default: true)
+        if let mode = stored[PrefKey.appListIsBlacklist] {
+            raw[PrefKey.appListIsBlacklist] = mode
+        }
         raw[PrefKey.whenToPush] = stored.resolvedInt(
             PrefKey.whenToPush, default: snapshot.whenToPush.rawValue
         )

@@ -194,9 +194,15 @@ public final class PreferencesStorage: NSObject {
 
     /// `appListIsBlacklist` defaults to `true`, so storing `true` is a no-op and
     /// the entry is dropped instead (reads fall back to the default).
+    /// Whether a value is the segment's "Default" sentinel, meaning "store
+    /// nothing and follow the global setting".
+    ///
+    /// `appListIsBlacklist` used to be its own special case here — a `true`
+    /// counted as "default" because the segment had only two states and one of
+    /// them had to be absent. With three states the sentinel is the only
+    /// default, and `true` is a real blacklist that has to be stored.
     private static func isDefaultBool(key: String, value: Any) -> Bool {
-        guard key == PrefKey.appListIsBlacklist else { return false }
-        return Prefs([key: value]).bool(key, default: true)
+        (value as? NSNumber)?.intValue == segmentCellDefault
     }
 }
 

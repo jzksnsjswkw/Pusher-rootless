@@ -161,9 +161,12 @@ public enum ServiceImporter {
             }
             if let appList = instance.appList, !appList.isEmpty {
                 object[PrefKey.appList] = appList
-                object[PrefKey.appListIsBlacklist] = instance.appListIsBlacklist ?? true
-            } else if instance.appListIsBlacklist != nil {
-                object[PrefKey.appListIsBlacklist] = instance.appListIsBlacklist
+            }
+            // Written on its own: a document that carries only the mode (or
+            // neither half) is preserved as it was, rather than being rounded to
+            // a blacklist by a default that no longer exists.
+            if let isBlacklist = instance.appListIsBlacklist {
+                object[PrefKey.appListIsBlacklist] = isBlacklist
             }
             // The declared settings' values, in the instance's own namespace, so a
             // document cannot reach a framework key through them.

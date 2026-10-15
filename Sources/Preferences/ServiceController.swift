@@ -427,8 +427,20 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             segment.setProperty(PrefKey.appListIsBlacklist,
                                 forKey: SpecifierRouting.PropertyKey.customAppsPrefsKey)
             segment.setProperty(true, forKey: "enabled")
-            segment.setProperty(true, forKey: SpecifierRouting.PropertyKey.defaultValue)
-            segment.setValues([true, false], titles: ["Blacklist".localized, "Whitelist".localized])
+            // "Default" leads, the same sentinel the device-condition segments
+            // carry: chosen, it stores nothing and the instance follows the
+            // global list, which the engine applies before the per-instance
+            // loop. Without it the segment had only two states, and a global
+            // whitelist could not be followed — "blacklist" was the closest the
+            // instance could get.
+            segment.setProperty(
+                NSNumber(value: segmentCellDefault),
+                forKey: SpecifierRouting.PropertyKey.defaultValue
+            )
+            segment.setValues(
+                [NSNumber(value: segmentCellDefault), true, false],
+                titles: ["Default".localized, "Blacklist".localized, "Whitelist".localized]
+            )
             specifiers.append(segment)
         }
 

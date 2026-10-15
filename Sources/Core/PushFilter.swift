@@ -47,10 +47,15 @@ public enum PushFilter {
 
     /// The per-service app list. A blacklist blocks listed apps; a whitelist
     /// blocks everything else.
+    ///
+    /// `nil` — the segment's "Default" — applies nothing here: the global list
+    /// has already had its say before the per-instance loop, and re-checking it
+    /// per instance would only repeat the same verdict.
     public static func appListReason(config: ServiceConfig, appID: String) -> String? {
-        appListReason(
+        guard let isBlacklist = config.appListIsBlacklist else { return nil }
+        return appListReason(
             appList: config.appList,
-            isBlacklist: config.appListIsBlacklist,
+            isBlacklist: isBlacklist,
             appID: appID
         )
     }
