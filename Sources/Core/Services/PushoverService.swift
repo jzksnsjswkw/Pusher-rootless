@@ -12,12 +12,17 @@ public enum PushoverService: PushService {
     public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
         let deviceIDs = config.raw.dictionaries(PrefKey.devices).compactMap { $0.string("id") }
 
+        // A body is required, and a notification may be a title alone: the two
+        // fields swap roles so neither is empty and nothing is printed twice.
+        let hasBody = !context.displayMessage.isEmpty
+        let title = hasBody ? context.displayTitle : context.appName
+        let body = hasBody ? context.displayMessage : (context.title ?? title)
+
         var infoDict: [String: Any] = [
             "token": config.raw.string(PrefKey.token, default: ""),
             "user": config.raw.string(PrefKey.user, default: ""),
-            "title": context.displayTitle,
-            // Required by the API.
-            "message": context.pushBody,
+            "title": title,
+            "message": body,
             "device": deviceIDs.joined(separator: ","),
         ]
         // Pushover accepts one sound per message, so the first selected wins.

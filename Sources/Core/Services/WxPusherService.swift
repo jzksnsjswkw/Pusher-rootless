@@ -25,26 +25,20 @@ public enum WxPusherService: PushService {
     }
 
     public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+        // A body is required, and a notification may be a title alone: the two
+        // fields swap roles so neither is empty and nothing is printed twice.
+        let hasBody = !context.displayMessage.isEmpty
+
         var infoDict: [String: Any] = [
             "appToken": config.raw.string(WxPusherPrefKey.appToken, default: ""),
-            // The API rejects an empty body with `1001 content不能为空`, so a
-            // notification that carried only a title would never arrive.
-            "content": context.pushBody,
+            "content": hasBody ? context.displayMessage : (context.title ?? context.appName),
             // 1 text, 2 HTML, 3 Markdown. Text is the default the API documents.
             "contentType": config.raw.int(WxPusherPrefKey.contentType, default: 1),
         ]
 
-        // The title, and only the title, when the notification has no body of its
-        // own: the fallback body is the notification's title, and sending
-        // `"App: title"` above it would print that title twice. With a body to
-        // send, the summary is the displayed title as usual.
-        //
-        // Left out entirely when empty rather than sent as "" — the platform then
-        // shows the content, which reads better than a blank line. Only a test
-        // push has nothing to send.
-        let summary = context.displayMessage.isEmpty
-            ? context.appName
-            : context.displayTitle
+        // Left out when empty rather than sent as "": the platform then shows the
+        // content, which reads better than a blank line.
+        let summary = hasBody ? context.displayTitle : context.appName
         if !summary.isEmpty { infoDict["summary"] = summary }
 
         // Both lists are sent as arrays; empty ones are left out rather than sent

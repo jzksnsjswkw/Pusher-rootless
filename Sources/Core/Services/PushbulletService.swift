@@ -10,10 +10,14 @@ public enum PushbulletService: PushService {
     }
 
     public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+        // A body is required, and a notification may be a title alone: the two
+        // fields swap roles so neither is empty and nothing is printed twice.
+        let hasBody = !context.displayMessage.isEmpty
+
         var infoDict: [String: Any] = [
             "type": "note",
-            "title": context.displayTitle,
-            "body": context.pushBody,
+            "title": hasBody ? context.displayTitle : context.appName,
+            "body": hasBody ? context.displayMessage : (context.title ?? context.appName),
         ]
         if let device = firstDeviceID(config: config) {
             infoDict["device_iden"] = device

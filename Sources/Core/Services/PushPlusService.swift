@@ -34,11 +34,14 @@ public enum PushPlusService: PushService {
     }
 
     public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+        // A body is required, and a notification may be a title alone: the two
+        // fields swap roles so neither is empty and nothing is printed twice.
+        let hasBody = !context.displayMessage.isEmpty
+
         var infoDict: [String: Any] = [
             "token": config.raw.string(PushPlusPrefKey.token, default: ""),
-            "title": context.displayTitle,
-            // Required, like WxPusher's: an empty one is refused.
-            "content": context.pushBody,
+            "title": hasBody ? context.displayTitle : context.appName,
+            "content": hasBody ? context.displayMessage : (context.title ?? context.appName),
         ]
         // Both are optional and both have a sensible server-side default —
         // sending to the account itself, in the HTML template — so an empty field

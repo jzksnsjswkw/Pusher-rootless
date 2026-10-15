@@ -128,23 +128,6 @@ public struct BulletinContext {
     /// Subtitle + message, joined as the bulletin would show them.
     public var displayMessage: String = ""
 
-    /// The message body to send, never empty.
-    ///
-    /// A notification may carry a title and nothing else — a subscription alert
-    /// from a push platform is one — and `displayMessage` is then correctly
-    /// empty. Several APIs reject an empty body outright, so those services send
-    /// this instead.
-    ///
-    /// The fallback is the notification's own title, not `displayTitle`: that one
-    /// carries the app's name, which the service is sending as the summary
-    /// already. Using it would put the same sentence in both fields — a
-    /// notification whose title and body read identically, which is what this
-    /// avoids rather than causes.
-    public var pushBody: String {
-        guard displayMessage.isEmpty else { return displayMessage }
-        return (title?.isEmpty == false) ? title! : displayTitle
-    }
-
     /// The bulletin's primary attachment file, `nil` when it has none.
     public var attachmentURL: URL?
 
