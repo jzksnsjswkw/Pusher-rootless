@@ -366,6 +366,11 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             }
             guard previous != isOn else { return }
             showsCipherSettings = isOn
+        case PrefKey.appListIsBlacklist:
+            // The row appears and disappears with this, so the page is rebuilt
+            // rather than a single cell reloaded.
+            installSpecifiers(buildSpecifiers())
+            return
         case BarkPrefKey.cipherKey, BarkPrefKey.cipherAlgorithm:
             // The rows do not move, but the footer's verdict does: a key of the
             // wrong length for the chosen algorithm is the one thing this page can
@@ -377,6 +382,12 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             return
         }
         installSpecifiers(buildSpecifiers())
+    }
+
+    /// Whether the app-list row is shown: false while the segment reads
+    /// "Default", true once the instance has a list of its own.
+    private var showsAppList: Bool {
+        PrefsStore.instance(serviceInstanceID)[PrefKey.appListIsBlacklist] != nil
     }
 
     /// A switch's value, which arrives as a number.
@@ -427,6 +438,10 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             segment.setProperty(PrefKey.appListIsBlacklist,
                                 forKey: SpecifierRouting.PropertyKey.customAppsPrefsKey)
             segment.setProperty(true, forKey: "enabled")
+            segment.setProperty(
+                NSValue(nonretainedObject: self),
+                forKey: SpecifierRouting.PropertyKey.changeObserver
+            )
             // "Default" leads, the same sentinel the device-condition segments
             // carry: chosen, it stores nothing and the instance follows the
             // global list, which the engine applies before the per-instance
@@ -444,7 +459,12 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             specifiers.append(segment)
         }
 
-        if let appList = PSSpecifier.preferenceSpecifierNamed(
+        // Hidden while the segment is on "Default": with no list of its own, the
+        // row would open a picker whose choices the instance does not use — it
+        // follows the global list — and changing them would look as though it had
+        // done nothing. The row returns the moment the segment claims blacklist or
+        // whitelist, which is when the list starts to mean something.
+        if showsAppList, let appList = PSSpecifier.preferenceSpecifierNamed(
             "App List".localized, target: nil, set: nil, get: nil,
             detail: AppListController.self, cell: .linkCell, edit: nil
         ) {
@@ -552,6 +572,10 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             // services with no plist — carries it already; this is the other
             // path, and it had been left at two states.
             if specifier.identifier == "appListIsBlacklist" {
+                specifier.setProperty(
+                    NSValue(nonretainedObject: self),
+                    forKey: SpecifierRouting.PropertyKey.changeObserver
+                )
                 var values: [Any] = specifier.values ?? []
                 let titleDictionary = specifier.titleDictionary ?? [:]
                 var titles: [String] = ["Default".localized]
