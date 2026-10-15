@@ -1,0 +1,20 @@
+# Who wrote what.
+#
+# The agent that works on this repository commits as `pi <pi@local>` unless told
+# otherwise, and it was told otherwise partway through: the commits it wrote
+# before then are authored by that name. The work is the project maintainer's
+# either way, and this file says so without rewriting history — a rewrite would
+# orphan the released tags and leave anyone who has cloned with a divergent
+# `git log`.
+#
+# GitHub's contributor statistics read this file, so these commits and the ones
+# under the real name are counted together.
+
+# The same person under two names, from before the account was renamed.
+jzksnsjswkw <214893178@qq.com> watermelonpig <214893178@qq.com>
+
+# GitHub's own address for the account.
+jzksnsjswkw <214893178@qq.com> <69855421+jzksnsjswkw@users.noreply.github.com>
+
+jzksnsjswkw <214893178@qq.com> <pi@local>
+jzksnsjswkw <214893178@qq.com> <pi@localhost>
