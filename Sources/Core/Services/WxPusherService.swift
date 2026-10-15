@@ -34,10 +34,18 @@ public enum WxPusherService: PushService {
             "contentType": config.raw.int(WxPusherPrefKey.contentType, default: 1),
         ]
 
-        // Left out when empty rather than sent as "": the platform then shows the
-        // content as the title, which reads better than a blank line. Only a test
-        // push has no title to send.
-        if !context.displayTitle.isEmpty { infoDict["summary"] = context.displayTitle }
+        // The title, and only the title, when the notification has no body of its
+        // own: the fallback body is the notification's title, and sending
+        // `"App: title"` above it would print that title twice. With a body to
+        // send, the summary is the displayed title as usual.
+        //
+        // Left out entirely when empty rather than sent as "" — the platform then
+        // shows the content, which reads better than a blank line. Only a test
+        // push has nothing to send.
+        let summary = context.displayMessage.isEmpty
+            ? context.appName
+            : context.displayTitle
+        if !summary.isEmpty { infoDict["summary"] = summary }
 
         // Both lists are sent as arrays; empty ones are left out rather than sent
         // as `[]`, which the API reads as "this app has no recipients" and rejects.
