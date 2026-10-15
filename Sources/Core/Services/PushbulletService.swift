@@ -13,7 +13,7 @@ public enum PushbulletService: PushService {
         var infoDict: [String: Any] = [
             "type": "note",
             "title": context.displayTitle,
-            "body": context.displayMessage,
+            "body": context.pushBody,
         ]
         if let device = firstDeviceID(config: config) {
             infoDict["device_iden"] = device

@@ -154,7 +154,10 @@ public enum ServiceRegistry {
         .init(PushbulletService.self),
         .init(PusherReceiverService.self),
         .init(PushoverService.self),
+        .init(PushPlusService.self),
+        .init(ServerChanService.self),
         .init(WechatService.self),
+        .init(WxPusherService.self),
         .init(ShortcutService.self, displayName: "Shortcut"),
         .init(CustomService.self, displayName: customServiceDisplayName),
     ]

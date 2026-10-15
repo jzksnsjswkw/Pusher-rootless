@@ -16,7 +16,8 @@ public enum PushoverService: PushService {
             "token": config.raw.string(PrefKey.token, default: ""),
             "user": config.raw.string(PrefKey.user, default: ""),
             "title": context.displayTitle,
-            "message": context.displayMessage,
+            // Required by the API.
+            "message": context.pushBody,
             "device": deviceIDs.joined(separator: ","),
         ]
         // Pushover accepts one sound per message, so the first selected wins.

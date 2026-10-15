@@ -128,6 +128,19 @@ public struct BulletinContext {
     /// Subtitle + message, joined as the bulletin would show them.
     public var displayMessage: String = ""
 
+    /// The message body to send, never empty.
+    ///
+    /// A notification may carry a title and nothing else — a subscription alert
+    /// from a push platform is one — and `displayMessage` is then correctly
+    /// empty. Several APIs reject an empty body outright, so those services send
+    /// this instead: the body when there is one, the title when there is not.
+    /// Delivery matters more than the distinction between a body and a title
+    /// with nothing under it, which is what the two collapse to on a phone
+    /// anyway.
+    public var pushBody: String {
+        displayMessage.isEmpty ? displayTitle : displayMessage
+    }
+
     /// The bulletin's primary attachment file, `nil` when it has none.
     public var attachmentURL: URL?
 

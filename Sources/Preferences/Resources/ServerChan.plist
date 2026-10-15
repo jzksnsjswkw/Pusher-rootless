@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Get it from sct.ftqq.com.</string>
+			<key>label</key>
+			<string>Credentials</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>key</key>
+			<string>sendKey</string>
+			<key>label</key>
+			<string>SendKey:</string>
+			<key>noAutoCorrect</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Apps</string>
+		</dict>
+		<dict>
+			<key>PostNotification</key>
+			<string>com.noahsaso.pusher/prefs</string>
+			<key>cell</key>
+			<string>PSSegmentCell</string>
+			<key>defaults</key>
+			<string>com.noahsaso.pusher</string>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+			<key>key</key>
+			<string>appListIsBlacklist</string>
+			<key>validTitles</key>
+			<array>
+				<string>Blacklist</string>
+				<string>Whitelist</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<true/>
+				<false/>
+			</array>
+		</dict>
+		<dict>
+			<key>alphabeticIndexingEnabled</key>
+			<true/>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>NSPAppListController</string>
+			<key>icon</key>
+			<string>app_list</string>
+			<key>label</key>
+			<string>App List</string>
+			<key>useSearchBar</key>
+			<true/>
+		</dict>
+	</array>
+</dict>
+</plist>

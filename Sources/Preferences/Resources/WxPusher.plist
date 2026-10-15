@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Create an app token (starts with AT_) at wxpusher.zjiecode.com/admin. UIDs are the recipients, comma-separated.</string>
+			<key>label</key>
+			<string>Credentials</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>key</key>
+			<string>appToken</string>
+			<key>label</key>
+			<string>App Token:</string>
+			<key>noAutoCorrect</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>key</key>
+			<string>uids</string>
+			<key>label</key>
+			<string>UIDs:</string>
+			<key>noAutoCorrect</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Topic IDs broadcast to a group, comma-separated, instead of UIDs. Content type: 1 text, 2 HTML, 3 Markdown.</string>
+			<key>label</key>
+			<string>Message</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>key</key>
+			<string>topicIds</string>
+			<key>label</key>
+			<string>Topic IDs:</string>
+			<key>noAutoCorrect</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>key</key>
+			<string>contentType</string>
+			<key>label</key>
+			<string>Content Type:</string>
+			<key>noAutoCorrect</key>
+			<true/>
+			<key>placeholder</key>
+			<string>1</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>key</key>
+			<string>url</string>
+			<key>label</key>
+			<string>URL:</string>
+			<key>noAutoCorrect</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Apps</string>
+		</dict>
+		<dict>
+			<key>PostNotification</key>
+			<string>com.noahsaso.pusher/prefs</string>
+			<key>cell</key>
+			<string>PSSegmentCell</string>
+			<key>defaults</key>
+			<string>com.noahsaso.pusher</string>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+			<key>key</key>
+			<string>appListIsBlacklist</string>
+			<key>validTitles</key>
+			<array>
+				<string>Blacklist</string>
+				<string>Whitelist</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<true/>
+				<false/>
+			</array>
+		</dict>
+		<dict>
+			<key>alphabeticIndexingEnabled</key>
+			<true/>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>NSPAppListController</string>
+			<key>icon</key>
+			<string>app_list</string>
+			<key>label</key>
+			<string>App List</string>
+			<key>useSearchBar</key>
+			<true/>
+		</dict>
+	</array>
+</dict>
+</plist>
