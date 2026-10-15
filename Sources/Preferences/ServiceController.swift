@@ -562,8 +562,13 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             specifier.setProperty(serviceType, forKey: SpecifierRouting.PropertyKey.serviceType)
             // The app list controller needs to know whether this page belongs to
             // a webhook so it can seed a new override correctly.
+            // The plist's own app-list row hides with the segment on "Default",
+            // exactly as the code-built copy hides in `appFilterSpecifiers`:
+            // with the instance following the global list, a picker here would
+            // hold choices nothing reads.
             if specifier.cellType == .linkCell, specifier.name == "App List".localized {
                 specifier.setProperty(isWebhook, forKey: SpecifierRouting.PropertyKey.isWebhook)
+                if !showsAppList { continue }
             }
             // The plist's own app-list segment (Blacklist/Whitelist) gets the same
             // leading "Default" the device-condition segments get below: chosen,
