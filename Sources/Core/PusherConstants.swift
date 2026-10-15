@@ -125,6 +125,24 @@ public enum PrefKey {
     /// observe; it is where the storage layer puts things.
     public static let instanceConfig = "config"
 
+    /// The prefix on every key the framework owns inside a resolved config.
+    ///
+    /// A service reads its settings from `ServiceConfig.raw`, and a service is
+    /// free to name them whatever the API it calls expects — Bark has a parameter
+    /// called `id` and another called `key`. The framework's own keys used to sit
+    /// in the same dictionary under their bare names, so a service that happened
+    /// to want `appList` or `whenToPush` read the framework's value instead of its
+    /// own, and a service that wanted anything the framework also wanted could not
+    /// say so at all.
+    ///
+    /// Prefixed, the two vocabularies cannot collide: the framework reads and
+    /// writes through the prefix, a service reads the bare name, and neither has
+    /// to know what the other is called. The payload options a service *is*
+    /// supposed to read — `includeIcon`, `imageMaxWidth`, `dateFormat` — keep
+    /// their bare names, because those are the framework handing the service its
+    /// parameters rather than the framework talking to itself.
+    public static let frameworkPrefix = "fw."
+
     /// The keys that belong to the instance object itself, never to its config.
     ///
     /// Anything else an instance object holds at this level is a leftover from

@@ -51,7 +51,7 @@ public struct ServiceConfig {
 
     // MARK: - Filters
 
-    public var appList: [String] { raw.stringArray(PrefKey.appList) }
+    public var appList: [String] { framework.stringArray(PrefKey.appList) }
     /// `nil` is the segment's "Default" — the instance follows the global list,
     /// which the engine has already applied by the time this is read. `true` and
     /// `false` are the instance's own blacklist and whitelist.
@@ -59,24 +59,36 @@ public struct ServiceConfig {
     /// The earlier form defaulted a missing key to `true`, which made "Default"
     /// and "blacklist" the same setting and silently ignored a global whitelist.
     public var appListIsBlacklist: Bool? {
-        raw[PrefKey.appListIsBlacklist] as? Bool
+        framework[PrefKey.appListIsBlacklist] as? Bool
     }
 
     /// The SNS condition keys this instance is gated on.
-    public var sns: [String] { raw.stringArray(PrefKey.sns) }
+    public var sns: [String] { framework.stringArray(PrefKey.sns) }
     /// Defaults to `true` (AND) when unset.
-    public var snsIsAnd: Bool { raw.bool(PrefKey.snsIsAnd, default: true) }
+    public var snsIsAnd: Bool { framework.bool(PrefKey.snsIsAnd, default: true) }
     /// Defaults to `true` when unset.
-    public var snsRequireANWithOR: Bool { raw.bool(PrefKey.snsRequireANWithOR, default: true) }
+    public var snsRequireANWithOR: Bool { framework.bool(PrefKey.snsRequireANWithOR, default: true) }
 
     /// Defaults to "either" when unset.
     public var whenToPush: WhenToPush {
-        WhenToPush(rawValue: raw.resolvedInt(PrefKey.whenToPush, default: WhenToPush.either.rawValue)) ?? .either
+        WhenToPush(rawValue: framework.resolvedInt(PrefKey.whenToPush, default: WhenToPush.either.rawValue)) ?? .either
     }
 
     /// Defaults to "any network" when unset.
     public var whatNetwork: WhatNetwork {
-        WhatNetwork(rawValue: raw.resolvedInt(PrefKey.whatNetwork, default: WhatNetwork.any.rawValue)) ?? .any
+        WhatNetwork(rawValue: framework.resolvedInt(PrefKey.whatNetwork, default: WhatNetwork.any.rawValue)) ?? .any
+    }
+
+    /// The framework's own keys, under their prefix.
+    ///
+    /// A view of `raw` rather than a copy: the two are one dictionary, and
+    /// writing through either is visible to the other. The prefix is what keeps
+    /// them apart — see ``PrefKey/frameworkPrefix``.
+    public var framework: Prefs {
+        Prefs(raw.raw.reduce(into: [String: Any]()) { result, pair in
+            guard pair.key.hasPrefix(PrefKey.frameworkPrefix) else { return }
+            result[String(pair.key.dropFirst(PrefKey.frameworkPrefix.count))] = pair.value
+        })
     }
 
     // MARK: - Instance hooks
@@ -84,16 +96,16 @@ public struct ServiceConfig {
     /// The "received" hook: runs as soon as a notification arrives.
     public var receivedHook: HookConfig {
         HookConfig(
-            isEnabled: raw.bool(PrefKey.hookReceivedEnabled),
-            script: raw.string(PrefKey.hookReceivedScript) ?? ""
+            isEnabled: framework.bool(PrefKey.hookReceivedEnabled),
+            script: framework.string(PrefKey.hookReceivedScript) ?? ""
         )
     }
 
     /// The "filtered" hook: runs after every filter has passed.
     public var filteredHook: HookConfig {
         HookConfig(
-            isEnabled: raw.bool(PrefKey.hookFilteredEnabled),
-            script: raw.string(PrefKey.hookFilteredScript) ?? ""
+            isEnabled: framework.bool(PrefKey.hookFilteredEnabled),
+            script: framework.string(PrefKey.hookFilteredScript) ?? ""
         )
     }
 
@@ -101,7 +113,7 @@ public struct ServiceConfig {
 
     /// The raw per-app override objects, keyed by bundle ID.
     public var customApps: [String: Prefs] {
-        guard let container = raw.dict(PrefKey.customApps) else { return [:] }
+        guard let container = framework.dict(PrefKey.customApps) else { return [:] }
         return container.raw.compactMapValues { value in
             (value as? [String: Any]).map(Prefs.init)
         }
@@ -247,6 +259,15 @@ public enum ConfigLoader {
 
     /// Fills in everything the payload builders read, so they never have to
     /// default a missing value themselves.
+    /// A framework key, under its prefix.
+    ///
+    /// Every write the framework makes to a resolved config goes through this, so
+    /// the framework's keys and a service's are separate vocabularies in one
+    /// dictionary — see ``PrefKey/frameworkPrefix``.
+    private static func fw(_ key: String) -> String {
+        PrefKey.frameworkPrefix + key
+    }
+
     private static func normalize(_ instance: ServiceInstance, snapshot: ConfigSnapshot) -> ServiceConfig {
         let descriptor = instance.descriptor
 
@@ -292,14 +313,14 @@ public enum ConfigLoader {
         // third state, and writing `true` over its absence collapsed "follow the
         // global list" into "blacklist". The list itself stays as stored too; the
         // engine skips the instance-level check entirely when no mode is set.
-        raw[PrefKey.appList] = stored.stringArray(PrefKey.appList)
+        raw[fw(PrefKey.appList)] = stored.stringArray(PrefKey.appList)
         if let mode = stored[PrefKey.appListIsBlacklist] {
-            raw[PrefKey.appListIsBlacklist] = mode
+            raw[fw(PrefKey.appListIsBlacklist)] = mode
         }
-        raw[PrefKey.whenToPush] = stored.resolvedInt(
+        raw[fw(PrefKey.whenToPush)] = stored.resolvedInt(
             PrefKey.whenToPush, default: snapshot.whenToPush.rawValue
         )
-        raw[PrefKey.whatNetwork] = stored.resolvedInt(
+        raw[fw(PrefKey.whatNetwork)] = stored.resolvedInt(
             PrefKey.whatNetwork, default: snapshot.whatNetwork.rawValue
         )
         // Both spellings are read, the long one first, and the *global* value is
@@ -308,15 +329,15 @@ public enum ConfigLoader {
         // and it is what makes a service that never chose follow the global —
         // before this, an instance silently used AND whatever the user had set
         // globally.
-        raw[PrefKey.snsIsAnd] = snsToggle(
+        raw[fw(PrefKey.snsIsAnd)] = snsToggle(
             PrefKey.snsIsAnd, alias: PrefKey.SNSAlias.isAnd,
             in: stored, fallback: snapshot.snsIsAnd
         )
-        raw[PrefKey.snsRequireANWithOR] = snsToggle(
+        raw[fw(PrefKey.snsRequireANWithOR)] = snsToggle(
             PrefKey.snsRequireANWithOR, alias: PrefKey.SNSAlias.requireANWithOR,
             in: stored, fallback: snapshot.snsRequireANWithOR
         )
-        raw[PrefKey.sns] = snsKeys(from: stored, global: snapshot)
+        raw[fw(PrefKey.sns)] = snsKeys(from: stored, global: snapshot)
 
         // Only enabled devices/sounds survive normalization, so the payload
         // builders never have to filter them.
@@ -336,7 +357,7 @@ public enum ConfigLoader {
             raw[PrefKey.url] = serviceURL
         }
 
-        raw[PrefKey.customApps] = normalizedCustomApps(
+        raw[fw(PrefKey.customApps)] = normalizedCustomApps(
             from: stored, descriptor: descriptor, isWebhook: instance.isCustom,
             serviceURL: serviceURL, eventName: eventName, dbName: dbName, serverURL: serverURL
         )
