@@ -14,16 +14,6 @@
 			<key>cell</key>
 			<string>PSEditTextCell</string>
 			<key>key</key>
-			<string>uid</string>
-			<key>label</key>
-			<string>UID:</string>
-			<key>noAutoCorrect</key>
-			<true/>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSEditTextCell</string>
-			<key>key</key>
 			<string>sendKey</string>
 			<key>label</key>
 			<string>SendKey:</string>

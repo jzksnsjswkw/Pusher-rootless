@@ -7,8 +7,7 @@ import UIKit
 /// has to do here.
 enum ServerChan3Guide {
 
-    /// The example's values, which are also what the screenshot shows.
-    static let exampleUID = "12345"
+    /// The example's value, which is also what the screenshot shows.
     static let exampleKey = "sctp12345abcdeabcdeabcdeabcde"
 
     static func present(from controller: UIViewController) {
@@ -23,9 +22,8 @@ enum ServerChan3Guide {
 
                 .heading("Example".localized),
                 .image("serverchan3_example"),
-                .text(String(format: ("UID is **%@**, SendKey is **%@** "
-                    + "(use the copy button for the whole value).").localized,
-                    exampleUID, exampleKey)),
+                .text(String(format: ("SendKey: **%@** — use the copy button for the "
+                    + "whole value.").localized, exampleKey)),
 
                 .heading("The settings below are optional".localized),
 

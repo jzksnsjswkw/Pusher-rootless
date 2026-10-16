@@ -585,12 +585,11 @@
 "Tags:" = "标签：";
 "From sc3.ft07.com, on the SendKey page. ServerChan³ keys start with sctp." = "从 sc3.ft07.com 的 SendKey 页面获取。Server酱³ 的密钥以 sctp 开头。";
 "Tags are separated by vertical bars." = "标签用竖线分隔。";
-"UID:" = "UID：";
 "Both are on the SendKey page at sc3.ft07.com. The UID is the number in the URL." = "两者都在 sc3.ft07.com 的 SendKey 页面。UID 是接口地址里的那串数字。";
 "Using ServerChan³" = "使用 Server酱³";
 "ServerChan³ and ServerChan Turbo are two separate services with separate accounts and separate keys." = "Server酱³ 和 Server酱·Turbo 是两个独立服务，账号和密钥不通用";
 "Get your credentials at: https://sc3.ft07.com/sendkey" = "访问 https://sc3.ft07.com/sendkey 获取凭证";
-"UID is **%@**, SendKey is **%@** (use the copy button for the whole value)." = "UID 填 **%@**，SendKey 填 **%@**（点击复制按钮复制完整内容）";
 "The settings below are optional" = "以下为可选的高级设置";
 "Tags" = "标签";
 "Separated by vertical bars, like 工作|重要。" = "用竖线分隔，例如 工作|重要。";
+"SendKey: **%@** — use the copy button for the whole value." = "SendKey 填 **%@**（点击复制按钮复制完整内容）";
