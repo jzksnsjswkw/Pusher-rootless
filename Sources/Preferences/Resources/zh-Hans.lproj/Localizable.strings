@@ -591,5 +591,5 @@
 "Get your credentials at: https://sc3.ft07.com/sendkey" = "访问 https://sc3.ft07.com/sendkey 获取凭证";
 "The settings below are optional" = "以下为可选的高级设置";
 "Tags" = "标签";
-"Separated by vertical bars, like 工作|重要。" = "用竖线分隔，例如 工作|重要。";
+"Separated by vertical bars, like 工作|重要." = "用竖线分隔，例如 工作|重要。";
 "SendKey: **%@** — use the copy button for the whole value." = "SendKey 填 **%@**（点击复制按钮复制完整内容）";
