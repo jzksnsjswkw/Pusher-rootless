@@ -8,7 +8,7 @@ import UIKit
 enum ServerChan3Guide {
 
     /// The example's value, which is also what the screenshot shows.
-    static let exampleKey = "sctp12345abcdeabcdeabcdeabcde"
+    static let exampleKey = "sctp12345tabcdeabcdeabcde"
 
     static func present(from controller: UIViewController) {
         GuideSheet.present(
@@ -21,7 +21,10 @@ enum ServerChan3Guide {
                 .text("Get your credentials at: https://sc3.ft07.com/sendkey".localized),
 
                 .heading("Example".localized),
+                // The page it comes from, then the field it goes into: the reader
+                // sees where the value is, and then what the result looks like.
                 .image("serverchan3_example"),
+                .image("serverchan3_settings"),
                 .text(String(format: ("SendKey: **%@** — use the copy button for the "
                     + "whole value.").localized, exampleKey)),
 
