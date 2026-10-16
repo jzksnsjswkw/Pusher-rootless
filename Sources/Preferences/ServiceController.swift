@@ -107,6 +107,11 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
                 title: "Guide".localized, style: .plain,
                 target: self, action: #selector(showBarkGuide)
             )
+        case ServerChan3Service.serviceName:
+            navigationItem.rightBarButtonItem = UIBarButtonItem(
+                title: "Guide".localized, style: .plain,
+                target: self, action: #selector(showServerChan3Guide)
+            )
         default:
             break
         }
@@ -263,6 +268,12 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     @objc private func showBarkGuide() {
         view.endEditing(true)
         BarkGuide.present(from: self)
+    }
+
+    /// The ServerChan³ guide, presented over this page.
+    @objc private func showServerChan3Guide() {
+        view.endEditing(true)
+        ServerChan3Guide.present(from: self)
     }
 
     /// The Shortcut guide, presented over this page.

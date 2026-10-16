@@ -7,8 +7,6 @@
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
-			<key>footerText</key>
-			<string>Both are on the SendKey page at sc3.ft07.com. The UID is the number in the URL.</string>
 			<key>label</key>
 			<string>Credentials</string>
 		</dict>
