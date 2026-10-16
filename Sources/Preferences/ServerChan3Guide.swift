@@ -21,9 +21,9 @@ enum ServerChan3Guide {
                 .text("Get your credentials at: https://sc3.ft07.com/sendkey".localized),
 
                 .heading("Example".localized),
-                // The page it comes from, then the field it goes into: the reader
-                // sees where the value is, and then what the result looks like.
-                .image("serverchan3_example"),
+                // The official page, then this page with the value in it: where
+                // the key comes from, and what filling it in looks like.
+                .image("serverchan3_page"),
                 .image("serverchan3_settings"),
                 .text(String(format: ("SendKey: **%@** — use the copy button for the "
                     + "whole value.").localized, exampleKey)),
