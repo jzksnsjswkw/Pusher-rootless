@@ -34,8 +34,21 @@ def find_receiver(text: str, dot: int) -> str | None:
     """The expression `.localized` is applied to, `dot` being its period."""
     i = dot
     depth = 0
+    in_string = False
     while i > 0:
         ch = text[i - 1]
+        # Characters inside a literal are text, not syntax. Without this, the
+        # comma in `"Separated by bars, like this".localized` reads as the
+        # boundary between arguments and the scan stops in the middle of the
+        # string — which is how that key went unreported while being absent from
+        # the table.
+        if ch == '"' and not _escaped(text, i - 1):
+            in_string = not in_string
+            i -= 1
+            continue
+        if in_string:
+            i -= 1
+            continue
         if ch in ")]":
             depth += 1
         elif ch in "([":
@@ -43,9 +56,12 @@ def find_receiver(text: str, dot: int) -> str | None:
                 i -= 1
                 break
             depth -= 1
-        # `[` and `,` are boundaries too: in `["A".localized, "B".localized]` each
-        # element is its own key, and scanning past the comma would take both.
-        elif depth == 0 and ch in "\n;,?:=[":
+        # Boundaries. `[` and `,` matter for `["A".localized, "B".localized]`, where
+        # scanning past the comma would take both. The operators are here because
+        # `.localized` binds tighter than `+`: in `"- " + "…".localized` the key is
+        # the second string alone, and stopping at the `+` is what keeps the list
+        # marker out of it.
+        elif depth == 0 and ch in "\n;,?:=[+-*/":
             break
         i -= 1
     expr = text[i:dot].strip()
@@ -56,6 +72,16 @@ def find_receiver(text: str, dot: int) -> str | None:
     # same from here, so balanced parentheses are stripped only by `resolve`,
     # which then checks whether what remains is nothing but literals.
     return expr
+
+
+def _escaped(text: str, index: int) -> bool:
+    """Whether the character at `index` is preceded by an odd run of backslashes."""
+    backslashes = 0
+    i = index - 1
+    while i >= 0 and text[i] == "\\":
+        backslashes += 1
+        i -= 1
+    return backslashes % 2 == 1
 
 
 def resolve(expr: str) -> str | None:
