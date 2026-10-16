@@ -583,6 +583,5 @@
 "Message" = "消息";
 "ServerChan3" = "Server酱³";
 "Tags:" = "标签：";
-"Short:" = "摘要：";
 "From sc3.ft07.com, on the SendKey page. ServerChan³ keys start with sctp." = "从 sc3.ft07.com 的 SendKey 页面获取。Server酱³ 的密钥以 sctp 开头。";
-"Tags are separated by vertical bars. Short is the summary shown on the message card." = "标签用竖线分隔。摘要是消息卡片上显示的简述。";
+"Tags are separated by vertical bars." = "标签用竖线分隔。";

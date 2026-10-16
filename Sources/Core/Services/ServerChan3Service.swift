@@ -21,7 +21,6 @@ public enum ServerChan3Service: PushService {
         [
             ServerChan3PrefKey.sendKey: "",
             ServerChan3PrefKey.tags: "",
-            ServerChan3PrefKey.short: "",
         ]
     }
 
@@ -39,8 +38,6 @@ public enum ServerChan3Service: PushService {
         ]
         let tags = config.raw.string(ServerChan3PrefKey.tags, default: "")
         if !tags.isEmpty { infoDict["tags"] = tags }
-        let short = config.raw.string(ServerChan3PrefKey.short, default: "")
-        if !short.isEmpty { infoDict["short"] = short }
 
         let key = config.raw.string(ServerChan3PrefKey.sendKey, default: "")
         let urlString = "https://\(uid)\(urlSuffix)\(key).send"
@@ -61,5 +58,4 @@ public enum ServerChan3Service: PushService {
 enum ServerChan3PrefKey {
     static let sendKey = "sendKey"
     static let tags = "tags"
-    static let short = "short"
 }
