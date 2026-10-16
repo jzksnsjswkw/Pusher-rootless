@@ -581,3 +581,8 @@
 "Topic IDs broadcast to a group, comma-separated, instead of UIDs. Content type: 1 text, 2 HTML, 3 Markdown." = "主题 ID 用于群发，多个用逗号隔开，与用户 UID 二选一。内容类型：1 文本、2 HTML、3 Markdown。";
 "Get it from sct.ftqq.com." = "从 sct.ftqq.com 获取。";
 "Message" = "消息";
+"ServerChan3" = "Server酱³";
+"Tags:" = "标签：";
+"Short:" = "摘要：";
+"From sc3.ft07.com, on the SendKey page. ServerChan³ keys start with sctp." = "从 sc3.ft07.com 的 SendKey 页面获取。Server酱³ 的密钥以 sctp 开头。";
+"Tags are separated by vertical bars. Short is the summary shown on the message card." = "标签用竖线分隔。摘要是消息卡片上显示的简述。";
