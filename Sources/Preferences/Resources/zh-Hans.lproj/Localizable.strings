@@ -585,3 +585,5 @@
 "Tags:" = "标签：";
 "From sc3.ft07.com, on the SendKey page. ServerChan³ keys start with sctp." = "从 sc3.ft07.com 的 SendKey 页面获取。Server酱³ 的密钥以 sctp 开头。";
 "Tags are separated by vertical bars." = "标签用竖线分隔。";
+"UID:" = "UID：";
+"Both are on the SendKey page at sc3.ft07.com. The UID is the number in the URL." = "两者都在 sc3.ft07.com 的 SendKey 页面。UID 是接口地址里的那串数字。";
