@@ -594,7 +594,7 @@
 "Separated by vertical bars, like 工作|重要." = "用竖线分隔，例如 工作|重要。";
 "SendKey: **%@** — use the copy button for the whole value." = "SendKey 填 **%@**（点击复制按钮复制完整内容）";
 "Current version" = "新版 Bark";
-"Under Usage Example, open the arrow beside Send Test and choose Copy Key." = "在「使用示例」里点「发送测试」左边的箭头，选「复制 Key」。";
+"Under Usage Example, open the arrow to the right of Copy and choose Copy Key." = "在「使用示例」里点「复制」右边的箭头，选「复制 Key」。";
 "The key is **%@** in the example above." = "上图的示例里，**%@** 就是 Key。";
 "Older versions of Bark" = "旧版 Bark";
 "Copy the middle of the test URL on Bark's first screen." = "从 Bark 首页的测试 URL 里复制中间那段。";

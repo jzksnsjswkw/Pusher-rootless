@@ -24,8 +24,8 @@ enum BarkGuide {
                 // MARK: Current Bark
 
                 .heading("Current version".localized),
-                .text(("Under Usage Example, open the arrow beside Send Test and "
-                    + "choose Copy Key.").localized),
+                .text(("Under Usage Example, open the arrow to the right of Copy "
+                    + "and choose Copy Key.").localized),
                 .image("bark_key_menu"),
                 .text(String(format: ("The key is **%@** in the example above.").localized,
                              exampleKey)),
