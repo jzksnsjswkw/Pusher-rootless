@@ -2,10 +2,10 @@ import UIKit
 
 /// The guide presented from a Bark instance's page.
 ///
-/// Three pictures of another app — the key to read off, what the credentials look
-/// like once it is in, and the encryption switches that have to be matched. The
-/// wording is the guide's author's, kept as written: it is short by intent and
-/// every line carries something.
+/// Two versions of the same instructions, because Bark changed where the key is
+/// shown. The new one comes first: a reader on the current app finds what they see
+/// on screen immediately, and a reader on an older one scrolls past it to the
+/// version that matches theirs.
 enum BarkGuide {
 
     /// The key in the screenshots. Generated for the guide, not anyone's.
@@ -21,19 +21,26 @@ enum BarkGuide {
                     + "notification, Pusher forwards it to Bark, Bark posts it "
                     + "again, and Pusher forwards that.").localized),
 
-                .heading("Key".localized),
-                .text("Copy the middle of the test URL on Bark's first screen into Key.".localized),
+                // MARK: Current Bark
+
+                .heading("Current version".localized),
+                .text(("Under Usage Example, open the arrow beside Send Test and "
+                    + "choose Copy Key.").localized),
+                .image("bark_key_menu"),
+                .text(String(format: ("The key is **%@** in the example above.").localized,
+                             exampleKey)),
+
+                // MARK: Older Bark
+
+                .heading("Older versions of Bark".localized),
+                .text("Copy the middle of the test URL on Bark's first screen.".localized),
+                .image("bark_guide"),
+                .image("bark_creds_guide"),
+
+                // MARK: Shared
 
                 .heading("Server URL".localized),
                 .text("Leave the default, or leave it empty.".localized),
-
-                .heading("Example".localized),
-                .image("bark_guide"),
-                .image("bark_creds_guide"),
-                // The markers around the placeholder make the value bold: it is
-                // the thing to compare against the highlight in the picture, and
-                // the sentence around it is scaffolding.
-                .text(String(format: "**%@** is the key.".localized, exampleKey)),
 
                 .heading("The advanced settings below are optional".localized),
 
