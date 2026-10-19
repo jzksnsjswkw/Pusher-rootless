@@ -4,7 +4,6 @@
 <dict>
 	<key>items</key>
 	<array>
-		<!-- Device Conditions -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -12,14 +11,14 @@
 			<string>Device Conditions</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.noahsaso.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSSegmentCell</string>
 			<key>default</key>
 			<integer>1</integer>
 			<key>defaults</key>
 			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
@@ -38,14 +37,14 @@
 			</array>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.noahsaso.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSSegmentCell</string>
 			<key>default</key>
 			<integer>0</integer>
 			<key>defaults</key>
 			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
@@ -63,7 +62,6 @@
 				<integer>2</integer>
 			</array>
 		</dict>
-
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -78,12 +76,25 @@
 			<key>label</key>
 			<string>Sufficient Notification Settings</string>
 		</dict>
-
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
 			<string>Only keeps logs for the last 100 notifications.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>detail</key>
+			<string>NSPFilterRuleListController</string>
+			<key>icon</key>
+			<string>app_list</string>
+			<key>label</key>
+			<string>Notification Filter</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
 		</dict>
 		<dict>
 			<key>cell</key>

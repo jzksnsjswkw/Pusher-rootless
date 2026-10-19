@@ -74,7 +74,13 @@ static BOOL PusherIsBundle(NSString *bundleID) {
 - (void)publishBulletin:(BBBulletin *)bulletin
            destinations:(unsigned long long)destinations
      alwaysToLockScreen:(BOOL)alwaysToLockScreen {
-  %orig;
+  // A rule may hide the notification from the phone as well as from Pusher.
+  // Hiding means not publishing: `%orig` is the publish, so it is skipped — the
+  // engine's answer is a matching pass over strings and returns at once, because
+  // it runs before SpringBoard draws anything.
+  if (![[NSPushEngine sharedInstance] shouldSuppressBulletin:bulletin]) {
+    %orig;
+  }
   if ([self respondsToSelector:@selector(sendBulletinToPusher:)]) {
     [self sendBulletinToPusher:bulletin];
   }
@@ -86,7 +92,13 @@ static BOOL PusherIsBundle(NSString *bundleID) {
 %hook BBServer
 - (void)publishBulletin:(BBBulletin *)bulletin
            destinations:(unsigned long long)destinations {
-  %orig;
+  // A rule may hide the notification from the phone as well as from Pusher.
+  // Hiding means not publishing: `%orig` is the publish, so it is skipped — the
+  // engine's answer is a matching pass over strings and returns at once, because
+  // it runs before SpringBoard draws anything.
+  if (![[NSPushEngine sharedInstance] shouldSuppressBulletin:bulletin]) {
+    %orig;
+  }
   if ([self respondsToSelector:@selector(sendBulletinToPusher:)]) {
     [self sendBulletinToPusher:bulletin];
   }
@@ -98,7 +110,13 @@ static BOOL PusherIsBundle(NSString *bundleID) {
 %hook BBServer
 - (void)publishBulletinRequest:(BBBulletin *)bulletin
                   destinations:(unsigned long long)destinations {
-  %orig;
+  // A rule may hide the notification from the phone as well as from Pusher.
+  // Hiding means not publishing: `%orig` is the publish, so it is skipped — the
+  // engine's answer is a matching pass over strings and returns at once, because
+  // it runs before SpringBoard draws anything.
+  if (![[NSPushEngine sharedInstance] shouldSuppressBulletin:bulletin]) {
+    %orig;
+  }
   if ([self respondsToSelector:@selector(sendBulletinToPusher:)]) {
     [self sendBulletinToPusher:bulletin];
   }

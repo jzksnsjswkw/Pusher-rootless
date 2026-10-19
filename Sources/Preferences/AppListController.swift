@@ -84,6 +84,31 @@ public final class AppListController: ATLApplicationListMultiSelectionController
         selection = selected
     }
 
+    /// Builds the same page the framework would, for a caller that has no
+    /// specifier to push it from.
+    ///
+    /// AltList reads the applications from the specifier's own properties, so a
+    /// page pushed without one comes up empty and every tap lands on nothing. This
+    /// synthesises the specifier the controller expects — the same shape the plist
+    /// cell produces — and installs it, which is the whole of what that cell was
+    /// for.
+    public static func standalone(
+        title: String,
+        selection: @escaping () -> [String],
+        write: @escaping ([String]) -> Void
+    ) -> AppListController {
+        let controller = AppListController()
+        let specifier = PSSpecifier.preferenceSpecifierNamed(
+            title, target: nil, set: nil, get: nil, detail: nil, cell: .linkCell, edit: nil
+        )!
+        specifier.setProperty(true, forKey: "useSearchBar")
+        specifier.setProperty(true, forKey: "alphabeticIndexingEnabled")
+        controller.specifier = specifier
+        controller.customSelection = selection
+        controller.customWrite = write
+        return controller
+    }
+
     /// One app's switch was toggled.
     ///
     /// Written through immediately rather than only on dismissal, so a crash or
@@ -109,12 +134,26 @@ public final class AppListController: ATLApplicationListMultiSelectionController
 
     // MARK: - Storage
 
+    /// What the list reads and writes, when the caller is not an instance.
+    ///
+    /// A notification rule's scope is a third kind of app list — not the global
+    /// one, not an instance's — and rather than teach this page about scopes, it
+    /// takes the two closures it needs. A page that sets neither behaves exactly as
+    /// before.
+    public var customSelection: (() -> [String])?
+    public var customWrite: (([String]) -> Void)?
+
     private func currentSelection() -> [String] {
+        if let customSelection { return customSelection() }
         guard let instanceID else { return AppListStorage.global() }
         return AppListStorage.forInstance(instanceID)
     }
 
     private func write(_ appIDs: [String]) {
+        if let customWrite {
+            customWrite(appIDs)
+            return
+        }
         guard let instanceID else {
             AppListStorage.setGlobal(appIDs)
             return

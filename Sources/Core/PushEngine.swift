@@ -71,6 +71,53 @@ public final class PushEngine: NSObject {
 
     // MARK: - Bulletin entry point
 
+    /// Whether the user's rules hide this bulletin from the phone entirely.
+    ///
+    /// Called from the `BBServer` hook *before* `%orig`, because that is what
+    /// hiding means: the notification is never published, so nothing draws it.
+    /// Only the rule lists are consulted — matching is string comparison on fields
+    /// that were already resolved — and nothing here awaits, allocates a context of
+    /// its own, or reads the network. A hook that fetched could not answer this
+    /// question, and this must answer it before SpringBoard draws a single pixel.
+    /// Bulletins this process deliberately kept off the screen.
+    ///
+    /// Suppressing the display means `%orig` is not called, so SpringBoard never
+    /// publishes the bulletin and never stamps it with a `lastInterruptDate`. The
+    /// engine uses that stamp to tell a live notification from a queued one being
+    /// replayed after a restart, so a suppressed-but-forwarded notification would
+    /// be discarded as a replay — the "Forward only" rule forwarded nothing. The
+    /// suppressed ids are remembered here so those two cases can be told apart.
+    private var suppressedBulletinIDs: [String] = []
+
+    @objc(shouldSuppressBulletin:)
+    public func shouldSuppress(bulletin: BBBulletin?) -> Bool {
+        guard let bulletin else { return false }
+        guard currentConfig().enabled else { return false }
+        // Building a context reads the app's section info from BBServer and
+        // resolves its name — real work, on every notification, and pointless for
+        // the many users who write no rules. Asked before the context exists,
+        // which is why the check is a cheap one on the stored lists rather than on
+        // the resolved outcome.
+        guard FilterRules.hasAnyRules else { return false }
+        let context = BulletinAdapter.context(for: bulletin)
+        guard FilterRules.suppressesNotification(context) else { return false }
+        // Logged, because hiding is otherwise silent: the notification is never
+        // published, so nothing else in the pipeline gets to mention it.
+        PushLog.add(service: "", context: context, label: "Hidden by a rule")
+
+        lock.lock()
+        suppressedBulletinIDs.append(context.bulletinID)
+        // Bounded, evicting the oldest: only bulletins from this same moment are
+        // still in flight, so a small window is all that is ever needed. An array
+        // rather than a set because `Set.removeFirst` takes an arbitrary element,
+        // which would evict one that is still on its way.
+        if suppressedBulletinIDs.count > 32 {
+            suppressedBulletinIDs.removeFirst()
+        }
+        lock.unlock()
+        return true
+    }
+
     /// Called from the `BBServer` hook for every published bulletin.
     @objc(handleBulletin:)
     public func handle(bulletin: BBBulletin?) {
@@ -81,10 +128,17 @@ public final class PushEngine: NSObject {
 
         let context = BulletinAdapter.context(for: bulletin)
 
-        // A bulletin SpringBoard never presented (no lastInterruptDate) is a
-        // queued bulletin being replayed, e.g. right after a SpringBoard
-        // restart.
-        guard BulletinAdapter.wasPresented(bulletin) else {
+        // A bulletin without a `lastInterruptDate` is normally a queued one being
+        // replayed after a restart — but it is also what a bulletin looks like
+        // when a rule suppressed the display, because suppressing means never
+        // publishing it. Those were recorded when the decision was taken.
+        lock.lock()
+        let wasSuppressed = suppressedBulletinIDs.contains(context.bulletinID)
+        if wasSuppressed {
+            suppressedBulletinIDs.removeAll { $0 == context.bulletinID }
+        }
+        lock.unlock()
+        guard wasSuppressed || BulletinAdapter.wasPresented(bulletin) else {
             PusherLog.debug("Not forwarding, bulletin was never presented")
             PushLog.add(service: "", context: context,
                         label: "Last interrupt date nil (this should only happen if SpringBoard "
@@ -144,20 +198,48 @@ public final class PushEngine: NSObject {
         }
     }
 
-    /// Records this bulletin's content and reports whether it looks like a
-    /// forwarding loop.
+    /// Reports whether this bulletin looks like a forwarding loop.
     ///
-    /// A forwarded push can itself produce a notification that would be
-    /// forwarded again. The count of identical contents in the recent window is
-    /// compared against the threshold, so a legitimate single duplicate is not
-    /// mistaken for a loop.
+    /// A forwarded push can itself produce a notification that would be forwarded
+    /// again. The count of identical contents in the recent window is compared
+    /// against the threshold, so a legitimate single duplicate is not mistaken for
+    /// a loop.
+    ///
+    /// Nothing is recorded here. A notification that is filtered, hidden or has
+    /// nowhere to go never reaches a service, so it cannot be part of a loop — and
+    /// counting it would let a burst of blocked notifications fill the window and
+    /// silence the next real one. Only ``recordForwarded(_:)`` fills the window,
+    /// and it is called when a service was actually asked to send.
     private func isLooping(_ context: BulletinContext) -> Bool {
         let signature = context.contentSignature
         lock.lock()
         defer { lock.unlock() }
+        return recentContent.filter { $0 == signature }.count
+            >= Pusher.loopPreventionThreshold
+    }
 
-        let count = recentContent.filter { $0 == signature }.count
-        guard count < Pusher.loopPreventionThreshold else { return true }
+    /// Bulletin ids already counted toward the window.
+    ///
+    /// A notification fanned out to three instances is one notification, not three
+    /// links in a chain; without this the threshold would be reached by a third as
+    /// many real notifications.
+    private var recordedBulletinIDs: [String] = []
+
+    /// Notes that this content was actually forwarded.
+    ///
+    /// One entry per notification, not per instance: the loop this guards against
+    /// is one notification producing another, and two instances of a service both
+    /// sending the same bulletin is not two links in a chain.
+    private func recordForwarded(_ context: BulletinContext) {
+        let signature = context.contentSignature
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard !recordedBulletinIDs.contains(context.bulletinID) else { return }
+        recordedBulletinIDs.append(context.bulletinID)
+        if recordedBulletinIDs.count > Pusher.loopPreventionWindow {
+            recordedBulletinIDs.removeFirst()
+        }
 
         // Slide the window rather than clearing it: clearing would reset the
         // duplicate count mid-loop, so a genuine loop (the threshold within the
@@ -166,7 +248,6 @@ public final class PushEngine: NSObject {
             recentContent.removeFirst()
         }
         recentContent.append(signature)
-        return false
     }
 
     // MARK: - Instance hooks
@@ -295,6 +376,28 @@ public final class PushEngine: NSObject {
 
         var context = context
         var effectiveConfig = serviceConfig
+
+        // ── The user's rules ────────────────────────────────────────────────
+        // Checked before the hooks: a rule is a statement about whether this
+        // notification should be forwarded at all, and a hook that edits it should
+        // not run for one the user has already ruled out. The rules win over the
+        // filters below by construction — they answered first.
+        //
+        // Only the "do not forward" half happens here. The "do not show" half is
+        // decided in the BBServer hook, before `%orig`, because hiding a
+        // notification means not letting SpringBoard publish it.
+        // The instance's own rules decide first, then the global ones. Unlike
+        // hiding — which is an effect on the device and takes any list's answer —
+        // forwarding is per destination, so each list is asked about its own
+        // destination only and the answer is local to this call.
+        let ownRules = FilterRules.instance(id).outcome(for: context)
+        let globalRules = FilterRules.global().outcome(for: context)
+        if let action = ownRules ?? globalRules, !action.forwards {
+            let label = "Filtered by a rule (\(action.rawValue))"
+            PusherLog.debug("[S:\(id),A:\(context.appID)] \(label)")
+            PushLog.add(service: id, context: context, label: label)
+            return
+        }
 
         // ── The "received" hook ─────────────────────────────────────────────
         // First thing after the notification exists for this instance, so it
@@ -425,6 +528,10 @@ public final class PushEngine: NSObject {
             PusherLog.debug("[S:\(service),T:\(context.isTest),A:\(context.appName)] Pushed")
             if !context.isTest {
                 PushLog.add(service: service, context: context, label: "Pushed")
+                // Now it is part of the loop-prevention window: a service was
+                // asked to send it, so a notification caused by it can be the
+                // second link in a chain.
+                self.recordForwarded(context)
             }
         }
     }

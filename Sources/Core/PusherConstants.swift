@@ -104,6 +104,14 @@ public enum PrefKey {
     public static let customServices = "CustomServices"
     public static let global = "Global"
 
+    /// The user's notification rules, one list globally and one per instance.
+    ///
+    /// Both hold a FilterRuleSet — a scope plus an ordered list of rules — so
+    /// the two pages edit the same shape and the engine reads them with the same
+    /// code.
+    public static let globalRules = "globalRules"
+    public static let instanceRules = "rules"
+
     // Identity of one entry in `Services`. `id` is stable and opaque while
     // `type` names the descriptor that builds the request; they are separate so
     // an instance can be renamed without losing its log or its storage.

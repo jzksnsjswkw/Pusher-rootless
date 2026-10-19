@@ -662,6 +662,10 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // is why they live on the instance rather than on the type.
         all.append(contentsOf: hookSpecifiers())
 
+        // And its own rules, which decide before anything else whether this
+        // destination sees the notification at all.
+        all.append(contentsOf: ruleSpecifiers())
+
         // Device conditions, the SNS page and the log page are shared by every
         // instance; they close out the page.
         all.append(contentsOf: globalTailSpecifiers())
@@ -906,6 +910,34 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         return specifiers
     }
 
+    /// The instance's notification rules: a row that opens the list and shows how
+    /// many there are.
+    func ruleSpecifiers() -> [PSSpecifier] {
+        guard let group = PSSpecifier.groupSpecifier(
+            withName: "Notification Rules".localized
+        ) else { return [] }
+        group.setProperty(
+            ("These apply to this destination only, and before the filters below. "
+                + "The first rule that matches decides.").localized,
+            forKey: "footerText"
+        )
+
+        guard let row = PSSpecifier.preferenceSpecifierNamed(
+            "Rules".localized, target: nil, set: nil, get: nil,
+            detail: FilterRuleListController.self, cell: .linkCell, edit: nil
+        ) else { return [group] }
+        row.identifier = Self.rulesRowIdentifier
+        let count = FilterRules.instance(serviceInstanceID).ruleCount
+        row.setProperty(
+            count == 0 ? "None".localized : String(format: "%d".localized, count),
+            forKey: "value"
+        )
+        return [group, row]
+    }
+
+    /// The rules row, found again when its count changes.
+    static let rulesRowIdentifier = "instanceRulesRow"
+
     func testPushSection() -> [PSSpecifier] {
         guard let group = PSSpecifier.emptyGroup() else { return [] }
         guard let button = PSSpecifier.preferenceSpecifierNamed(
@@ -932,6 +964,29 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     public override func tableView(
         _ tableView: UITableView, didSelectRowAt indexPath: IndexPath
     ) {
+        // The rules row carries an owner, and a detail class cannot: the page is
+        // pushed here and given the instance, rather than instantiated with none.
+        if let specifier = specifier(at: indexPath),
+           specifier.identifier == Self.rulesRowIdentifier {
+            tableView.deselectRow(at: indexPath, animated: true)
+            view.endEditing(true)
+            let page = FilterRuleListController(owner: .instance(serviceInstanceID))
+            page.onSave = { [weak self] in
+                guard let self else { return }
+                let count = FilterRules.instance(self.serviceInstanceID).ruleCount
+                if let row = self.specifier(forID: Self.rulesRowIdentifier) {
+                    row.setProperty(
+                        count == 0 ? "None".localized
+                            : String(format: "%d".localized, count),
+                        forKey: "value"
+                    )
+                    self.reloadSpecifier(row, animated: false)
+                }
+            }
+            push(page)
+            return
+        }
+
         if let specifier = specifier(at: indexPath),
            let name = specifier.property(
                forKey: SpecifierRouting.PropertyKey.hookPhase
