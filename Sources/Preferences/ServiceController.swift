@@ -494,7 +494,28 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     }
 
     func globalTailSpecifiers() -> [PSSpecifier] {
-        let loaded = (loadSpecifiers(named: "GlobalAndServices") as? [PSSpecifier]) ?? []
+        var loaded = (loadSpecifiers(named: "GlobalAndServices") as? [PSSpecifier]) ?? []
+        // The tail is shared with the global settings page, but two of its rows
+        // are global-only: a rule group here would edit the instance's rules while
+        // labelling itself as the global one, and there is already a rules row
+        // above for this instance. Removed after loading rather than filtered out
+        // of the plist, because the global page needs them.
+        //
+        // Its group header goes with it: a row removed from a group of one leaves
+        // an empty section behind, and an empty section draws as a gap between the
+        // rows either side of it.
+        var kept: [PSSpecifier] = []
+        for specifier in loaded {
+            if specifier.name == "Notification Filter".localized {
+                // Drop the header that was just added for this row, if it is one.
+                if let last = kept.last, last.cellType == .groupCell, last.name == nil {
+                    kept.removeLast()
+                }
+                continue
+            }
+            kept.append(specifier)
+        }
+        loaded = kept
         for specifier in loaded {
             specifier.setProperty(serviceInstanceID, forKey: SpecifierRouting.PropertyKey.instanceID)
             specifier.setProperty(serviceType, forKey: SpecifierRouting.PropertyKey.serviceType)
@@ -910,23 +931,29 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         return specifiers
     }
 
-    /// The instance's notification rules: a row that opens the list and shows how
-    /// many there are.
+    /// The instance's notification rules: the same row the global settings page
+    /// uses, pointed at this instance.
+    ///
+    /// The same row rather than a section of its own: it is the same feature, and
+    /// a page that presents it differently in two places asks the reader to learn
+    /// it twice.
     func ruleSpecifiers() -> [PSSpecifier] {
-        guard let group = PSSpecifier.groupSpecifier(
-            withName: "Notification Rules".localized
-        ) else { return [] }
-        group.setProperty(
-            ("These apply to this destination only, and before the filters below. "
-                + "The first rule that matches decides.").localized,
-            forKey: "footerText"
-        )
+        guard let group = PSSpecifier.groupSpecifier(withName: nil) else { return [] }
 
         guard let row = PSSpecifier.preferenceSpecifierNamed(
-            "Rules".localized, target: nil, set: nil, get: nil,
+            "Notification Filter".localized, target: nil, set: nil, get: nil,
             detail: FilterRuleListController.self, cell: .linkCell, edit: nil
         ) else { return [group] }
         row.identifier = Self.rulesRowIdentifier
+        // The image itself, not the `icon` name: the framework resolves a *name*
+        // through its own lazy icon loading, which only finds bundle-backed artwork
+        // for rows it built from a plist. A row built in code gets nothing, which
+        // is why this one had no icon while the global page's did.
+        row.setProperty(
+            UIImage(named: "filter", in: Bundle.pusher, compatibleWith: nil),
+            forKey: "iconImage"
+        )
+        row.setProperty("filter", forKey: "icon")
         let count = FilterRules.instance(serviceInstanceID).ruleCount
         row.setProperty(
             count == 0 ? "None".localized : String(format: "%d".localized, count),

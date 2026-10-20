@@ -136,6 +136,13 @@ public final class FilterRuleListController: PlainViewController {
         push(editor)
     }
 
+    @objc private func toggleGroup(_ sender: UISwitch) {
+        guard sender.tag < groups.count else { return }
+        groups[sender.tag].isEnabled = sender.isOn
+        save()
+        reloadData()
+    }
+
     @objc private func toggleEditing(_ sender: UIBarButtonItem) {
         tableView.setEditing(!tableView.isEditing, animated: true)
         sender.title = tableView.isEditing ? "Done".localized : "Edit".localized
@@ -199,27 +206,50 @@ extension FilterRuleListController: UITableViewDataSource, UITableViewDelegate {
         let cell = tableView.dequeueReusableCell(withIdentifier: Self.cell, for: indexPath)
         let group = groups[indexPath.row]
 
-        // The apps are the title: a group is "these apps", and the keywords inside
-        // it are the detail.
-        let appCount = group.scope.apps.count
-        switch group.scope.target {
-        case .selected:
-            cell.textLabel?.text = appCount == 0
-                ? "Filter selected apps".localized
-                : String(format: "Filter %d apps".localized, appCount)
-        case .unselected:
-            cell.textLabel?.text = appCount == 0
-                ? "Do not filter selected apps".localized
-                : String(format: "Except %d apps".localized, appCount)
-        }
+        // A name if the user gave one, otherwise one derived from what the group
+        // does: "过滤 微信,淘宝" says more than "3 apps" and needs no naming step.
+        cell.textLabel?.text = Self.displayName(of: group)
 
         let ruleCount = group.rules.count
         cell.detailTextLabel?.text = ruleCount == 0
             ? "No rules, does nothing".localized
             : String(format: "%d rules".localized, ruleCount)
         cell.accessoryType = .disclosureIndicator
-        cell.textLabel?.textColor = .label
+        // Dimmed rather than hidden when off, so the list still shows what exists
+        // in the order it would apply in.
+        cell.textLabel?.textColor = group.isEnabled ? .label : .secondaryLabel
+
+        // The switch is the row's own accessory, rebuilt each time rather than
+        // reused from a recycled cell.
+        let toggle = UISwitch()
+        toggle.isOn = group.isEnabled
+        toggle.tag = indexPath.row
+        toggle.addTarget(self, action: #selector(toggleGroup(_:)), for: .valueChanged)
+        cell.accessoryView = toggle
         return cell
+    }
+
+    /// A name if the user gave one, otherwise one derived from what the group
+    /// does: "过滤 微信,淘宝" says more than "3 apps" and needs no naming step.
+    ///
+    /// The app names come from here rather than from the model: the model has no
+    /// access to the application list, and a group stored with bundle ids should
+    /// not carry names that were only true on one device.
+    static func displayName(of group: FilterRuleGroup) -> String {
+        let trimmed = group.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+
+        let verb = group.derivedVerb.localized
+        guard !group.scope.apps.isEmpty else {
+            return verb + " " + "nothing".localized
+        }
+        let names = group.scope.apps.map {
+            LSApplicationProxy.applicationProxy(forIdentifier: $0)?.localizedName ?? $0
+        }
+        // Half-width commas: the names are read as a list, and a full-width comma
+        // in a row that also contains Chinese reads as punctuation rather than as
+        // a separator.
+        return verb + " " + names.joined(separator: ",")
     }
 
     public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {

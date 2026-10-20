@@ -46,6 +46,33 @@ open class ListController: PSListController, TintableController {
             cell.titleLabel?.textColor = Theme.activeTintColor
         }
         cell.tintColor = Theme.activeTintColor
+
+        // A specifier may carry its own icon as an image. The framework resolves an
+        // `icon` *name* through lazy icon loading, which only finds bundle-backed
+        // artwork for rows it built from a plist — a row built in code gets
+        // nothing. Set directly, it draws.
+        if let image = specifierForRow(indexPath)?.property(forKey: "iconImage") as? UIImage,
+           let iconView = cell.iconImageView() {
+            iconView.image = image
+        }
+
+        // A specifier may name its own cell class. `PSListController` builds its
+        // cells from the specifier's type and ignores that key, so the swap is done
+        // here — the same place the tint is applied, and the only place every cell
+        // passes through.
+        if let custom = specifierForRow(indexPath)?
+            .property(forKey: "cellClass") as? PSTableCell.Type,
+           !(cell.isMember(of: custom)) {
+            if let replacement = custom.init(
+                style: .default,
+                reuseIdentifier: nil,
+                specifier: specifierForRow(indexPath)
+            ) {
+                replacement.backgroundColor = cell.backgroundColor
+                replacement.separatorInset = cell.separatorInset
+                return replacement
+            }
+        }
         return cell
     }
 

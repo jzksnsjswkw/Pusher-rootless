@@ -66,7 +66,7 @@ public enum FilterRules {
     private static func holdsAMatchableRule(_ stored: [String: Any]?) -> Bool {
         guard let stored else { return false }
         return FilterRuleSet(stored: stored).groups.contains { group in
-            group.rules.contains(where: \.isEnabled)
+            group.isEnabled && group.rules.contains(where: \.isEnabled)
         }
     }
 

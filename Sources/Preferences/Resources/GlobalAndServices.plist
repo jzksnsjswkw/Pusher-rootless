@@ -79,8 +79,6 @@
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
-			<key>footerText</key>
-			<string>Only keeps logs for the last 100 notifications.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -88,13 +86,15 @@
 			<key>detail</key>
 			<string>NSPFilterRuleListController</string>
 			<key>icon</key>
-			<string>app_list</string>
+			<string>filter</string>
 			<key>label</key>
 			<string>Notification Filter</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Only keeps logs for the last 100 notifications.</string>
 		</dict>
 		<dict>
 			<key>cell</key>

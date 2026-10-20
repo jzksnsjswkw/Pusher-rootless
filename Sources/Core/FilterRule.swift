@@ -38,14 +38,90 @@ public struct FilterRule {
     }
 
     /// Whether the keyword's presence is what matches.
+    /// How the keyword is compared with the field.
+    ///
+    /// Five comparisons and their negations. `contains` is the one people reach
+    /// for; `matches` is for things with a shape — a six-digit verification code, an
+    /// order number — where a substring test either misses or over-matches. Prefix
+    /// and suffix are the two cases of "contains" that a substring test gets wrong.
+    ///
+    /// The negation is a case rather than a flag so that a rule reads as one
+    /// sentence: "标题包含 嘿嘿" and "标题不包含 嘿嘿" are two statements, not one
+    /// statement and a checkbox.
+    /// The comparison, without its negation.
+    ///
+    /// Split from the negation because eight options do not fit on one segment row
+    /// on a phone, and because "which comparison" and "inverted or not" are two
+    /// questions. The stored form is the pair below, so a rule written before the
+    /// split still reads.
+    public enum Comparison: String, CaseIterable {
+        case contains, startsWith, endsWith, matches
+
+        public var label: String {
+            switch self {
+            case .contains: return "Contains"
+            case .startsWith: return "Starts with"
+            case .endsWith: return "Ends with"
+            case .matches: return "Matches regex"
+            }
+        }
+    }
+
+    /// The comparison and whether it is negated, as one value.
     public enum Relation: String, CaseIterable {
         case contains
         case doesNotContain
+        case startsWith
+        case doesNotStartWith
+        case endsWith
+        case doesNotEndWith
+        case matches
+        case doesNotMatch
+
+        /// The comparison this relation applies.
+        public var comparison: Comparison {
+            switch self {
+            case .contains, .doesNotContain: return .contains
+            case .startsWith, .doesNotStartWith: return .startsWith
+            case .endsWith, .doesNotEndWith: return .endsWith
+            case .matches, .doesNotMatch: return .matches
+            }
+        }
+
+        /// This relation rebuilt from a comparison and whether it is negated.
+        public init(comparison: Comparison, isNegated: Bool) {
+            switch (comparison, isNegated) {
+            case (.contains, false): self = .contains
+            case (.contains, true): self = .doesNotContain
+            case (.startsWith, false): self = .startsWith
+            case (.startsWith, true): self = .doesNotStartWith
+            case (.endsWith, false): self = .endsWith
+            case (.endsWith, true): self = .doesNotEndWith
+            case (.matches, false): self = .matches
+            case (.matches, true): self = .doesNotMatch
+            }
+        }
+
+        /// Whether this relation is the negation of its base comparison.
+        public var isNegated: Bool {
+            switch self {
+            case .doesNotContain, .doesNotStartWith, .doesNotEndWith, .doesNotMatch:
+                return true
+            default:
+                return false
+            }
+        }
 
         public var label: String {
             switch self {
             case .contains: return "Contains"
             case .doesNotContain: return "Does not contain"
+            case .startsWith: return "Starts with"
+            case .doesNotStartWith: return "Does not start with"
+            case .endsWith: return "Ends with"
+            case .doesNotEndWith: return "Does not end with"
+            case .matches: return "Matches regex"
+            case .doesNotMatch: return "Does not match regex"
             }
         }
     }
@@ -165,24 +241,86 @@ public struct FilterRule {
     public func matches(_ context: BulletinContext) -> Bool {
         let keyword = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !keyword.isEmpty else { return true }
-        return contains(keyword, in: context) == (relation == .contains)
+        // A pattern that does not compile decides nothing, in either direction.
+        // Inverting its failure would turn a typo into a rule matching everything —
+        // the one outcome that is worse than a rule matching nothing.
+        guard hasValidPattern else { return false }
+        return compare(keyword, in: context) != relation.isNegated
     }
 
     /// Whether `keyword` appears in the field this rule watches.
-    private func contains(_ keyword: String, in context: BulletinContext) -> Bool {
+    /// Whether the base (un-negated) comparison holds for any of the rule's fields.
+    ///
+    /// `any` means any of the three, which is why "整条消息" reads as one field: a
+    /// notification is one thing, and a keyword found in any of its parts is found
+    /// in it.
+    private func compare(_ keyword: String, in context: BulletinContext) -> Bool {
+        let values: [String?]
         switch field {
-        case .any:
-            return [context.title, context.subtitle, context.message]
-                .contains { value in
-                    value?.range(of: keyword, options: .caseInsensitive) != nil
-                }
-        case .title:
-            return context.title?.range(of: keyword, options: .caseInsensitive) != nil
-        case .subtitle:
-            return context.subtitle?.range(of: keyword, options: .caseInsensitive) != nil
-        case .message:
-            return context.message?.range(of: keyword, options: .caseInsensitive) != nil
+        case .any: values = [context.title, context.subtitle, context.message]
+        case .title: values = [context.title]
+        case .subtitle: values = [context.subtitle]
+        case .message: values = [context.message]
         }
+
+        switch relation {
+        case .contains, .doesNotContain:
+            return values.contains {
+                $0?.range(of: keyword, options: .caseInsensitive) != nil
+            }
+        case .startsWith, .doesNotStartWith:
+            return values.contains {
+                $0?.range(of: "^" + NSRegularExpression.escapedPattern(for: keyword),
+                           options: [.regularExpression, .caseInsensitive]) != nil
+            }
+        case .endsWith, .doesNotEndWith:
+            return values.contains {
+                $0?.range(of: NSRegularExpression.escapedPattern(for: keyword) + "$",
+                           options: [.regularExpression, .caseInsensitive]) != nil
+            }
+        case .matches, .doesNotMatch:
+            guard let expression = try? compiled(keyword) else { return false }
+            return values.contains { value in
+                guard let value, !value.isEmpty else { return false }
+                let range = NSRange(value.startIndex..<value.endIndex, in: value)
+                return expression.firstMatch(in: value, options: [], range: range) != nil
+            }
+        }
+    }
+
+    /// The user's pattern, compiled as written.
+    ///
+    /// Not anchored: a regular expression is the user's to compose, and someone who
+    /// wants the whole field writes `^…$` themselves. Wrapping it would make `\d{4}`
+    /// stop matching inside `123456` — which is the behaviour the pattern asked
+    /// for, not a mistake to correct.
+    private func compiled(_ pattern: String) throws -> NSRegularExpression {
+        try NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+    }
+
+    /// Whether the rule's regular expression is one the engine can compile.
+    ///
+    /// Exposed so the list can say so: a rule that can never match looks exactly
+    /// like a rule that never happens to match.
+    public var hasValidPattern: Bool {
+        guard relation == .matches || relation == .doesNotMatch else { return true }
+        let keyword = self.keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !keyword.isEmpty else { return true }
+        return (try? compiled(keyword)) != nil
+    }
+
+    /// The words a derived name is built from, before the keyword.
+    ///
+    /// Returned as keys rather than a sentence: the Core layer cannot see the
+    /// bundle's string table. The page assembles `<field><relation> <keyword>`,
+    /// which is the shape the list uses — "标题包含 嘿嘿".
+    public var derivedNameParts: (field: String, relation: String) {
+        (field.label, relation.label)
+    }
+
+    /// Whether this rule can be described by a keyword at all.
+    public var hasKeyword: Bool {
+        !keyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - Storage
@@ -226,23 +364,95 @@ enum FilterRuleKey {
 /// is one statement, and splitting it across a page made the second half read as
 /// if it applied to everything.
 public struct FilterRuleGroup {
+
+    /// A name the user gave this group, or empty to derive one.
+    ///
+    /// Derived names say what the group does — "过滤 微信,淘宝" — which is right
+    /// until two groups read alike, so a name is offered rather than imposed.
+    public var name = ""
+
+    /// What to show for this group: its name, or one derived from what it does.
+    ///
+    /// Derived, because naming is work and most groups are described by their
+    /// parts — "过滤 微信,淘宝" is the whole statement. Named, because two groups
+    /// can derive alike, and the user is the one who knows which is which.
+    ///
+    /// The app names come from the caller: this layer has no access to the
+    /// application list, and a group stored with bundle ids should not carry names
+    /// that were true on one device.
+    /// The verb this group's derived name starts with.
+    ///
+    /// Returned as a key rather than a sentence: the Core layer cannot see the
+    /// bundle's string table, so the page localizes it. The shape of the name is
+    /// here because it belongs to the model — `<verb> <app>,<app>` — and only the
+    /// verb needs translating.
+    public var derivedVerb: String {
+        scope.target == .selected ? "Filter" : "Exclude"
+    }
+
+    /// Whether this group is in force.
+    ///
+    /// A switch rather than a delete, the same as a rule's: a group kept for a
+    /// season is not one to retype.
+    public var isEnabled = true
+
     public var scope = FilterRule.Scope()
     public var rules: [FilterRule] = []
 
     public init() {}
-    public init(scope: FilterRule.Scope, rules: [FilterRule]) {
+    public init(scope: FilterRule.Scope, rules: [FilterRule], isEnabled: Bool = true,
+                name: String = "") {
+        self.isEnabled = isEnabled
+        self.name = name
         self.scope = scope
         self.rules = rules
     }
 
     /// What this group decides for `context`, or `nil` when it has no opinion.
     ///
-    /// The first matching rule wins, so the order of the rules is the order of
-    /// precedence — which is why the page lets the user drag them. A group whose
-    /// scope does not cover the app has no opinion regardless of its rules.
+    /// Whether every rule must match, or only one.
+    ///
+    /// Two different things a group can say. "All of these words" narrows —
+    /// "contains 广告" and "does not contain 官方" together mean an ad that is not
+    /// an announcement. "Any of these words" widens — a list of spam words where
+    /// hearing any one is enough.
+    public enum Combination: String, CaseIterable {
+        case any, all
+
+        public var label: String {
+            switch self {
+            case .any: return "Any rule matches"
+            case .all: return "All rules match"
+            }
+        }
+    }
+
+    /// The outcome when this group decides a notification is unwanted.
+    ///
+    /// On the group, not on each rule: a single group is one statement about one
+    /// set of apps, and "hide or forward" is a decision about that statement. Per
+    /// rule it meant two rules on the same apps could disagree, and which one won
+    /// depended on their order — a precedence the user had to reason about.
+    public var action: FilterRule.Action = .suppressAll
+
+    public var combination: Combination = .any
+
+    /// What this group decides for `context`, or `nil` when it has no opinion.
+    ///
+    /// A group whose scope does not cover the app has no opinion regardless of its
+    /// rules. With `all`, every enabled rule has to match — an empty group matches
+    /// nothing, since there is nothing to agree with.
     public func outcome(for context: BulletinContext) -> FilterRule.Action? {
-        guard scope.covers(appID: context.appID) else { return nil }
-        return rules.first { $0.isEnabled && $0.matches(context) }?.action
+        guard isEnabled, scope.covers(appID: context.appID) else { return nil }
+        let active = rules.filter(\.isEnabled)
+        guard !active.isEmpty else { return nil }
+
+        let matched: Bool
+        switch combination {
+        case .any: matched = active.contains { $0.matches(context) }
+        case .all: matched = active.allSatisfy { $0.matches(context) }
+        }
+        return matched ? action : nil
     }
 
     /// A group with nothing in it is still shown and stored: it is what the user
@@ -255,6 +465,10 @@ public struct FilterRuleGroup {
     /// half-written save.
     public var stored: [String: Any] {
         [
+            FilterRuleSetKey.enabled: isEnabled,
+            FilterRuleSetKey.name: name,
+            FilterRuleSetKey.action: action.rawValue,
+            FilterRuleSetKey.combination: combination.rawValue,
             FilterRuleSetKey.target: scope.target.rawValue,
             FilterRuleSetKey.apps: scope.apps,
             FilterRuleSetKey.rules: rules.map(\.stored),
@@ -263,6 +477,12 @@ public struct FilterRuleGroup {
 
     public init(stored object: [String: Any]) {
         let prefs = Prefs(object)
+        isEnabled = prefs.bool(FilterRuleSetKey.enabled, default: true)
+        name = prefs.string(FilterRuleSetKey.name) ?? ""
+        action = FilterRule.Action(rawValue: prefs.string(FilterRuleSetKey.action) ?? "")
+            ?? .suppressAll
+        combination = Combination(rawValue: prefs.string(FilterRuleSetKey.combination) ?? "")
+            ?? .any
         scope.target = FilterRule.Scope.Target(rawValue: prefs.string(FilterRuleSetKey.target) ?? "")
             ?? .selected
         scope.apps = prefs.stringArray(FilterRuleSetKey.apps)
@@ -326,6 +546,10 @@ public struct FilterRuleSet {
 
 enum FilterRuleSetKey {
     static let groups = "groups"
+    static let enabled = "enabled"
+    static let name = "name"
+    static let action = "action"
+    static let combination = "combination"
     static let target = "target"
     static let apps = "apps"
     static let rules = "rules"

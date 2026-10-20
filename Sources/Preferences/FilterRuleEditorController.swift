@@ -19,16 +19,20 @@ public final class FilterRuleEditorController: ListController {
 
     /// The identifiers the segment rows are found by.
     private enum ID {
-        static let enabled = "ruleEnabled"
         static let field = "ruleField"
-        static let relation = "ruleRelation"
-        static let action = "ruleAction"
+        static let polarity = "rulePolarity"
+        static let comparison = "ruleComparison"
         static let keyword = "ruleKeyword"
+        static let notes = "ruleNotes"
     }
 
-    public init(rule: FilterRule, isNew: Bool) {
+    /// The group this rule belongs to, for the title.
+    private let groupName: String?
+
+    public init(rule: FilterRule, isNew: Bool, groupName: String? = nil) {
         self.rule = rule
         self.isNew = isNew
+        self.groupName = groupName
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -37,12 +41,14 @@ public final class FilterRuleEditorController: ListController {
     public override init(nibName: String?, bundle: Bundle?) {
         self.rule = FilterRule()
         self.isNew = true
+        self.groupName = nil
         super.init(nibName: nibName, bundle: bundle)
     }
 
     @objc public override init(forContentSize contentSize: CGSize) {
         self.rule = FilterRule()
         self.isNew = true
+        self.groupName = nil
         super.init(forContentSize: contentSize)
     }
 
@@ -53,7 +59,15 @@ public final class FilterRuleEditorController: ListController {
 
     public override func viewDidLoad() {
         super.viewDidLoad()
-        navigationItem.title = isNew ? "New Rule".localized : "Rule".localized
+        // "过滤淘宝 规则" when the group has a name, "规则" alone when it does
+        // not: the group is the context, and a page titled just "Rule" in a list
+        // of several groups says nothing about which one.
+        let rule = isNew ? "New Rule".localized : "Rule".localized
+        if let groupName, !groupName.isEmpty {
+            navigationItem.title = groupName + " " + rule
+        } else {
+            navigationItem.title = rule
+        }
         // Installed once, through the setter that records the array's identity.
         // Without this the getter compares the framework's array against `nil` on
         // every read, concludes it was substituted, and rebuilds — a page that
@@ -80,15 +94,18 @@ public final class FilterRuleEditorController: ListController {
     private func buildSpecifiers() -> [Any] {
         var all: [PSSpecifier] = []
 
-        // ── On/off ───────────────────────────────────────────────────────────
+        // ── The picture ──────────────────────────────────────────────────────
+        // First, because it is what the rows under it are asking about: "match the
+        // message" is a question about the third line of a notification, and the
+        // picture is the only thing on this page that says which line that is.
         all.append(PSSpecifier.groupSpecifier(withName: nil)!)
-        let enabled = PSSpecifier.preferenceSpecifierNamed(
-            "Enabled".localized, target: self,
-            set: #selector(setRuleEnabled(_:specifier:)), get: #selector(ruleEnabledValue(_:)),
-            detail: nil, cell: .switchCell, edit: nil
-        )!
-        enabled.identifier = ID.enabled
-        all.append(enabled)
+        if let preview = PSSpecifier.preferenceSpecifierNamed(
+            nil, target: nil, set: nil, get: nil, detail: nil,
+            cell: .staticTextCell, edit: nil
+        ) {
+            preview.setProperty(NotificationPreviewCell.self, forKey: "cellClass")
+            all.append(preview)
+        }
 
         // ── Condition ────────────────────────────────────────────────────────
         all.append(PSSpecifier.groupSpecifier(withName: nil)!)
@@ -104,11 +121,20 @@ public final class FilterRuleEditorController: ListController {
 
         all.append(segment(
             title: "Match".localized,
-            identifier: ID.relation,
-            values: FilterRule.Relation.allCases.map { $0.rawValue },
-            titles: FilterRule.Relation.allCases.map { $0.label.localized },
-            setSelector: #selector(setRelation(_:specifier:)),
-            getSelector: #selector(relationValue(_:))
+            identifier: ID.polarity,
+            values: ["positive", "negative"],
+            titles: ["Matches".localized, "Does not match".localized],
+            setSelector: #selector(setPolarity(_:specifier:)),
+            getSelector: #selector(polarityValue(_:))
+        ))
+
+        all.append(segment(
+            title: nil,
+            identifier: ID.comparison,
+            values: FilterRule.Comparison.allCases.map { $0.rawValue },
+            titles: FilterRule.Comparison.allCases.map { $0.label.localized },
+            setSelector: #selector(setComparison(_:specifier:)),
+            getSelector: #selector(comparisonValue(_:))
         ))
 
         let keyword = PSSpecifier.preferenceSpecifierNamed(
@@ -121,31 +147,11 @@ public final class FilterRuleEditorController: ListController {
         all.append(keyword)
 
         let keywordNotes = PSSpecifier.groupSpecifier(withName: nil)!
-        keywordNotes.setProperty(
-            ("Leave the keyword empty to match every notification from the apps "
-                + "this list covers.").localized,
-            forKey: "footerText"
-        )
+        keywordNotes.identifier = ID.notes
+        keywordNotes.setProperty(keywordNotesText(), forKey: "footerText")
         all.append(keywordNotes)
 
-        // ── Outcome ──────────────────────────────────────────────────────────
-        all.append(PSSpecifier.groupSpecifier(withName: nil)!)
-        all.append(segment(
-            title: nil,
-            identifier: ID.action,
-            values: FilterRule.Action.allCases.map { $0.rawValue },
-            titles: FilterRule.Action.allCases.map { $0.label.localized },
-            setSelector: #selector(setAction(_:specifier:)),
-            getSelector: #selector(actionValue(_:))
-        ))
 
-        let footer = PSSpecifier.groupSpecifier(withName: nil)!
-        footer.setProperty(
-            ("Hiding means SpringBoard never publishes the notification; "
-                + "the phone does not draw it.").localized,
-            forKey: "footerText"
-        )
-        all.append(footer)
 
         return all
     }
@@ -183,15 +189,6 @@ public final class FilterRuleEditorController: ListController {
     // a string here — and the getter returns the same shape, which is what makes
     // the row draw with the current choice selected.
 
-    @objc private func setRuleEnabled(_ value: Any?, specifier: PSSpecifier) {
-        rule.isEnabled = (value as? NSNumber)?.boolValue ?? false
-        onSave?(rule)
-    }
-
-    @objc private func ruleEnabledValue(_ specifier: PSSpecifier) -> Any? {
-        NSNumber(value: rule.isEnabled)
-    }
-
     @objc private func setField(_ value: Any?, specifier: PSSpecifier) {
         let raw = (value as? String) ?? ""
         rule.field = FilterRule.Field(rawValue: raw) ?? .any
@@ -202,29 +199,127 @@ public final class FilterRuleEditorController: ListController {
         rule.field.rawValue
     }
 
-    @objc private func setRelation(_ value: Any?, specifier: PSSpecifier) {
-        let raw = (value as? String) ?? ""
-        rule.relation = FilterRule.Relation(rawValue: raw) ?? .contains
+    @objc private func setPolarity(_ value: Any?, specifier: PSSpecifier) {
+        let negated = (value as? String) == "negative"
+        rule.relation = FilterRule.Relation(
+            comparison: rule.relation.comparison, isNegated: negated
+        )
         onSave?(rule)
     }
 
-    @objc private func relationValue(_ specifier: PSSpecifier) -> Any? {
-        rule.relation.rawValue
+    @objc private func polarityValue(_ specifier: PSSpecifier) -> Any? {
+        rule.relation.isNegated ? "negative" : "positive"
     }
 
-    @objc private func setAction(_ value: Any?, specifier: PSSpecifier) {
-        let raw = (value as? String) ?? ""
-        rule.action = FilterRule.Action(rawValue: raw) ?? .suppressAll
+    @objc private func setComparison(_ value: Any?, specifier: PSSpecifier) {
+        guard let raw = value as? String,
+              let comparison = FilterRule.Comparison(rawValue: raw) else { return }
+        rule.relation = FilterRule.Relation(
+            comparison: comparison, isNegated: rule.relation.isNegated
+        )
         onSave?(rule)
     }
 
-    @objc private func actionValue(_ specifier: PSSpecifier) -> Any? {
-        rule.action.rawValue
+    @objc private func comparisonValue(_ specifier: PSSpecifier) -> Any? {
+        rule.relation.comparison.rawValue
     }
 
     @objc private func setKeyword(_ value: Any?, specifier: PSSpecifier) {
         rule.keyword = (value as? String) ?? ""
         onSave?(rule)
+        refreshNotes()
+    }
+
+    // MARK: - The pattern's verdict
+
+    /// The paragraph under the keyword.
+    ///
+    /// A regular expression that does not compile matches nothing, and without a
+    /// word about it a rule that can never match looks exactly like a rule that
+    /// never happens to. The wording follows the encryption key's, which reports
+    /// its own problem the same way.
+    private func keywordNotesText(keyword live: String? = nil) -> String {
+        let notes = ("Leave the keyword empty to match every notification from the apps "
+            + "this list covers.").localized
+        guard let problem = patternProblem(keyword: live) else { return notes }
+        return "⚠️ " + problem + "\n\n" + notes
+    }
+
+    /// What is wrong with the pattern, or `nil` when it compiles.
+    private func patternProblem(keyword live: String? = nil) -> String? {
+        guard rule.relation.comparison == .matches else { return nil }
+        let pattern = (live ?? rule.keyword).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !pattern.isEmpty else { return nil }      // empty matches everything
+        guard let reported = RegexDiagnosis.problem(with: pattern) else { return nil }
+        // The key, and the offset ICU reported after a bar.
+        let parts = reported.split(separator: "|", maxSplits: 1)
+        let sentence = String(parts[0]).localized
+        guard parts.count == 2, let offset = Int(parts[1]) else { return sentence }
+        return sentence + String(format: " (position %d)".localized, offset)
+    }
+
+    /// The keyword field, watched as it is typed into.
+    ///
+    /// `setKeyword` fires when the framework calls the setter, which is when the
+    /// field loses focus — so the warning would appear only after the user looked
+    /// away. The field's own `editingChanged` is what makes it appear as they type.
+    private weak var keywordField: UITextField?
+
+    private func observeKeywordField(in cell: UITableViewCell) {
+        guard let field = Self.firstTextField(in: cell) else { return }
+        guard keywordField !== field else { return }
+        keywordField = field
+        field.addTarget(self, action: #selector(keywordChanged(_:)), for: .editingChanged)
+    }
+
+    @objc private func keywordChanged(_ field: UITextField) {
+        // The live text, not the stored value: the write has not happened yet.
+        refreshNotes(keyword: field.text ?? "")
+    }
+
+    private static func firstTextField(in view: UIView) -> UITextField? {
+        for subview in view.subviews {
+            if let field = subview as? UITextField { return field }
+            if let found = firstTextField(in: subview) { return found }
+        }
+        return nil
+    }
+
+    /// Rewrites the paragraph under the keyword, without rebuilding the section.
+    ///
+    /// Reloading would rebuild every cell in it — including the field being typed
+    /// into, which would lose focus and its keyboard on the first keystroke.
+    private func refreshNotes(keyword live: String? = nil) {
+        guard let group = specifier(forID: ID.notes) else { return }
+        let text = keywordNotesText(keyword: live)
+        guard text != group.property(forKey: "footerText") as? String else { return }
+        group.setProperty(text, forKey: "footerText")
+        updateFooterView(text, identifier: ID.notes)
+    }
+
+    private func updateFooterView(_ text: String, identifier: String) {
+        guard let table else { return }
+        let rows = (super.specifiers ?? []).compactMap { $0 as? PSSpecifier }
+        var section = -1
+        for specifier in rows where specifier.cellType == .groupCell {
+            section += 1
+            guard specifier.identifier == identifier else { continue }
+            guard section < table.numberOfSections,
+                  let footer = table.footerView(forSection: section)
+            else { return }
+
+            func apply(_ view: UIView) {
+                if let label = view as? UILabel { label.text = text }
+                view.subviews.forEach(apply)
+            }
+            apply(footer)
+            footer.setNeedsLayout()
+            UIView.performWithoutAnimation {
+                table.beginUpdates()
+                table.endUpdates()
+            }
+            return
+        }
     }
 
     @objc private func keywordValue(_ specifier: PSSpecifier) -> Any? {
