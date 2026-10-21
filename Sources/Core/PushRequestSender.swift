@@ -168,9 +168,35 @@ public final class RequestSender {
             return
         }
 
+        // Credentials written into the URL — `https://user:pass@host/path` — are
+        // turned into a Basic authorization header, and stripped from the URL:
+        // a URL carrying credentials is logged by every proxy it passes through,
+        // and `URL` keeps them where a request would send them twice.
+        //
+        // Accepted rather than offered as a field because it is what people type.
+        // The custom webhook service takes a key in a header or the body; a
+        // server that wants Basic auth has nowhere to put it otherwise.
+        var sanitized = url
+        var basicAuth: String?
+        if let user = url.user, let password = url.password {
+            basicAuth = Data("\(user):\(password)".utf8).base64EncodedString()
+            if var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+                components.user = nil
+                components.password = nil
+                sanitized = components.url ?? url
+            }
+        }
+
         var urlRequest = URLRequest(
-            url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 10
+            url: sanitized, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 10
         )
+        if let basicAuth {
+            urlRequest.setValue("Basic \(basicAuth)", forHTTPHeaderField: "Authorization")
+            // Logged as a name, never the value: the whole point of moving it off
+            // the URL is that it stops being written down.
+            PushLog.add(service: service, context: context, label: "Header",
+                        object: "Authorization: Basic ***")
+        }
         PushLog.add(service: service, context: context, label: "Method", object: httpMethod)
         urlRequest.httpMethod = httpMethod
 

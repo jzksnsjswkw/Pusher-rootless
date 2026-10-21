@@ -686,3 +686,8 @@
 "Octal escape too large." = "八进制转义过大。";
 "Not a valid regular expression." = "正则表达式无效。";
 " (position %d)" = "（位置 %d）";
+"Server" = "服务器";
+"Token:" = "令牌：";
+"Priority:" = "优先级：";
+"The address of your Gotify server. Credentials may be written into it, like https://user:pass@host." = "你的 Gotify 服务器地址。可以把认证信息写在里面，例如 https://user:pass@host。";
+"Priority raises how loudly the client announces a message. 5 is an ordinary notification; 8 and above are for things worth interrupting for." = "优先级决定客户端提醒的强度。5 是普通通知，8 及以上用于值得打断的事。";

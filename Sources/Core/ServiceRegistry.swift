@@ -150,6 +150,7 @@ public enum ServiceRegistry {
     public static let addableServices: [ServiceDescriptor] = [
         .init(BarkService.self),
         .init(FeishuService.self),
+        .init(GotifyService.self),
         .init(IFTTTService.self),
         .init(PushbulletService.self),
         .init(PusherReceiverService.self),
