@@ -9,6 +9,9 @@ import Foundation
 public enum WxPusherService: PushService {
     public static let serviceName = "WxPusher"
     static let pushURL = "https://wxpusher.zjiecode.com/api/send/message"
+    /// The simple-push endpoint. Same host, different path, and no app token: an
+    /// SPT names its own recipient.
+    static let simplePushURL = "https://wxpusher.zjiecode.com/api/send/message/simple-push"
 
     public static func url(eventName: String, dbName: String, serverURL: String) -> String {
         pushURL
@@ -16,6 +19,8 @@ public enum WxPusherService: PushService {
 
     public static func defaultPrefs() -> [String: Any] {
         [
+            WxPusherPrefKey.mode: WxPusherMode.spt.rawValue,
+            WxPusherPrefKey.spt: "",
             WxPusherPrefKey.appToken: "",
             WxPusherPrefKey.uids: "",
             WxPusherPrefKey.topicIds: "",
@@ -30,11 +35,32 @@ public enum WxPusherService: PushService {
         let hasBody = !context.displayMessage.isEmpty
 
         var infoDict: [String: Any] = [
-            "appToken": config.raw.string(WxPusherPrefKey.appToken, default: ""),
             "content": hasBody ? context.displayMessage : (context.title ?? context.appName),
             // 1 text, 2 HTML, 3 Markdown. Text is the default the API documents.
             "contentType": config.raw.int(WxPusherPrefKey.contentType, default: 1),
         ]
+
+        // Two ways to send, chosen on the page rather than inferred from which
+        // field was filled in: a user who pastes an App Token and leaves an SPT
+        // from an earlier attempt behind would otherwise be sent the wrong way
+        // with nothing on screen saying so.
+        let mode = WxPusherMode(
+            rawValue: config.raw.string(WxPusherPrefKey.mode, default: "")
+        ) ?? .spt
+        let spt = config.raw.string(WxPusherPrefKey.spt, default: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if mode == .spt, !spt.isEmpty {
+            infoDict["spt"] = spt
+            let summary = hasBody ? context.displayTitle : context.appName
+            if !summary.isEmpty { infoDict["summary"] = summary }
+            let url = config.raw.string(WxPusherPrefKey.url, default: "")
+            if !url.isEmpty { infoDict["url"] = url }
+            return withLogBody(
+                PushRequest(urlString: simplePushURL, infoDict: infoDict), infoDict
+            )
+        }
+
+        infoDict["appToken"] = config.raw.string(WxPusherPrefKey.appToken, default: "")
 
         // Left out when empty rather than sent as "": the platform then shows the
         // content, which reads better than a blank line.
@@ -71,7 +97,18 @@ public enum WxPusherService: PushService {
 }
 
 /// The keys this service's settings are stored under.
+/// Which of the two ways to send this instance uses.
+public enum WxPusherMode: String {
+    /// A personal token from the WxPusher site. No app, no user list.
+    case spt
+    /// An app's token, with recipients named by UID or topic.
+    case app
+}
+
 enum WxPusherPrefKey {
+    static let mode = "wxPusherMode"
+    /// A simple push token, `SPT_…`.
+    static let spt = "spt"
     static let appToken = "appToken"
     static let uids = "uids"
     static let topicIds = "topicIds"

@@ -221,9 +221,10 @@ public final class RequestSender {
             } else {
                 urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 do {
-                    payload = try JSONSerialization.data(
-                        withJSONObject: body, options: [.prettyPrinted]
-                    )
+                    // Compact, not pretty-printed: the whitespace is for a
+                    // reader and the reader here is a server. It is also a few
+                    // bytes per field on every push.
+                    payload = try JSONSerialization.data(withJSONObject: body)
                 } catch {
                     PusherLog.debug("\(logString) JSON serialization failed: \(error)")
                     PushLog.add(service: service, context: context,

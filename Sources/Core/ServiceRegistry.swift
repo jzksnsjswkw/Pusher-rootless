@@ -149,6 +149,7 @@ public enum ServiceRegistry {
     /// shows them. The generic webhook is last because it is the fallback.
     public static let addableServices: [ServiceDescriptor] = [
         .init(BarkService.self),
+        .init(DingtalkService.self),
         .init(FeishuService.self),
         .init(GotifyService.self),
         .init(IFTTTService.self),

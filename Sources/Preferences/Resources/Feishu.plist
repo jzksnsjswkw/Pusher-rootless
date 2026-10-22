@@ -4,33 +4,50 @@
 <dict>
 	<key>items</key>
 	<array>
-		<!-- Credentials -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>The key is the part of the bot's webhook URL after /hook/.</string>
 			<key>label</key>
-			<string>Webhook</string>
+			<string>Credentials</string>
 		</dict>
 		<dict>
-			<key>cell</key>
-			<string>PSEditTextCell</string>
-			<key>detail</key>
-			<string>PSDetailController</string>
-			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
 			<key>PostNotification</key>
 			<string>com.noahsaso.pusher/prefs</string>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>defaults</key>
+			<string>com.noahsaso.pusher</string>
+			<key>detail</key>
+			<string>PSDetailController</string>
 			<key>key</key>
 			<string>key</string>
-			<key>service</key>
-			<string>Feishu</string>
 			<key>label</key>
 			<string>Key:</string>
 			<key>noAutoCorrect</key>
 			<true/>
+			<key>service</key>
+			<string>Feishu</string>
 		</dict>
-
-		<!-- App List -->
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Only needed when the bot requires a signature. Leave it empty otherwise.</string>
+			<key>label</key>
+			<string>Signature</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>key</key>
+			<string>secret</string>
+			<key>label</key>
+			<string>Signing secret:</string>
+			<key>noAutoCorrect</key>
+			<true/>
+		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -38,14 +55,14 @@
 			<string>Apps</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.noahsaso.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSSegmentCell</string>
 			<key>default</key>
 			<true/>
 			<key>defaults</key>
 			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
@@ -64,6 +81,8 @@
 			</array>
 		</dict>
 		<dict>
+			<key>alphabeticIndexingEnabled</key>
+			<true/>
 			<key>cell</key>
 			<string>PSLinkCell</string>
 			<key>detail</key>
@@ -75,12 +94,8 @@
 			<key>service</key>
 			<string>Feishu</string>
 			<key>useSearchBar</key>
-			<true />
-			<key>alphabeticIndexingEnabled</key>
-			<true />
+			<true/>
 		</dict>
 	</array>
-	<key>title</key>
-	<string>Feishu</string>
 </dict>
 </plist>

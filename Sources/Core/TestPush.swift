@@ -48,12 +48,24 @@ public final class TestPush: NSObject {
             bulletin.primaryAttachment = attachment
         }
 
+        // Composed by the same two functions a real notification goes through, and
+        // passed in explicitly rather than left to be derived from the bulletin.
+        // Deriving means asking a synthetic `BBBulletin` for `showsSubtitle`, which
+        // is a readonly property no code sets on a bulletin built this way — so the
+        // subtitle was silently dropped. Calling the functions directly gives the
+        // same output without depending on a field that is never populated.
         let context = BulletinAdapter.context(
             for: bulletin,
             isTest: true,
             appName: Content.appName,
-            displayTitle: bulletin.title,
-            displayMessage: "\(bulletin.subtitle ?? "")\n\(bulletin.message ?? "")"
+            displayTitle: BulletinAdapter.displayTitle(
+                appName: Content.appName, title: Content.title
+            ),
+            displayMessage: BulletinAdapter.displayMessage(
+                subtitle: Content.subtitle,
+                message: Content.message,
+                showsSubtitle: true
+            )
         )
 
         PushEngine.shared.send(to: service, context: context)

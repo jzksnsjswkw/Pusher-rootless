@@ -377,6 +377,10 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             }
             guard previous != isOn else { return }
             showsCipherSettings = isOn
+        case WxPusherPrefKey.mode:
+            // The credential rows appear and disappear with this.
+            installSpecifiers(buildSpecifiers())
+            return
         case PrefKey.appListIsBlacklist:
             // The row appears and disappears with this, so the page is rebuilt
             // rather than a single cell reloaded.
@@ -393,6 +397,23 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             return
         }
         installSpecifiers(buildSpecifiers())
+    }
+
+    /// Which WxPusher credential rows to show.
+    ///
+    /// Read from storage, unlike the toggles, and the difference is when this is
+    /// asked: it decides which rows exist, so it is read while the list is being
+    /// *built* — and at that moment `specifier(forID:)` still answers from the
+    /// previous list. Asking the old cell returns the value from before the tap,
+    /// which made switching the segment change nothing.
+    ///
+    /// The write lands in storage before `cellDidChange` is called, so this is
+    /// current by the time the rebuild happens.
+    private var wxPusherMode: WxPusherMode {
+        WxPusherMode(
+            rawValue: PrefsStore.instance(serviceInstanceID)
+                .string(WxPusherPrefKey.mode, default: "")
+        ) ?? .spt
     }
 
     /// Whether the app-list row is shown: false while the segment reads
@@ -586,7 +607,29 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             loaded = []
             all = []
         } else {
-            loaded = loadSpecifiers(named: serviceType) as? [PSSpecifier] ?? []
+            var rows = loadSpecifiers(named: serviceType) as? [PSSpecifier] ?? []
+
+            // The WxPusher credential rows are cut down to what the chosen mode
+            // needs: an SPT names its own recipient, so the app token and the user
+            // lists beside it would be fields that do nothing. Here, because this
+            // is where the service's own plist is loaded — the array above holds
+            // the shared tail, which has none of these keys.
+            if serviceType == WxPusherService.serviceName {
+                let mode = wxPusherMode
+                rows.removeAll { specifier in
+                    switch specifier.property(forKey: "key") as? String {
+                    case WxPusherPrefKey.spt:
+                        return mode != .spt
+                    case WxPusherPrefKey.appToken, WxPusherPrefKey.uids,
+                         WxPusherPrefKey.topicIds:
+                        return mode != .app
+                    default:
+                        return false
+                    }
+                }
+            }
+
+            loaded = rows
             all = loaded
         }
         for specifier in loaded {
@@ -597,6 +640,18 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             if specifier.cellType == .linkCell, specifier.name == "App List".localized {
                 specifier.setProperty(isWebhook, forKey: SpecifierRouting.PropertyKey.isWebhook)
             }
+            // Every row that decides whether *other rows exist* says so here: the
+            // storage layer tells this object what changed, and without the
+            // observer it is told nothing — the value is stored, and the page
+            // keeps showing the old set of rows until something else rebuilds it
+            // (a trip to the background and back, in practice).
+            if specifier.property(forKey: "key") as? String == WxPusherPrefKey.mode {
+                specifier.setProperty(
+                    NSValue(nonretainedObject: self),
+                    forKey: SpecifierRouting.PropertyKey.changeObserver
+                )
+            }
+
             // The plist's own app-list segment (Blacklist/Whitelist) gets the same
             // leading "Default" the device-condition segments get below: chosen,
             // it stores nothing and the instance follows the global list. The

@@ -8,9 +8,41 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>Create an app token (starts with AT_) at wxpusher.zjiecode.com/admin. UIDs are the recipients, comma-separated.</string>
+			<string>SPT is a personal key from the WxPusher site: no app, no user id. Use an App Token instead to send to UIDs or Topic IDs.</string>
 			<key>label</key>
 			<string>Credentials</string>
+		</dict>
+		<dict>
+			<key>PostNotification</key>
+			<string>com.noahsaso.pusher/prefs</string>
+			<key>cell</key>
+			<string>PSSegmentCell</string>
+			<key>defaults</key>
+			<string>com.noahsaso.pusher</string>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+			<key>key</key>
+			<string>wxPusherMode</string>
+			<key>validTitles</key>
+			<array>
+				<string>SPT</string>
+				<string>App Token</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<string>spt</string>
+				<string>app</string>
+			</array>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>key</key>
+			<string>spt</string>
+			<key>label</key>
+			<string>SPT:</string>
+			<key>noAutoCorrect</key>
+			<true/>
 		</dict>
 		<dict>
 			<key>cell</key>
