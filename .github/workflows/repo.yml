@@ -1,0 +1,47 @@
+name: Repository
+
+# Builds the Sileo source from a release's assets and publishes it to Pages.
+#
+# Runs after the release job rather than inside it: the index lists the two debs
+# that release attached, and those are not available until it has finished.
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Fetch the release's debs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p staged
+          gh release download "${{ github.event.release.tag_name }}" \
+            --pattern '*.deb' --dir staged
+          ls -la staged
+
+      - name: Build the index
+        run: |
+          # dpkg-deb is what reads the control fields, and macOS has no dpkg.
+          brew install dpkg
+          ./scripts/make_repo.sh "${{ github.event.release.tag_name }}" staged/*.deb
+
+      - name: Publish to Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./repo
+          publish_branch: gh-pages
+          # The source lives in another repository (jzksnsjswkw/repo), so pushing
+          # there needs a token that can write to it. Falls back to this repository
+          # when the secret is absent, which is enough to try the workflow out.
+          destination_dir: .
+          keep_files: false

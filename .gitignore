@@ -11,3 +11,4 @@ Generated/
 # large enough that no reader of a diff wants them.
 reverse/
 .sisyphus/
+repo/

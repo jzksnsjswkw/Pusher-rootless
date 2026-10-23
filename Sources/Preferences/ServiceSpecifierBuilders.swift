@@ -4,7 +4,7 @@ import UIKit
 ///
 /// Most services are configured entirely by their plist, but several need cells
 /// that push a detail controller (Pushover's device and sound pickers) or that
-/// are not in any plist (Wechat's credentials, Bark's parameters). Those are
+/// are not in any plist (the WeCom robot's credentials, Bark's parameters). Those are
 /// built and registered here, keyed by service name, so ``ServiceController``
 /// can look them up without knowing which services exist — adding a service
 /// does not mean editing a dispatch chain.
@@ -52,7 +52,7 @@ public final class ServiceSpecifierBuilders: NSObject {
         register(builder: Self.pushover, forService: PushoverService.serviceName)
         register(builder: Self.pushbullet, forService: PushbulletService.serviceName)
         register(builder: Self.ifttt, forService: IFTTTService.serviceName)
-        register(builder: Self.wechat, forService: WechatService.serviceName)
+        register(builder: Self.wechat, forService: WeComService.serviceName)
         register(builder: Self.bark, forService: BarkService.serviceName)
         register(builder: Self.pusherReceiver, forService: PusherReceiverService.serviceName)
         register(builder: Self.shortcut, forService: ShortcutService.serviceName)
@@ -364,7 +364,7 @@ public final class ServiceSpecifierBuilders: NSObject {
         ] + payloadOptions(service: service, appID: appID, defaults: defaults, pageObserver: pageObserver)
     }
 
-    // MARK: - Wechat
+    // MARK: - 企业微信机器人
 
     /// The recipient, plus the Corporate ID / secret / agent ID credentials.
     private static func wechat(service: String, appID: String?, defaults: ServiceConfig?, pageObserver: AnyObject?) -> [PSSpecifier] {

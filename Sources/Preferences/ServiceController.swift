@@ -654,6 +654,27 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
             // observer it is told nothing — the value is stored, and the page
             // keeps showing the old set of rows until something else rebuilds it
             // (a trip to the background and back, in practice).
+            // The email server's mode gets the same leading "Default" the device
+            // conditions do: chosen, an instance follows the table rather than
+            // overriding it, which is what "take it from the address" means.
+            if serviceType == EmailService.serviceName,
+               let key = specifier.property(forKey: "key") as? String,
+               key == EmailPrefKey.security {
+                var values: [Any] = specifier.values ?? []
+                let titleDictionary = specifier.titleDictionary ?? [:]
+                var titles: [String] = ["Default".localized]
+                for value in values {
+                    guard let lookup = value as? AnyHashable else { continue }
+                    titles.append(titleDictionary[lookup] as? String ?? "")
+                }
+                values.insert(NSNumber(value: segmentCellDefault), at: 0)
+                specifier.setValues(values, titles: titles)
+                specifier.setProperty(
+                    NSNumber(value: segmentCellDefault),
+                    forKey: SpecifierRouting.PropertyKey.defaultValue
+                )
+            }
+
             if specifier.property(forKey: "key") as? String == WxPusherPrefKey.mode {
                 specifier.setProperty(
                     NSValue(nonretainedObject: self),

@@ -60,7 +60,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>Left empty, the server is taken from the sender address (qq.com, 163.com, gmail.com and others). Fill it in for a mailbox on any other domain.</string>
+			<string>Default takes all three from the sender address. SSL uses port 465, STARTTLS uses 587, None uses 25. A server typed here is used as given.</string>
 			<key>label</key>
 			<string>Server</string>
 		</dict>
@@ -83,6 +83,28 @@
 			<string>numbersAndPunctuation</string>
 			<key>label</key>
 			<string>Port:</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSegmentCell</string>
+			<key>defaults</key>
+			<string>com.noahsaso.pusher</string>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+			<key>key</key>
+			<string>security</string>
+			<key>validTitles</key>
+			<array>
+				<string>None</string>
+				<string>SSL</string>
+				<string>STARTTLS</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<string>plain</string>
+				<string>tls</string>
+				<string>starttls</string>
+			</array>
 		</dict>
 		<dict>
 			<key>cell</key>

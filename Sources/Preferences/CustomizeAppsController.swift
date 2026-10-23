@@ -128,7 +128,7 @@ public final class CustomizeAppsController: PlainViewController, UITableViewData
             override[PrefKey.sounds] = serviceDefaults.array(PrefKey.sounds)
         case PushbulletService.serviceName:
             override[PrefKey.devices] = serviceDefaults.array(PrefKey.devices)
-        case WechatService.serviceName:
+        case WeComService.serviceName:
             override[PrefKey.touser] = serviceDefaults.string(PrefKey.touser, default: "")
         case IFTTTService.serviceName:
             override[PrefKey.eventName] = serviceDefaults.string(PrefKey.eventName, default: "")

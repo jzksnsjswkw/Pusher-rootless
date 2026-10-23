@@ -458,6 +458,12 @@ enum ServiceArtwork {
     /// when a named resource is missing, so its rows name the shared image.
     static func resourceName(forType type: String) -> String {
         guard ServiceRegistry.isBuiltIn(type) else { return "DefaultService" }
+        // Two services are the same product seen two ways — 企业微信's robot and
+        // its group push — and they share one piece of artwork rather than
+        // shipping the brand mark twice.
+        if type == WeComRobotService.serviceName {
+            return "BuiltInService_\(WeComService.serviceName)"
+        }
         return "BuiltInService_\(type)"
     }
 

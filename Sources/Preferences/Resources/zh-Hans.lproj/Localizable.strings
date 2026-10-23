@@ -53,7 +53,7 @@
 "Bark" = "Bark";
 "Feishu" = "飞书";
 "Webhook" = "Webhook";
-"Wechat" = "企业微信";
+"WeCom" = "企业微信·机器人";
 "Server URL:" = "服务器 URL：";
 "Key:" = "Key：";
 "Corpid:" = "Corpid：";
@@ -705,7 +705,7 @@
 "DingTalk renders the mention itself: the number is replaced with the person's name, and a body without one gets the mention added at the end." = "钉钉会自己渲染 @：号码会被替换成对方的昵称，正文里没有对应位置时会追加到末尾。";
 "Dingtalk" = "钉钉";
 "The key is the part of the robot's webhook URL after access_token=." = "Key 是机器人 webhook 地址里 access_token= 后面的部分。";
-"WeCom" = "企业微信·消息推送";
+"WeComRobot" = "企业微信·消息推送";
 "The key is the part of the webhook URL after key=." = "Key 是 webhook 地址里 key= 后面的部分。";
 "Email" = "邮件";
 "From:" = "发件邮箱：";
@@ -714,7 +714,6 @@
 "Host:" = "服务器：";
 "Port:" = "端口：";
 "Comma-separated for several recipients." = "多个收件人用逗号分隔。";
-"Left empty, the server is taken from the sender address (qq.com, 163.com, gmail.com and others). Fill it in for a mailbox on any other domain." = "留空则根据发件邮箱自动选择（支持 QQ、163、Gmail 等常用邮箱）。其他域名需要手动填写。";
 "Sender name:" = "发件人昵称：";
 "Subject:" = "邮件主题：";
 "A sender name is what the recipient sees beside the address. A subject you write here replaces the notification title, which then moves into the body." = "发件人昵称是收件人在地址旁边看到的名字。填写邮件主题后会替换通知标题，原通知标题会移到正文。";
@@ -725,3 +724,6 @@
 "Recipient 3" = "收件人 3";
 "Recipient 4" = "收件人 4";
 "Recipient 5" = "收件人 5";
+"Default takes all three from the sender address. SSL uses port 465, STARTTLS uses 587, None uses 25. A server typed here is used as given." = "默认会根据发件邮箱自动选择服务器、加密方式和端口。SSL 用 465，STARTTLS 用 587，不加密用 25。手动填写的服务器按填写的值使用。";
+"SSL" = "SSL";
+"STARTTLS" = "STARTTLS";
