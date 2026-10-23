@@ -88,6 +88,7 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        installRecipientsEditButton()
 
         // Two services have a guide, for the same reason: both hand the user off
         // to another app — a Shortcut to build, a Bark key to read off Bark's own
@@ -629,6 +630,14 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
                 }
             }
 
+            // The recipient list is the one field whose length the user controls,
+            // so its rows are built here rather than in the plist: one row per
+            // address, each with the button that adds the next or removes itself.
+            if serviceType == EmailService.serviceName,
+               let at = rows.firstIndex(where: { $0.property(forKey: "key") as? String == EmailPrefKey.password }) {
+                rows.insert(contentsOf: recipientSpecifiers(), at: at + 1)
+            }
+
             loaded = rows
             all = loaded
         }
@@ -986,6 +995,170 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         return specifiers
     }
 
+    // MARK: - Email recipients
+
+    /// The prefix every address row is stored under. The suffix is the row number,
+    /// and the rows are numbered without gaps — that is the whole invariant these
+    /// three methods exist to keep.
+    private static let recipientKeyPrefix = "emailRecipient"
+
+    /// One address per row, read straight from the keys the framework writes.
+    ///
+    /// The rows themselves are the storage. `PSEditTextCell` writes through
+    /// `setPreferenceValue:specifier:` under the specifier's own key, and reads
+    /// back from there; deriving a second list from them was the mistake that left
+    /// the page showing one set of addresses and the service sending to another.
+    private var emailRecipients: [String] {
+        let config = PrefsStore.instance(serviceInstanceID)
+        var addresses: [String] = []
+        var index = 0
+        while let text = config[Self.recipientKeyPrefix + "\(index)"] as? String {
+            addresses.append(text)
+            index += 1
+        }
+        // An instance configured before the rows existed has a single joined
+        // string, and one configured during the array era has an array under
+        // `toEmail`. Both are read once and then rewritten as rows.
+        if addresses.isEmpty {
+            if let array = config[EmailPrefKey.to] as? [String] {
+                addresses = array
+            } else if let text = config[EmailPrefKey.to] as? String {
+                addresses = text.components(separatedBy: CharacterSet(charactersIn: ",，;； "))
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+            }
+        }
+        return addresses.isEmpty ? [""] : addresses
+    }
+
+    /// Replaces every row key with `addresses`, in order, with no gaps.
+    ///
+    /// Written wholesale rather than row by row: removing the middle of a numbered
+    /// list leaves the numbers after it pointing past the end, and the next read
+    /// stops at the gap. Rewriting the whole block is what keeps the sequence
+    /// contiguous.
+    private func writeRecipients(_ addresses: [String]) {
+        PrefsStore.updateInstance(serviceInstanceID) { config in
+            for key in config.keys where key.hasPrefix(Self.recipientKeyPrefix) {
+                config.removeValue(forKey: key)
+            }
+            for (index, address) in addresses.enumerated() {
+                config[Self.recipientKeyPrefix + "\(index)"] = address
+            }
+            // The joined forms are what this replaced. Left behind, they would be
+            // read again the first time the rows come back empty.
+            config.removeValue(forKey: EmailPrefKey.to)
+        }
+    }
+
+    private func recipientSpecifiers() -> [PSSpecifier] {
+        var rows: [PSSpecifier] = emailRecipients.enumerated().map { index, _ in
+            // A plain text cell with no setter or getter of its own: the framework
+            // reads and writes it by the key below, which is the storage.
+            // The label is built from a localized prefix and the bare number:
+            // an interpolated string cannot be looked up in the table, since the
+            // key would have to contain the number.
+            let label = index == 0
+                ? "Recipient".localized
+                : "Recipient".localized + " " + String(index + 1)
+            let specifier = PSSpecifier.preferenceSpecifierNamed(
+                label,
+                target: nil, set: nil, get: nil,
+                detail: nil, cell: .editTextCell, edit: nil
+            )!
+            specifier.setProperty(Self.recipientKeyPrefix + "\(index)", forKey: "key")
+            specifier.identifier = Self.recipientKeyPrefix + "\(index)"
+            specifier.setProperty(true, forKey: "enabled")
+            return specifier
+        }
+
+        let add = PSSpecifier.preferenceSpecifierNamed(
+            "Add recipient".localized, target: self,
+            set: nil, get: nil, detail: nil, cell: .buttonCell, edit: nil
+        )!
+        // `buttonAction` is an ObjC ivar, not a property. The action takes one
+        // argument, because that is what `PSButtonCell` sends.
+        add.buttonAction = #selector(addRecipientRow(_:))
+        add.setProperty(true, forKey: "enabled")
+        add.identifier = EmailRecipientSpecKey.addRow
+        rows.append(add)
+        return rows
+    }
+
+    /// Appends an empty row.
+    @objc func addRecipientRow(_ sender: Any?) {
+        writeRecipients(emailRecipients + [""])
+        installSpecifiers(buildSpecifiers())
+    }
+
+    /// Removes one row. The list never becomes empty: the first row clears instead
+    /// of disappearing, because a page with no address row has nowhere to type one.
+    private func removeRecipientRow(at index: Int) {
+        var addresses = emailRecipients
+        guard index > 0, index < addresses.count else { return }
+        addresses.remove(at: index)
+        writeRecipients(addresses)
+        installSpecifiers(buildSpecifiers())
+    }
+
+    // MARK: - Editing recipients
+
+    /// The Edit button, shown only on the page that has deletable rows.
+    ///
+    /// The same interaction as the instance list: tap Edit, red circles appear
+    /// beside the rows that can go, tap one to delete. Pulling to reveal a delete
+    /// button would be quicker but inconsistent with the rest of the app, and the
+    /// instance list is where the user has already learned this gesture.
+    private var recipientsEditButton: UIBarButtonItem?
+
+    private func installRecipientsEditButton() {
+        guard serviceType == EmailService.serviceName else {
+            navigationItem.rightBarButtonItem = nil
+            return
+        }
+        guard recipientsEditButton == nil || navigationItem.rightBarButtonItem == nil else { return }
+        let button = UIBarButtonItem(
+            title: "Edit".localized, style: .plain,
+            target: self, action: #selector(toggleRecipientsEditing)
+        )
+        recipientsEditButton = button
+        navigationItem.rightBarButtonItem = button
+    }
+
+    @objc private func toggleRecipientsEditing() {
+        let editing = !(table?.isEditing ?? false)
+        table?.setEditing(editing, animated: true)
+        recipientsEditButton?.title = editing ? "Done".localized : "Edit".localized
+    }
+
+    /// Only the address rows are deletable. The first one is not: a page whose
+    /// only field is gone has nowhere left to type an address.
+    public override func tableView(
+        _ tableView: UITableView,
+        editingStyleForRowAt indexPath: IndexPath
+    ) -> UITableViewCell.EditingStyle {
+        guard let identifier = specifierForRow(indexPath)?.identifier,
+              identifier.hasPrefix(EmailRecipientSpecKey.prefix),
+              let index = Int(identifier.dropFirst(EmailRecipientSpecKey.prefix.count)),
+              index > 0
+        else { return .none }
+        return .delete
+    }
+
+    public override func tableView(
+        _ tableView: UITableView,
+        commit editingStyle: UITableViewCell.EditingStyle,
+        forRowAt indexPath: IndexPath
+    ) {
+        guard editingStyle == .delete,
+              let identifier = specifierForRow(indexPath)?.identifier,
+              identifier.hasPrefix(EmailRecipientSpecKey.prefix),
+              let index = Int(identifier.dropFirst(EmailRecipientSpecKey.prefix.count)),
+              index > 0, index < emailRecipients.count
+        else { return }
+        removeRecipientRow(at: index)
+    }
+
     /// The instance's notification rules: the same row the global settings page
     /// uses, pointed at this instance.
     ///
@@ -1162,4 +1335,11 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         }
         completionHandler(options)
     }
+}
+
+/// Keys shared between the recipient rows and the code that collects them.
+enum EmailRecipientSpecKey {
+    /// Each field's key and identifier start with this; the suffix is its index.
+    static let prefix = "emailRecipient"
+    static let addRow = "emailRecipientAdd"
 }

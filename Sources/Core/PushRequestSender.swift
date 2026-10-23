@@ -72,6 +72,41 @@ public final class RequestSender {
         return (retriesLeft[key] ?? 0) > 0
     }
 
+    // MARK: - Email delivery
+
+    /// Talks SMTP. Never retried, and that is deliberate: `MAIL FROM` and `RCPT TO`
+    /// are idempotent, but the message body is not — a failure in the middle of
+    /// `DATA` may or may not have been accepted, and resending risks a duplicate in
+    /// the mailbox with no way to tell. Reporting the failure once is honest; the
+    /// alternative is silently sending twice.
+    private func sendEmail(
+        _ message: SMTPClient.Message,
+        request: PushRequest,
+        logString: String,
+        service: String,
+        context: BulletinContext
+    ) {
+        // The whole message, in the same shape the HTTP services log their request
+        // bodies: a user diagnosing a send needs to see what was actually written,
+        // not just that a connection was made.
+        PushLog.add(service: service, context: context, label: "Request Body Dictionary", object: [
+            "host": message.host,
+            "port": message.port,
+            "from": message.from,
+            "to": message.recipients,
+            "subject": message.subject,
+            "body": message.body,
+        ])
+        SMTPClient.send(message) { result in
+            switch result {
+            case .success:
+                PushLog.add(service: service, context: context, label: "Sent")
+            case .failure(let failure):
+                PushLog.add(service: service, context: context, label: failure.label)
+            }
+        }
+    }
+
     // MARK: - Shortcut delivery
 
     /// Runs a Shortcut instead of performing an HTTP request.
@@ -114,6 +149,16 @@ public final class RequestSender {
         // A shortcut run is not a fetch: it has no URL, no body and no HTTP
         // status. Sending it down the URLSession path would report a bogus
         // "invalid URL" failure, so it is diverted before any of that begins.
+        // An email is not a fetch either: it opens an SMTP connection, which is a
+        // conversation rather than one request and response. Same diversion as a
+        // shortcut, for the same reason — the URLSession path has nothing to do
+        // with it and would report a bogus "invalid URL".
+        if let message = request.state[EmailState.message] as? SMTPClient.Message {
+            sendEmail(message, request: request, logString: logString,
+                      service: service, context: context)
+            return
+        }
+
         if let shortcutName = request.state[ShortcutState.shortcutName] as? String {
             sendShortcut(
                 named: shortcutName,

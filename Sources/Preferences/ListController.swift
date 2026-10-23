@@ -75,6 +75,7 @@ open class ListController: PSListController, TintableController {
             ) {
                 replacement.backgroundColor = cell.backgroundColor
                 replacement.separatorInset = cell.separatorInset
+
                 return replacement
             }
         }

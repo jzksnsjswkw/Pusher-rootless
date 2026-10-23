@@ -74,7 +74,13 @@ public final class FilterRuleListController: PlainViewController {
 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        Theme.setActiveTintColor(nil)
+        // Only the global list belongs to no service. An instance's list was opened
+        // from that instance's page and stays in that service's colour — clearing it
+        // here repainted the page in the default green, which is what made it look
+        // like it had lost its tint on the way in.
+        if case .global = owner {
+            Theme.setActiveTintColor(nil)
+        }
         tintToPusherColor()
         reloadData()
     }

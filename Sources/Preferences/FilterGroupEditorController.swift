@@ -62,7 +62,8 @@ public final class FilterGroupEditorController: PlainViewController {
 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        Theme.setActiveTintColor(nil)
+        // The same as the rule editor: reached only from a rule list, which has
+        // already set the colour for the context it was opened in.
         tintToPusherColor()
         // The app picker writes back through the closure it was given, and the row
         // that shows the count has to be redrawn when it returns — this page is not

@@ -77,7 +77,9 @@ public final class FilterRuleEditorController: ListController {
 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        Theme.setActiveTintColor(nil)
+        // Left alone: this page is only ever reached from a rule list, which is
+        // already carrying whatever colour that context set. Clearing it here made
+        // the editor lose the colour its parent had.
         tintToPusherColor()
     }
 
