@@ -830,3 +830,5 @@
 "100 MB, deletable, but nothing is promised" = "100 MB，可删除，但不承诺长期保存";
 "128 MB, deleted after three hours" = "128 MB，3 小时后自动删除";
 "Enter the API key for %@." = "填入 %@ 的 API Key。";
+"When on, the icon field in the settings is ignored." = "开启时，配置中的 icon 字段将被忽略。";
+"When on, the image field in the settings is ignored." = "开启时，配置中的 image 字段将被忽略。";

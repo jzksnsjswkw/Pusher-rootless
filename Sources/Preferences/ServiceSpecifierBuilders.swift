@@ -259,15 +259,34 @@ public final class ServiceSpecifierBuilders: NSObject {
         // The icon row is deliberately *not* built here: a logo identifies the
         // service, so it belongs beside its name rather than among the payload
         // options. The pages place it there (see the identity group each builds).
+        //
+        // Each switch heads its own group, because the note about what it
+        // overrides is a group footer: a footer is drawn at the end of its group, so
+        // two notes on one group would be one paragraph about two different
+        // settings. The note matters because the field it overrides is edited on a
+        // different page — a `icon` typed into the parameters is replaced silently
+        // once this switch is on, and a user who set both would never learn which
+        // one won.
         if descriptor.supportsIcon {
+            let group = PSSpecifier.groupSpecifier(withName: "")!
+            group.setProperty(
+                "When on, the icon field in the settings is ignored.".localized, forKey: "footerText"
+            )
+            specifiers.append(group)
             specifiers.append(toggle("Include Icon", service: name, appID: appID,
                                      key: PrefKey.includeIcon, defaultValue: iconDefault))
         }
+
+        // The sizing rows below belong to this switch: they are how the picture it
+        // includes is scaled, so with the image off they describe nothing and are
+        // not shown. The switch tells the page directly when it changes, which is
+        // what rebuilds the rows in the same visit.
         if descriptor.supportsImage {
-            // The sizing rows below belong to this switch: they are how the
-            // picture it includes is scaled, so with the image off they describe
-            // nothing and are not shown. The switch tells the page directly when
-            // it changes, which is what rebuilds the rows in the same visit.
+            let group = PSSpecifier.groupSpecifier(withName: "")!
+            group.setProperty(
+                "When on, the image field in the settings is ignored.".localized, forKey: "footerText"
+            )
+            specifiers.append(group)
             specifiers.append(toggle("Include Image", service: name, appID: appID,
                                      key: PrefKey.includeImage, defaultValue: imageDefault,
                                      changeObserver: pageObserver))
@@ -285,6 +304,9 @@ public final class ServiceSpecifierBuilders: NSObject {
         let imageFallback = storedImage != nil ? nil : defaults?.raw
         if descriptor.supportsImage,
            includeImage(stored: imageState, fallback: imageFallback) {
+            // A group of its own, so the three numbers are drawn under the switch
+            // they belong to rather than as a continuation of whatever came before.
+            specifiers.append(PSSpecifier.groupSpecifier(withName: "")!)
             specifiers.append(contentsOf: [
                 decimalField("Maximum Image Width (pixels)", service: name,
                              key: PrefKey.imageMaxWidth, defaultValue: Pusher.defaultMaxWidth),
