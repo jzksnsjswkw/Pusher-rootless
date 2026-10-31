@@ -1,192 +1,152 @@
 import Foundation
 import UIKit
 
-/// The image-host setting, shown at the top of Global Settings.
+/// The image-host row shown in Global Settings.
 ///
-/// One page of its own rather than cells inline: a host has a name, a description
-/// and sometimes a key, and squeezing three rows per host into the settings list
-/// would push everything else off the screen. The inline part is a single row that
-/// says which host is in use.
+/// The value goes on the row's trailing side and the choice is made in a sheet that
+/// rises from the bottom — the same shape iOS uses for picking from a short list.
+/// A pushed page would work, but it costs a navigation transition and a back button
+/// for four names, and the descriptions are one line each.
 enum ImageHostRows {
     static let rowIdentifier = "globalImageHost"
 
-    /// The row that opens the picker.
-    static func entryRow() -> PSSpecifier? {
-        let host = ImageHostRegistry.selected
+    static func entryRow(target: AnyObject) -> PSSpecifier? {
         let row = PSSpecifier.preferenceSpecifierNamed(
-            "图片上传".localized, target: ImageHostSettingsController.self,
-            set: nil, get: nil,
-            detail: ImageHostSettingsController.self, cell: .linkCell, edit: nil
+            "图片上传".localized, target: target,
+            set: nil, get: nil, detail: nil, cell: .linkCell, edit: nil
         )
         row?.identifier = rowIdentifier
-        // The chosen host is the value, so the list says what it is without opening
-        // anything. `detailText` rather than the row's own label: the label is the
-        // setting's name and belongs to the app, not to the host.
-        row?.setProperty(host?.displayName ?? "None".localized, forKey: "detail")
         row?.setProperty(true, forKey: "enabled")
+        // The chosen host on the trailing side, so the list says which one without
+        // opening the sheet.
+        row?.setProperty(ImageHostRows.selectedName(), forKey: "detail")
+
         return row
+    }
+
+    /// The value shown on the row.
+    static func selectedName() -> String {
+        ImageHostRegistry.selected?.displayName ?? "None".localized
     }
 }
 
-/// Picks the host, and collects its key if it wants one.
+/// The sheet that picks a host.
 ///
-/// Built in code rather than from a plist because the list of hosts is the registry
-/// — a plist would be a second copy that could disagree with it, and the key field
-/// appears and disappears with the selection.
-public final class ImageHostSettingsController: ListController {
-    /// The framework creates detail controllers with two different initialisers.
-    /// A custom one would hide both, and the page would fail to open rather than
-    /// fail to build.
+/// A plain table in a `UINavigationController` so the sheet has a bar with a Done
+/// button — the same arrangement the guide sheets use, and the reason is the same:
+/// a bare view controller in a sheet has nowhere to put the button.
+public final class ImageHostPickerController: UITableViewController {
+    /// Called with the identifier once the user picks a host.
+    public var onSelect: ((String) -> Void)?
+
+    /// The page and row to redraw once a host is chosen, so the setting behind the
+    /// sheet shows the new value without leaving and re-entering it.
+    public weak var sourcePage: ListController?
+    public var sourceRow: PSSpecifier?
+
+    public init() {
+        super.init(style: .insetGrouped)
+    }
+
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-    public override init(nibName: String?, bundle: Bundle?) {
-        super.init(nibName: nibName, bundle: bundle)
-    }
-
-    @objc public override init(forContentSize contentSize: CGSize) {
-        super.init(forContentSize: contentSize)
-    }
-
-    private var builtSpecifiers: NSMutableArray?
 
     public override func viewDidLoad() {
         super.viewDidLoad()
         title = "图片上传".localized
-        buildSpecifiers()
-    }
-
-    /// The framework replaces a code-built page's specifiers with the plist's on
-    /// background/foreground; this one has no plist, so it has to put its own back.
-    public override func rebuildSpecifiers() -> NSMutableArray? {
-        builtSpecifiers
-    }
-
-    private func buildSpecifiers() {
-        guard !hasInstalledSpecifiers else { return }
-        let rows = buildRows()
-        builtSpecifiers = rows
-        installSpecifiers(rows)
-    }
-
-    private func buildRows() -> NSMutableArray {
-        let rows = NSMutableArray()
-
-        // One group per host: a name, what it is for, and a checkmark on the one in
-        // use. A segment control would fit them in one row but could not carry the
-        // description, and which host to trust is not a decision to make from four
-        // bare names.
-        let header = PSSpecifier.groupSpecifier(withName: "上传到".localized)
-        header?.setProperty(
-            "服务只能接收图片链接时，附件会先上传到这里，再把链接发出去。".localized,
-            forKey: "footerText"
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .done, target: self, action: #selector(dismissSheet)
         )
-        rows.add(header as Any)
-
-        let selected = ImageHostRegistry.selected
-        for host in ImageHostRegistry.all {
-            // A plain cell, with the tick drawn in `cellForRowAt`: the framework's
-            // list picker asks each cell to check itself, and a specifier property
-            // named `checked` is read by nothing.
-            let row = PSSpecifier.preferenceSpecifierNamed(
-                host.displayName, target: self,
-                set: nil, get: nil, detail: nil, cell: .linkCell, edit: nil
-            )!
-            row.identifier = "host." + host.identifier
-            // The description rides along as the cell's subtitle, so choosing a host
-            // does not require opening anything.
-            row.setProperty(host.summary.localized, forKey: "subtitle")
-            row.setProperty(host.identifier, forKey: "hostIdentifier")
-            row.setProperty(selectHost, forKey: "action")
-            rows.add(row)
-        }
-
-        // The key field belongs to the selected host only. A field per host would
-        // be four fields for one decision, three of them irrelevant.
-        if let host = selected, host.requiresKey {
-            let group = PSSpecifier.groupSpecifier(withName: host.displayName)
-            // The host's name is interpolated, so the whole string is localised
-            // before it is formatted — a fragment-based key would look up English
-            // and fall back.
-            group?.setProperty(
-                String(format: "Enter the API key for %@.".localized, host.displayName),
-                forKey: "footerText"
-            )
-            rows.add(group as Any)
-
-            let field = PSSpecifier.preferenceSpecifierNamed(
-                "API Key".localized, target: self,
-                set: #selector(setKey(_:forSpecifier:)),
-                get: #selector(key(forSpecifier:)),
-                detail: nil, cell: .editTextCell, edit: nil
-            )!
-            field.identifier = "hostKey"
-            field.setProperty(host.identifier, forKey: "hostIdentifier")
-            // A key is a secret typed by hand; the keyboard should not autocorrect
-            // or capitalise it.
-            field.setProperty(true, forKey: "enabled")
-            rows.add(field)
-        }
-
-        return rows
+        // The sheet sizes itself to content, so a table with one screen of rows
+        // should not bounce.
+        tableView.alwaysBounceVertical = false
     }
 
-    /// The tick on the host in use.
-    ///
-    /// Drawn here because it belongs to the cell: the framework's own pickers call
-    /// `setChecked:` on each cell, and a `checked` property on the specifier is
-    /// read by nothing — setting it looked like it worked and drew nothing.
+    @objc private func dismissSheet() {
+        dismiss(animated: true)
+    }
+
+    // MARK: - Table
+
+    public override func numberOfSections(in tableView: UITableView) -> Int { 1 }
+
+    public override func tableView(
+        _ tableView: UITableView, numberOfRowsInSection section: Int
+    ) -> Int {
+        ImageHostRegistry.all.count
+    }
+
+    public override func tableView(
+        _ tableView: UITableView, titleForHeaderInSection section: Int
+    ) -> String? {
+        "上传到".localized
+    }
+
+    public override func tableView(
+        _ tableView: UITableView, titleForFooterInSection section: Int
+    ) -> String? {
+        // The consequence, in one sentence: a service that only takes a link will
+        // get one from here, and a user choosing between these needs to know what
+        // the choice affects.
+        "服务只能接收图片链接时，附件会先上传到这里，再把链接发出去。".localized
+    }
+
     public override func tableView(
         _ tableView: UITableView, cellForRowAt indexPath: IndexPath
     ) -> UITableViewCell {
-        let cell = super.tableView(tableView, cellForRowAt: indexPath)
-        guard let specifier = specifierForRow(indexPath),
-              let identifier = specifier.property(forKey: "hostIdentifier") as? String,
-              let tableCell = cell as? PSTableCell
-        else { return cell }
-        tableCell.setChecked(ImageHostRegistry.selected?.identifier == identifier)
+        let host = ImageHostRegistry.all[indexPath.row]
+        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        cell.textLabel?.text = host.displayName
+        // One line about what the host is for, under the name. Four bare names are
+        // not enough to choose by when the difference is retention and file size.
+        cell.detailTextLabel?.text = host.summary.localized
+        cell.detailTextLabel?.numberOfLines = 0
+        cell.detailTextLabel?.textColor = .secondaryLabel
+        cell.textLabel?.font = .preferredFont(forTextStyle: .body)
+        cell.detailTextLabel?.font = .preferredFont(forTextStyle: .caption1)
+        cell.accessoryType = ImageHostRegistry.selected?.identifier == host.identifier
+            ? .checkmark
+            : .none
+        // The tint matches the rest of the app rather than the sheet's default.
+        cell.tintColor = Theme.activeTintColor
         return cell
     }
 
-    // MARK: - Actions
-
-    private var selectHost: Selector { #selector(chooseHost(_:)) }
-
-    @objc private func chooseHost(_ sender: PSSpecifier) {
-        guard let identifier = sender.property(forKey: "hostIdentifier") as? String else {
-            return
-        }
-        PrefsStore.updateGlobal { $0[PrefKey.imageHostKey] = identifier }
-        // Rebuilt rather than patched: the key field appears or disappears with the
-        // choice, and the checkmark has to move to a different row. One page, so a
-        // full rebuild costs nothing.
-        rebuildPage()
+    public override func tableView(
+        _ tableView: UITableView, didSelectRowAt indexPath: IndexPath
+    ) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        let host = ImageHostRegistry.all[indexPath.row]
+        PrefsStore.updateGlobal { $0[PrefKey.imageHostKey] = host.identifier }
+        onSelect?(host.identifier)
+        dismiss(animated: true)
     }
 
-    @objc private func setKey(_ value: Any?, forSpecifier specifier: PSSpecifier) {
-        guard let host = specifier.property(forKey: "hostIdentifier") as? String else {
-            return
-        }
-        let text = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        PrefsStore.updateGlobal { global in
-            global[PrefKey.imageHostKeyKey(for: host)] = text
-        }
-    }
-
-    @objc private func key(forSpecifier specifier: PSSpecifier) -> Any? {
-        guard let host = specifier.property(forKey: "hostIdentifier") as? String else {
-            return ""
-        }
-        return PrefsStore.global().string(PrefKey.imageHostKeyKey(for: host)) ?? ""
-    }
-
-    /// Replaces the page's cells with freshly built ones.
+    /// Presents the sheet over `presenter`.
     ///
-    /// `hasInstalledSpecifiers` guards the first build, so it has to be cleared
-    /// before asking for another — otherwise the build would return immediately and
-    /// nothing would change.
-    private func rebuildPage() {
-        builtSpecifiers = nil
-        installSpecifiers(buildRows())
+    /// Wrapped in a navigation controller for the bar and the Done button, which a
+    /// bare sheet has nowhere to put — the guide sheets are arranged the same way
+    /// for the same reason.
+    static func present(from presenter: ListController, reloading row: PSSpecifier?) {
+        let picker = ImageHostPickerController()
+        picker.sourcePage = presenter
+        picker.sourceRow = row
+        let navigation = UINavigationController(rootViewController: picker)
+        navigation.modalPresentationStyle = .pageSheet
+        if let sheet = navigation.sheetPresentationController {
+            // Half the screen: four rows and two lines of text fit, and the setting
+            // it came from stays visible behind it.
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        picker.onSelect = { _ in
+            guard let row = picker.sourceRow else { return }
+            // The value is read from storage when the cell is built, so the
+            // specifier has to carry the new one before the row is redrawn —
+            // reloading alone would draw the old host.
+            row.setProperty(ImageHostRows.selectedName(), forKey: "detail")
+            picker.sourcePage?.reloadSpecifier(row)
+        }
+        presenter.present(navigation, animated: true)
     }
 }

@@ -557,6 +557,27 @@ public final class GlobalSettingsListController: ListController {
         buildSpecifiers()
     }
 
+    /// Opens the host picker instead of pushing a page.
+    ///
+    /// The row is a link cell, so the framework would look for a detail class and
+    /// push it. The choice is four names, which belongs in a sheet — so the row is
+    /// handled here and `super` is never reached for it.
+    ///
+    /// Handled *before* `super`, not after: `PSListController` pushes its own
+    /// blank detail controller first and calling `super` would leave both on the
+    /// stack.
+    public override func tableView(
+        _ tableView: UITableView, didSelectRowAt indexPath: IndexPath
+    ) {
+        if let specifier = specifierForRow(indexPath),
+           specifier.identifier == ImageHostRows.rowIdentifier {
+            tableView.deselectRow(at: indexPath, animated: true)
+            ImageHostPickerController.present(from: self, reloading: specifier)
+            return
+        }
+        super.tableView(tableView, didSelectRowAt: indexPath)
+    }
+
     /// Fills both SIM names from the device, then redraws the page so the text
     /// fields show the new values.
     ///
@@ -586,10 +607,9 @@ public final class GlobalSettingsListController: ListController {
         // only two of them, and they belong with the other per-device settings.
         conditions += ActiveSIMRows.rows(target: self)
 
-        // The upload host is one row here and a page of its own: the choice is
-        // short, but a host carries a description and sometimes a key, which is
-        // more than a row can hold.
-        if let imageHost = ImageHostRows.entryRow() {
+        // The upload host is one row, and the choice is a sheet: four names with a
+        // line each is a sheet's worth of content, not a page's.
+        if let imageHost = ImageHostRows.entryRow(target: self) {
             let group = PSSpecifier.groupSpecifier(withName: "")
             conditions += [group, imageHost].compactMap { $0 }
         }
