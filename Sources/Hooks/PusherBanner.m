@@ -122,7 +122,15 @@ BOOL PusherPublishBanner(NSString *sectionID,
                          long long simSlot,
                          NSString *simPhone,
                          NSString *simLabel) {
-  if (sectionID.length == 0) { return NO; }
+  // Cleared before every attempt. It is a module-level variable because the reason
+  // has to outlive the call, and a reason left over from a previous failure made
+  // every later publish report that failure — the page was reading an answer to a
+  // question asked minutes ago.
+  PusherPublishBannerFailure = nil;
+  if (sectionID.length == 0) {
+    PusherPublishBannerFailure = @"No app to show a notification for";
+    return NO;
+  }
   return PusherPublishOnMain(sectionID, title, subtitle, message, attachmentPath,
                              simSlot, simPhone, simLabel);
 }
