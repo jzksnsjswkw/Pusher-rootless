@@ -112,6 +112,11 @@ public final class ImageHostPickerController: UITableViewController {
         return cell
     }
 
+    /// Records the choice and moves the tick, without closing the sheet.
+    ///
+    /// A pick from four rows is easy to get wrong, and closing on the first tap
+    /// means reopening the sheet to correct it. The Done button is the way out, so
+    /// the choice can be changed as many times as it takes to be sure.
     public override func tableView(
         _ tableView: UITableView, didSelectRowAt indexPath: IndexPath
     ) {
@@ -119,7 +124,11 @@ public final class ImageHostPickerController: UITableViewController {
         let host = ImageHostRegistry.all[indexPath.row]
         PrefsStore.updateGlobal { $0[PrefKey.imageHostKey] = host.identifier }
         onSelect?(host.identifier)
-        dismiss(animated: true)
+
+        // The tick belongs to the cell, and only the accessory changes, so the rows
+        // are reloaded rather than the sheet being rebuilt — a rebuild would drop
+        // the scroll position for no gain.
+        tableView.reloadData()
     }
 
     /// Presents the sheet over `presenter`.
