@@ -313,6 +313,18 @@ public enum PrefKey {
     public static func simNumberKey(slot: Int) -> String { "SIMSlot\(slot)Number" }
     public static func simNameKey(slot: Int) -> String { "SIMSlot\(slot)Name" }
 
+    /// Which upload host services that need an image *link* should use.
+    ///
+    /// One setting for the whole app rather than per service: the host is where the
+    /// bytes go, and a user who prefers one over another prefers it everywhere.
+    /// A service never picks a host itself — the picture is the same file whichever
+    /// destination is asking for it.
+    public static let imageHostKey = "imageHost"
+
+    /// The API key for hosts that require one. Stored beside the choice so a host
+    /// can be switched without losing a key already entered for another.
+    public static func imageHostKeyKey(for host: String) -> String { "imageHostKey.\(host)" }
+
     public static func logKey(forService service: String) -> String { "\(service)Log" }
 
     /// Whether logging is enabled for one service.

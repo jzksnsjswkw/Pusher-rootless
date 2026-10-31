@@ -822,3 +822,11 @@
 "Show Custom Notification" = "显示自定义通知";
 "Forwarded to this instance — the result is in Log" = "已交由该实例转发，结果见日志";
 "Could not save the attachment: %@" = "无法保存附件：%@";
+"图片上传" = "图片上传";
+"上传到" = "上传到";
+"服务只能接收图片链接时，附件会先上传到这里，再把链接发出去。" = "服务只能接收图片链接时，附件会先上传到这里，再把链接发出去。";
+"Permanent, 32 MB, original quality, fastest" = "永久保存，32 MB，原图不压缩，最快";
+"Kept for a year, no account needed" = "保存一年，不需要注册";
+"100 MB, deletable, but nothing is promised" = "100 MB，可删除，但不承诺长期保存";
+"128 MB, deleted after three hours" = "128 MB，3 小时后自动删除";
+"Enter the API key for %@." = "填入 %@ 的 API Key。";

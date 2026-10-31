@@ -586,6 +586,14 @@ public final class GlobalSettingsListController: ListController {
         // only two of them, and they belong with the other per-device settings.
         conditions += ActiveSIMRows.rows(target: self)
 
+        // The upload host is one row here and a page of its own: the choice is
+        // short, but a host carries a description and sometimes a key, which is
+        // more than a row can hold.
+        if let imageHost = ImageHostRows.entryRow() {
+            let group = PSSpecifier.groupSpecifier(withName: "")
+            conditions += [group, imageHost].compactMap { $0 }
+        }
+
         // The app-list cells are stored nested under `Global[appList]`, while
         // the condition cells (`WhenToPush` / `WhatNetwork`) *are* the global
         // defaults and keep their flat top-level keys.
