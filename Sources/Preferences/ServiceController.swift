@@ -607,8 +607,17 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // a plist would be a second copy that could disagree with the declaration —
         // which is how Bark ended up advertising image support in its code while
         // its page offered no switch to turn it on.
-        let needsBuiltGroups = isScriptType
-            || serviceType == ShortcutService.serviceName
+        // Two separate questions, and they were one flag. A page without a plist
+        // has to have both built; a page *with* a plist already carries the app
+        // filter, and building it again put a second blacklist segment on every
+        // service that has one — which is how Bark ended up with two.
+        let needsBuiltAppFilter = isScriptType || serviceType == ShortcutService.serviceName
+        // The picture switches are declared in `PushService` rather than in a
+        // plist, deliberately: a plist copy could disagree with the declaration,
+        // and the copy that said "no" is the one that was being read. So they are
+        // built for any service that declares either capability, whatever its page
+        // comes from.
+        let needsBuiltPayloadOptions = needsBuiltAppFilter
             || ServiceRegistry.service(named: serviceType).supportsIcon
             || ServiceRegistry.service(named: serviceType).supportsImage
         let loaded: [PSSpecifier]
@@ -759,14 +768,15 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // different apps. The segment cell comes with the "Default" option the
         // global tail adds to its own segments, so an untouched filter follows
         // the global app list.
-        if needsBuiltGroups {
+        if needsBuiltAppFilter {
             all.append(contentsOf: appFilterSpecifiers())
-
-            // A page built without a plist asks for its payload options by the
-            // type's own name: for a script the switches offered are the ones
-            // *this definition* declared, which is what makes the definition's
-            // choices meaningful rather than a default a page can quietly
-            // contradict; for the Shortcut service they are its own two.
+        }
+        if needsBuiltPayloadOptions {
+            // The switches are asked for by the type's own name: for a script they
+            // are the ones *this definition* declared, which is what makes the
+            // definition's choices meaningful rather than a default a page can
+            // quietly contradict; for everything else they are its own declared
+            // capabilities.
             all.append(contentsOf: ServiceSpecifierBuilders.shared.payloadOptions(
                 forType: serviceType, instanceID: serviceInstanceID, appID: nil,
                 pageObserver: self
