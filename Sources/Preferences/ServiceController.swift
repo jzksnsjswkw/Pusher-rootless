@@ -601,7 +601,16 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // instance's business, and the icon/image switches are what makes the
         // difference between a payload that is a few hundred bytes of text and
         // one that carries pictures.
-        let needsBuiltGroups = isScriptType || serviceType == ShortcutService.serviceName
+        //
+        // Any service that declares picture support gets them too, even when its
+        // page comes from a plist: the switches are declared in `PushService`, and
+        // a plist would be a second copy that could disagree with the declaration —
+        // which is how Bark ended up advertising image support in its code while
+        // its page offered no switch to turn it on.
+        let needsBuiltGroups = isScriptType
+            || serviceType == ShortcutService.serviceName
+            || ServiceRegistry.service(named: serviceType).supportsIcon
+            || ServiceRegistry.service(named: serviceType).supportsImage
         let loaded: [PSSpecifier]
         var all: [PSSpecifier]
         if isScriptType {

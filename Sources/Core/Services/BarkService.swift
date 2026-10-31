@@ -7,12 +7,12 @@ import Foundation
 public enum BarkService: PushService {
     public static let serviceName = "Bark"
 
-    // Bark builds its own body (`title` and `body`), and its API takes image
-    // *URLs* rather than Base64 data, so the shared payload's icon/image fields
-    // have nowhere to go — the attachment is uploaded and its link goes in Bark's
-    // own `image` parameter instead. See the `ImageHost` branch in `request`.
-    public static var supportsIcon: Bool { false }
-    public static var supportsImage: Bool { false }
+    // Bark's two picture fields are URLs, not Base64: `icon` is the small picture
+    // beside the notification and `image` is the attachment it opens. Both have to
+    // be uploaded first, which is what the two switches turn on — see the branches
+    // in `request`.
+    public static var supportsIcon: Bool { true }
+    public static var supportsImage: Bool { true }
 
     static let defaultServer = "https://api.day.app"
 
@@ -96,15 +96,33 @@ public enum BarkService: PushService {
 
         // The notification's own attachment, as a link.
         //
-        // Bark takes `image` as a URL, so a Base64 attachment has to be uploaded
-        // before it can ride along. A link the user typed wins — they asked for
-        // that picture on every push — and an upload that fails leaves the field
-        // alone rather than failing the push: the notification itself is the
-        // message, the picture is the extra.
-        if infoDict["image"] == nil, let url = context.attachmentURL,
+        // Bark takes `image` as a URL, so the attachment is uploaded before it can
+        // ride along — and only when the instance's switch asks for it. A link the
+        // user typed in the parameters wins over both: they asked for that picture
+        // on every push, and replacing it with the notification's would undo a
+        // setting they made deliberately.
+        //
+        // An upload that fails leaves the field alone rather than failing the push:
+        // the notification is the message, the picture is the extra.
+        if shouldIncludeImage(config: config),
+           infoDict["image"] == nil,
+           let url = context.attachmentURL,
            let data = try? Data(contentsOf: url),
            let hosted = ImageHosts.url(for: data) {
             infoDict["image"] = hosted
+        }
+
+        // The icon beside the notification, likewise as a link.
+        //
+        // The same picture the other services carry as Base64 — the app's own icon,
+        // or the one the user gave this destination. Bark cannot take Base64, so it
+        // is uploaded and sent as a URL. A `icon` the user typed takes precedence,
+        // for the same reason as above.
+        if shouldIncludeIcon(config: config), infoDict["icon"] == nil,
+           let icon = ServiceIcon.image(from: config.raw) ?? context.iconImage,
+           let data = icon.pngData(),
+           let hosted = ImageHosts.url(for: data) {
+            infoDict["icon"] = hosted
         }
         // `delete` is only meaningful together with an id.
         if infoDict["delete"] != nil, infoDict["id"] == nil {
