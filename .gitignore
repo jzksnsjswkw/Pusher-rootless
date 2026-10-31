@@ -1,5 +1,9 @@
 .theos/
-packages/
+# Build output. The one exception is `packages/mirrored`, which holds dependency
+# debs this source publishes — those are inputs, not output, and the index cannot
+# be rebuilt without them.
+packages/*
+!packages/mirrored/
 obj/
 *.o
 *.d

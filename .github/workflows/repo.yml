@@ -49,7 +49,11 @@ jobs:
         run: |
           # dpkg-deb is what reads the control fields, and macOS has no dpkg.
           brew install dpkg
+          # `packages/mirrored` is picked up by the script itself: SandyXpc is a
+          # runtime dependency whose debs belong in this source, or installing
+          # Pusher stops on an unresolved dependency nobody can find.
           ./scripts/make_repo.sh "${{ steps.tag.outputs.value }}" staged/*.deb
+          ls -la repo/debs 2>/dev/null || true
 
       - name: Publish to Pages
         uses: peaceiris/actions-gh-pages@v4

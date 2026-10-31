@@ -1,6 +1,6 @@
 Package: com.jzksnsjswkw.pusher
 Name: Pusher-rootless
-Depends: mobilesubstrate, firmware (>= 15.0), com.opa334.altlist, com.opa334.libsandy, com.82flex.libsandyxpc
+Depends: mobilesubstrate, firmware (>= 15.0), com.opa334.altlist, com.82flex.libsandyxpc
 Conflicts: com.jzksnsjswkw.pusher, com.noahsaso.pusher
 Replaces: com.jzksnsjswkw.pusher, com.noahsaso.pusher
 Provides: com.jzksnsjswkw.pusher

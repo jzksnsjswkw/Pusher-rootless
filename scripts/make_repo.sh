@@ -23,6 +23,21 @@ shift
 # is one branch, and referenced absolutely because a client fetches it directly.
 DEPICTION_JSON="${DEPICTION_JSON:-$PAGES_URL/depiction/pusher.json}"
 
+# Packages this source mirrors rather than publishes. SandyXpc is a runtime
+# dependency of Pusher — the SMS lookup cannot reach `imagent` without it — and it
+# has to be installable from the source the user already added, or installing
+# Pusher stops half way with an unresolved dependency.
+#
+# The debs are the upstream release's own files, unchanged: rebuilding a
+# dependency would put a second build of one library on the device, and the
+# upstream release is what its author tests.
+MIRRORED_DEBS=()
+if [ -d "${MIRROR_DIR:-packages/mirrored}" ]; then
+    while IFS= read -r -d '' file; do
+        MIRRORED_DEBS+=("$file")
+    done < <(find "${MIRROR_DIR:-packages/mirrored}" -name '*.deb' -print0)
+fi
+
 OUT="${OUT_DIR:-repo}"
 mkdir -p "$OUT"
 
@@ -30,9 +45,9 @@ mkdir -p "$OUT"
 # index; older releases stay on their own release pages and are not repeated here,
 # because a client shows the newest version it finds and the rest is noise.
 if [ "$#" -gt 0 ]; then
-    DEBS=("$@")
+    DEBS=("$@" "${MIRRORED_DEBS[@]}")
 else
-    DEBS=(packages/*.deb)
+    DEBS=(packages/*.deb "${MIRRORED_DEBS[@]}")
 fi
 
 : > "$OUT/Packages"
@@ -53,6 +68,14 @@ for deb in "${DEBS[@]}"; do
     # GitHub rewrites `~` to `.` in uploaded asset names, so the URL and the local
     # filename differ. The index has to carry the name the server actually uses.
     filename=$(basename "$deb" | tr '~' '.')
+    # A mirrored deb is served from the source itself, because its upstream
+    # release belongs to another project and this index is the only thing that
+    # lists it. A package this repository publishes keeps pointing at its own
+    # release page, where the file was uploaded as part of the build.
+    case "$deb" in
+        "${MIRROR_DIR:-packages/mirrored}"/*) deb_url="$PAGES_URL/debs/$filename" ;;
+        *) deb_url="$RELEASES_URL/$TAG/$filename" ;;
+    esac
     size=$(stat -f%z "$deb" 2>/dev/null || stat -c%s "$deb")
     md5=$(md5 -q "$deb" 2>/dev/null || md5sum "$deb" | cut -d' ' -f1)
     sha256=$(shasum -a 256 "$deb" 2>/dev/null | cut -d' ' -f1 || sha256sum "$deb" | cut -d' ' -f1)
@@ -70,13 +93,17 @@ for deb in "${DEBS[@]}"; do
     pkg_name="$name"
     display_name=""
     provides=""
-    case "$arch" in
-        iphoneos-arm64e)
-            display_name="Pusher-roothide"
+    # The display name sticks to Pusher's own packages. A mirrored dependency
+    # keeps whatever name its control carries — it is not this project's to
+    # rename, and a user looking for SandyXpc should find it under its own name.
+    case "$name" in
+        com.jzksnsjswkw.pusher*)
+            case "$arch" in
+                iphoneos-arm64e) display_name="Pusher-roothide" ;;
+                iphoneos-arm64) display_name="Pusher-rootless" ;;
+            esac
             ;;
-        iphoneos-arm64)
-            display_name="Pusher-rootless"
-            ;;
+        *) display_name=$(field Name) ;;
     esac
     case "$name" in
         *-roothide|*-rootless) provides="Provides: ${name%-*}" ;;
@@ -114,7 +141,7 @@ for deb in "${DEBS[@]}"; do
         # field below is only the one-line summary some clients still show. The
         # path is absolute because the client resolves it against nothing.
         [ -n "$DEPICTION_JSON" ] && echo "Sileodepiction: $DEPICTION_JSON"
-        echo "Filename: $RELEASES_URL/$TAG/$filename"
+        echo "Filename: $deb_url"
         echo "Size: $size"
         echo "MD5sum: $md5"
         echo "SHA256: $sha256"
@@ -135,6 +162,16 @@ for deb in "${DEBS[@]}"; do
         echo ""
     } >> "$OUT/Packages"
 done
+
+# Mirrored debs are copied into the published tree, because their Filename points
+# at this source. Publishing them to the Pages branch is what makes the dependency
+# resolvable without the user adding a second source.
+if [ "${#MIRRORED_DEBS[@]}" -gt 0 ]; then
+    mkdir -p "$OUT/debs"
+    for deb in "${MIRRORED_DEBS[@]}"; do
+        cp -f "$deb" "$OUT/debs/$(basename "$deb" | tr '~' '.')"
+    done
+fi
 
 gzip -9 -k -f "$OUT/Packages"
 if command -v bzip2 >/dev/null; then
