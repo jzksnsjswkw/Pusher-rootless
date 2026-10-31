@@ -31,7 +31,14 @@ public enum PushFilter {
         }
 
         // The adapter reports why SpringBoard had no settings for this app.
-        if let reason = context.notificationSettingsUnavailableReason {
+        //
+        // A composed notification is exempt: it names whichever app the user
+        // picked, which may not have a section at all, and its settings are never
+        // read — the conditions that need them are skipped for a test. Reporting
+        // an app it invented as filtered would mean the composed notification is
+        // shown and never forwarded, which is what made an enabled instance look
+        // like it had received nothing.
+        if !context.isTest, let reason = context.notificationSettingsUnavailableReason {
             return reason
         }
 
