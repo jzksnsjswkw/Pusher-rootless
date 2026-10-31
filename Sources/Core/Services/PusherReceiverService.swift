@@ -20,12 +20,17 @@ public enum PusherReceiverService: PushService {
         urlBase + dbName + urlTail
     }
 
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
+        let key = config.raw.string(PrefKey.key, default: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            throw RequestError.missingField("API Key")
+        }
         let infoDict = baseInfoDict(context: context, config: config)
         return withLogBody(
             PushRequest(
                 urlString: pushURL(config: config),
-                headers: ["x-apikey": config.raw.string(PrefKey.key, default: "")],
+                headers: ["x-apikey": key],
                 infoDict: infoDict
             ),
             infoDict

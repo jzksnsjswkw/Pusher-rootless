@@ -52,7 +52,7 @@ public struct ServiceExport {
         self.instances = instances
     }
 
-    public static let documentKind = "com.noahsaso.pusher.services"
+    public static let documentKind = "com.jzksnsjswkw.pusher.services"
 
     /// How many things the document carries, for a one-line description.
     public var count: Int { services.count + instances.count }

@@ -52,6 +52,25 @@ public enum Runtime {
         return unsafeBitCast(imp, to: Fn.self)(receiver, NSSelectorFromString(selector), arg1, arg2)
     }
 
+    /// `[receiver selector:&error]` for a method that takes an `NSError **`.
+    ///
+    /// The out-parameter is real writable storage: a method that writes through it
+    /// crashes the process if handed nil, which is what the plain `send` overload
+    /// would pass.
+    public static func sendWithError(
+        _ receiver: AnyObject?, _ selector: String,
+        _ error: UnsafeMutablePointer<Unmanaged<CFError>?>
+    ) -> AnyObject? {
+        guard let receiver, let imp = implementation(of: receiver, selector) else {
+            return nil
+        }
+        typealias Fn = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> AnyObject?
+        return unsafeBitCast(imp, to: Fn.self)(
+            receiver, NSSelectorFromString(selector),
+            UnsafeMutableRawPointer(error)
+        )
+    }
+
     /// `[receiver selector]` where the return value is a scalar `Bool`.
     public static func sendBool(_ receiver: AnyObject?, _ selector: String) -> Bool {
         guard let receiver, let imp = implementation(of: receiver, selector) else { return false }
@@ -93,6 +112,18 @@ public enum Runtime {
         typealias Fn = @convention(c) (AnyClass, Selector) -> AnyObject?
         let imp = method_getImplementation(method)
         return unsafeBitCast(imp, to: Fn.self)(cls, NSSelectorFromString(selector))
+    }
+
+    /// `[Class selector:arg]` for a runtime-resolved class.
+    public static func classSend(_ cls: AnyClass?, _ selector: String,
+                                 _ arg: AnyObject?) -> AnyObject? {
+        guard let cls,
+              let metaclass = object_getClass(cls),
+              let method = class_getInstanceMethod(metaclass, NSSelectorFromString(selector))
+        else { return nil }
+        typealias Fn = @convention(c) (AnyClass, Selector, AnyObject?) -> AnyObject?
+        let imp = method_getImplementation(method)
+        return unsafeBitCast(imp, to: Fn.self)(cls, NSSelectorFromString(selector), arg)
     }
 
     /// `[[Class sharedInstance] selector]` — the common private-framework

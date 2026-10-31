@@ -32,8 +32,6 @@ public final class PushEngine: NSObject {
     /// without it changing underneath them.
     public private(set) var config = ConfigSnapshot()
 
-    /// Recent bulletin contents, used to detect forwarding loops.
-    private var recentContent: [String] = []
     private let lock = NSLock()
 
     /// Guards against forwarding before the first config load has completed.
@@ -100,6 +98,11 @@ public final class PushEngine: NSObject {
         // the resolved outcome.
         guard FilterRules.hasAnyRules else { return false }
         let context = BulletinAdapter.context(for: bulletin)
+        // A composed notification is looked at, not filtered: the rules exist to
+        // keep unwanted notifications off the phone, and this one was asked for.
+        // Checked before the rules would hide it, because hiding means never
+        // publishing — the test would disappear before the page could report on it.
+        guard !context.isTest else { return false }
         guard FilterRules.suppressesNotification(context) else { return false }
         // Logged, because hiding is otherwise silent: the notification is never
         // published, so nothing else in the pipeline gets to mention it.
@@ -126,7 +129,28 @@ public final class PushEngine: NSObject {
             return
         }
 
-        let context = BulletinAdapter.context(for: bulletin)
+        var context = BulletinAdapter.context(for: bulletin)
+
+        // Which SIM carried this message is not in the bulletin — the notification
+        // layer never sees a subscription. `imagent` does, so the answer is asked
+        // for over IPC, and only for SMS, because nothing else has a SIM.
+        //
+        // Resolved here, once, and carried on the context: each instance logs it
+        // from there, so one lookup covers every service and the line lands in the
+        // same section as that service's request.
+        // Skipped when the context already carries one: that means the card was
+        // chosen rather than resolved, and the lookup would overwrite the choice
+        // with the answer for a GUID that points at no row.
+        if context.appID == Pusher.smsBundleID, context.simSubscription == nil {
+            context.simSubscription = SMSLookup.subscription(
+                guid: context.publisherBulletinID
+            )
+            if let sim = context.simSubscription {
+                PusherLog.debug("[SMS] \(sim.description)")
+            } else {
+                PusherLog.debug("[SMS] \(SMSLookup.lastFailure ?? "not found")")
+            }
+        }
 
         // A bulletin without a `lastInterruptDate` is normally a queued one being
         // replayed after a restart — but it is also what a bulletin looks like
@@ -167,7 +191,7 @@ public final class PushEngine: NSObject {
         // blacklist would still be blocked by the global list it had just
         // replaced. See `send(to:context:config:deviceState:)`.
 
-        guard !isLooping(context) else {
+        guard !LoopGuard.shared.isLooping(context) else {
             PusherLog.debug("Prevented loop")
             PushLog.add(service: "", context: context, label: "Prevented loop")
             return
@@ -198,58 +222,6 @@ public final class PushEngine: NSObject {
         }
     }
 
-    /// Reports whether this bulletin looks like a forwarding loop.
-    ///
-    /// A forwarded push can itself produce a notification that would be forwarded
-    /// again. The count of identical contents in the recent window is compared
-    /// against the threshold, so a legitimate single duplicate is not mistaken for
-    /// a loop.
-    ///
-    /// Nothing is recorded here. A notification that is filtered, hidden or has
-    /// nowhere to go never reaches a service, so it cannot be part of a loop — and
-    /// counting it would let a burst of blocked notifications fill the window and
-    /// silence the next real one. Only ``recordForwarded(_:)`` fills the window,
-    /// and it is called when a service was actually asked to send.
-    private func isLooping(_ context: BulletinContext) -> Bool {
-        let signature = context.contentSignature
-        lock.lock()
-        defer { lock.unlock() }
-        return recentContent.filter { $0 == signature }.count
-            >= Pusher.loopPreventionThreshold
-    }
-
-    /// Bulletin ids already counted toward the window.
-    ///
-    /// A notification fanned out to three instances is one notification, not three
-    /// links in a chain; without this the threshold would be reached by a third as
-    /// many real notifications.
-    private var recordedBulletinIDs: [String] = []
-
-    /// Notes that this content was actually forwarded.
-    ///
-    /// One entry per notification, not per instance: the loop this guards against
-    /// is one notification producing another, and two instances of a service both
-    /// sending the same bulletin is not two links in a chain.
-    private func recordForwarded(_ context: BulletinContext) {
-        let signature = context.contentSignature
-        lock.lock()
-        defer { lock.unlock() }
-
-        guard !recordedBulletinIDs.contains(context.bulletinID) else { return }
-        recordedBulletinIDs.append(context.bulletinID)
-        if recordedBulletinIDs.count > Pusher.loopPreventionWindow {
-            recordedBulletinIDs.removeFirst()
-        }
-
-        // Slide the window rather than clearing it: clearing would reset the
-        // duplicate count mid-loop, so a genuine loop (the threshold within the
-        // last window) could never be detected.
-        while recentContent.count >= Pusher.loopPreventionWindow {
-            recentContent.removeFirst()
-        }
-        recentContent.append(signature)
-    }
-
     // MARK: - Instance hooks
 
     /// Runs one of an instance's hooks, logging what it decided.
@@ -270,6 +242,18 @@ public final class PushEngine: NSObject {
         context: BulletinContext,
         deviceState: DeviceState
     ) -> BulletinHookRunner.Outcome? {
+        // A Run executes the hook it was started from in the editor, so the editor
+        // can show what it decided. It must not run here as well: one press of the
+        // button would send two `fetch`es and two `push()`es, and write the log
+        // lines twice. The switch is irrelevant for that one — it was run whether
+        // or not it is on, which is what makes a Run work on a hook that has not
+        // been enabled yet.
+        guard context.test?.hasRun(phase) != true else { return nil }
+
+        // Every other hook follows its own switch. That is what testing one hook
+        // means: the others behave exactly as they do for a live notification, so
+        // a received hook left off stays off even while the filtered one is being
+        // tried.
         guard hook.shouldRun else { return nil }
 
         let outcome = BulletinHookRunner.run(
@@ -285,7 +269,7 @@ public final class PushEngine: NSObject {
         }
         for line in outcome.consoleOutput {
             PushLog.add(service: service, context: context,
-                        label: "Hook (\(phase.rawValue))", object: line, dontTruncate: true)
+                        label: "Hook (\(phase.title))", object: line, dontTruncate: true)
         }
         if let failure = outcome.failure {
             // A hook that cannot run must not decide: it either kept the
@@ -293,16 +277,16 @@ public final class PushEngine: NSObject {
             // threw after calling keep, its edits stand. Either way the
             // notification keeps moving, and the reason is in the log.
             PushLog.add(service: service, context: context,
-                        label: "Hook (\(phase.rawValue)) failed",
+                        label: "Hook (\(phase.title)) failed",
                         object: failure.message, dontTruncate: true)
         }
 
         if !outcome.isKept {
             PushLog.add(service: service, context: context,
-                        label: "Hook (\(phase.rawValue)) dropped the notification")
+                        label: "Hook (\(phase.title)) dropped the notification")
         } else if outcome.isForced {
             PushLog.add(service: service, context: context,
-                        label: "Hook (\(phase.rawValue)) forced the push past the filters")
+                        label: "Hook (\(phase.title)) forced the push past the filters")
         }
         return outcome
     }
@@ -312,12 +296,17 @@ public final class PushEngine: NSObject {
     private func apply(
         _ outcome: BulletinHookRunner.Outcome,
         to context: inout BulletinContext,
-        service: String
+        service: String,
+        phase: BulletinHookRunner.Phase
     ) {
         guard outcome.hasChanges else { return }
         let changed = outcome.changes.apply(to: &context)
+        // Both halves are named: which hook spoke, and which field it rewrote.
+        // "Hook changed message" left a reader guessing which of the two hooks it
+        // was, and the phase is exactly what the log is for.
         for field in changed {
-            PushLog.add(service: service, context: context, label: "Hook changed \(field)")
+            PushLog.add(service: service, context: context,
+                        label: "Hook (\(phase.title)) changed \(field)")
         }
     }
 
@@ -325,10 +314,68 @@ public final class PushEngine: NSObject {
 
     /// Applies the filters and then builds and sends the request for one
     /// instance.
+    /// Whether an instance with this id is configured. A test push asks this so
+    /// that it can fail visibly instead of reporting success for a destination
+    /// that no longer exists.
+    public func hasInstance(id: String) -> Bool {
+        currentConfig().instance(id: id) != nil
+    }
+
+    /// Run a request-building pass for a test push and report whether a request
+    /// came out of it.
+    ///
+    /// This is what the test push can honestly answer: not "delivered" — the
+    /// transport is asynchronous and the server's answer arrives later — but
+    /// "a request was built", which is what tells the user whether the fields
+    /// they typed produce anything. Absent credentials, an unknown mail domain,
+    /// a failed token fetch all stop here, and saying so is the point of a test
+    /// button.
+    func buildTestRequest(
+        id: String,
+        context: BulletinContext,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let snapshot = currentConfig()
+        guard let instance = snapshot.instance(id: id),
+              let config = snapshot.config(forID: id) else {
+            completion(.failure(RequestError.missingField("instance")))
+            return
+        }
+        // The same builder a real notification goes through, so a test push can
+        // only fail for a reason a real one would too.
+        instance.descriptor.buildRequestAsync(context, config) { result in
+            switch result {
+            case .success:
+                completion(.success(()))
+            case .failure(let error) where error is JavaScriptService.RequestHandled:
+                // The script already sent, so there is no request to hand over and
+                // nothing wrong: a test push that reaches this has been delivered.
+                completion(.success(()))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     public func send(to id: String, context: BulletinContext, config: ConfigSnapshot? = nil) {
         let snapshot = config ?? currentConfig()
         guard let instance = snapshot.instance(id: id) else { return }
 
+        // A context built here always carries its own settings: in SpringBoard the
+        // adapter read them from `BBServer`, and a test skips the conditions that
+        // would read them. There used to be a hop to SpringBoard for the case where
+        // neither held — it could only be reached from Preferences, which only sends
+        // tests, so it never ran and is gone. The hop was also the last thing
+        // writing a preferences domain of its own.
+        deliver(context, to: instance, config: snapshot)
+    }
+
+    /// The part of ``send(to:context:config:)`` that needs a resolved context.
+    private func deliver(
+        _ context: BulletinContext,
+        to instance: ServiceInstance,
+        config snapshot: ConfigSnapshot
+    ) {
         // A test push arrives from the distributed-messaging callback, already
         // off the main thread, so the device state is fetched the way a hook
         // fetches it — hopped to the main thread for the SpringBoard part.
@@ -377,6 +424,14 @@ public final class PushEngine: NSObject {
         var context = context
         var effectiveConfig = serviceConfig
 
+        // The SIM the message arrived on, for this instance's log. Resolved once
+        // by the caller and carried here, so the line appears in the same section
+        // as the request it describes rather than in a section of its own.
+        if let sim = context.simSubscription {
+            PushLog.add(service: id, context: context, label: "SMS subscription",
+                        object: sim.description)
+        }
+
         // ── The user's rules ────────────────────────────────────────────────
         // Checked before the hooks: a rule is a statement about whether this
         // notification should be forwarded at all, and a hook that edits it should
@@ -415,7 +470,7 @@ public final class PushEngine: NSObject {
             service: service, context: context, deviceState: deviceState
         ) {
             if received.isKept {
-                apply(received, to: &context, service: service)
+                apply(received, to: &context, service: service, phase: .received)
                 isForced = received.isForced
             } else {
                 // The hook ran and chose silence: this notification is dropped
@@ -492,7 +547,7 @@ public final class PushEngine: NSObject {
             service: service, context: context, deviceState: deviceState
         ) {
             if filtered.isKept {
-                apply(filtered, to: &context, service: service)
+                apply(filtered, to: &context, service: service, phase: .filtered)
             } else {
                 return
             }
@@ -506,14 +561,24 @@ public final class PushEngine: NSObject {
         // Everything used below is thread-safe: the context and config are
         // read-only value types, the log and the retry map lock internally, and
         // URLSession plus the Wechat token cache are safe from any queue.
-        serviceType.buildRequestAsync(context, effectiveConfig) { request in
-            guard let request else {
-                // The service could not build a request (Wechat's token fetch,
-                // say); log the failure and skip the send.
-                PusherLog.debug("[S:\(service),A:\(context.appName)] Failed to build request")
-                if !context.isTest {
-                    PushLog.add(service: service, context: context, label: "Failed to build request")
-                }
+        serviceType.buildRequestAsync(context, effectiveConfig) { result in
+            // A service that cannot assemble its request says why, and the reason
+            // is what the user needs: "Bark Key is empty" points at the field to
+            // fill, where "Failed to build request" pointed at nothing. The same
+            // builder answers a test push, so the two cannot disagree.
+            let request: PushRequest
+            switch result {
+            case .success(let built):
+                request = built
+            case .failure(let error):
+                // A script that sent its own requests is not a failure, and must
+                // not be logged as one: nothing went wrong, the work simply
+                // happened on the script's thread instead of here.
+                if error is JavaScriptService.RequestHandled { return }
+                let reason = error.localizedDescription
+                PusherLog.debug("[\(service),A:\(context.appName)] Not sent: \(reason)")
+                PushLog.add(service: service, context: context,
+                            label: "Not sent", object: reason)
                 return
             }
 
@@ -531,7 +596,9 @@ public final class PushEngine: NSObject {
                 // Now it is part of the loop-prevention window: a service was
                 // asked to send it, so a notification caused by it can be the
                 // second link in a chain.
-                self.recordForwarded(context)
+                // No longer recorded here: the transport counts every send, which
+                // includes this one and any a script makes.
+                _ = self
             }
         }
     }

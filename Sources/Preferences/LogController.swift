@@ -132,7 +132,9 @@ public final class LogController: PlainViewController, UITableViewDataSource, UI
 
             let title = LogFormatter.sectionTitle(forSection: section)
             sections.append(title)
-            rows[title] = logs
+            // The filter above reads the stored lines, marker included; what is
+            // drawn leaves the markers out.
+            rows[title] = LogFilter.visible(logs)
         }
     }
 
@@ -268,7 +270,14 @@ public final class LogController: PlainViewController, UITableViewDataSource, UI
         }
 
         if let title = row(at: indexPath) {
-            cell.textLabel?.text = indexPath.section < firstLogSection ? title.localized : title
+            // Section titles are UI text; log lines are records the pipeline wrote
+            // in English — except the hook markers, which name the phase and are
+            // the one part a reader has to match against the settings page.
+            if indexPath.section < firstLogSection {
+                cell.textLabel?.text = title.localized
+            } else {
+                cell.textLabel?.text = LogFilter.translated(title)
+            }
         }
 
         if indexPath.section == 0 {
@@ -335,7 +344,7 @@ public final class LogController: PlainViewController, UITableViewDataSource, UI
             let appName = LSApplicationProxy.applicationProxy(forIdentifier: filteredAppID)?.localizedName
                 ?? "Unknown App".localized
             cell.textLabel?.text = String(format: "App Filter: %@".localized, appName)
-            cell.imageView?.image = ApplicationIcon.image(forBundleID: filteredAppID)
+            cell.imageView?.image = BulletinAdapter.applicationIcon(forBundleID: filteredAppID)
 
         case FixedRow.globalOnly:
             // Shows only on the all-services page: it narrows the merged log

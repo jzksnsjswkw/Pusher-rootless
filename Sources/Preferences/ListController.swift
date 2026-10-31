@@ -256,6 +256,16 @@ open class ListController: PSListController, TintableController {
         return rows[row]
     }
 
+    /// Rebuilds this page's cells from scratch.
+    ///
+    /// Used by cells that draw a value the pipeline computed — the SIM numbers are
+    /// read from CoreTelephony, so after "get" the labels on screen are stale and a
+    /// plain reload would redraw them unchanged.
+    open func refreshActiveSIMRows() {
+        let rebuilt = rebuildSpecifiers() ?? NSMutableArray()
+        installSpecifiers(rebuilt)
+    }
+
     /// Localizes every label, footer and segment title in place.
     ///
     /// The plists hold English keys, so an untranslated build shows English

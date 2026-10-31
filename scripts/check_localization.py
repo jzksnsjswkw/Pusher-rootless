@@ -136,7 +136,21 @@ def resolve(expr: str) -> str | None:
     remainder = re.sub(r"\b[A-Za-z_][A-Za-z0-9_]*\s*:", "", remainder)
     if remainder.strip():
         return None
-    return "".join(literals)
+    # The literals are captured as they appear in the Swift source, where an
+    # embedded quote is `\"`. The translation table's keys are decoded, so these
+    # have to be too, or every message quoting a name — "Another service is
+    # already named \"%@\"" — reads as untranslated.
+    return "".join(unescape(lit) for lit in literals)
+
+
+def unescape(literal: str) -> str:
+    """The value a Swift string literal stands for, for the escapes used here."""
+    return (literal
+            .replace('\\"', '"')
+            .replace("\\'", "'")
+            .replace("\\n", "\n")
+            .replace("\\t", "\t")
+            .replace("\\\\", "\\"))
 
 
 def swift_keys() -> tuple[set[str], list[str]]:
@@ -157,8 +171,47 @@ def swift_keys() -> tuple[set[str], list[str]]:
 
 
 def table_keys() -> set[str]:
+    """Keys in the translation table, decoded.
+
+    The regex captures the key *as written in the .strings file*, where a newline
+    is the two characters `\n` and a quote is `\"`. A plist's `footerText` holds
+    the real newline and the real quote, so comparing the two forms directly
+    reported every multi-line footer as untranslated.
+    """
     text = TABLE.read_text()
-    return set(re.findall(r'^"((?:[^"\\]|\\.)*)"\s*=', text, re.M))
+    raw = re.findall(r'^"((?:[^"\\]|\\.)*)"\s*=', text, re.M)
+    return {
+        key.replace('\\n', '\n').replace('\\"', '"')
+           .replace('\\\\', '\\').replace('\\t', '\t')
+        for key in raw
+    }
+
+
+def plist_keys():
+    """The translatable strings a service page is built from.
+
+    `label`, `footerText` and `validTitles` are the three the framework renders;
+    `placeholder` is deliberately skipped — it is a format hint (`"1"` for a topic
+    id), not prose.
+    """
+    import plistlib
+    root = ROOT / "Sources" / "Preferences" / "Resources"
+    keys = set()
+    for path in sorted(root.glob("*.plist")):
+        try:
+            data = plistlib.loads(path.read_bytes())
+        except Exception:
+            continue
+        items = data.get("items", []) if isinstance(data, dict) else []
+        for item in items:
+            for field in ("label", "footerText"):
+                value = item.get(field)
+                if isinstance(value, str) and value:
+                    keys.add(value)
+            for value in item.get("validTitles") or []:
+                if isinstance(value, str) and value:
+                    keys.add(value)
+    return keys
 
 
 def main() -> int:
@@ -167,10 +220,22 @@ def main() -> int:
         return 1
 
     used, dynamic = swift_keys()
+    # The service pages are plist-driven, and `ListController.localize()` translates
+    # their labels and footers at load time. A key that only ever appears in a
+    # plist was invisible to this script, which is how `Token:` and
+    # `Mention everyone` shipped untranslated while it reported missing=0.
+    plist_used = plist_keys()
+    # Protocol method names and all-caps section headings stay as they are: `GET`
+    # in a method picker and `OPTIONS` above a settings group are clearer in the
+    # form the user will type or recognise from documentation.
+    NON_PROSE = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "CONNECT",
+                 "TRACE", "OPTIONS", "SPT"}
+    used |= (plist_used - NON_PROSE)
     have = table_keys()
     missing = sorted(k for k in used if k not in have)
 
-    print(f"used={len(used)}  have={len(have)}  missing={len(missing)}")
+    print(f"used={len(used)} ({len(plist_used)} from plists)  "
+          f"have={len(have)}  missing={len(missing)}")
     if dynamic:
         print(f"not resolvable to a literal ({len(dynamic)}):")
         for item in dynamic:

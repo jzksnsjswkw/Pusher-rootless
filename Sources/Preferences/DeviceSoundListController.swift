@@ -178,7 +178,10 @@ open class DeviceSoundListController: ListController {
     /// Merges `fetched` (id -> display name) into the list, keeping the user's
     /// selections and dropping entries the provider no longer offers.
     func merge(fetched: [(id: String, name: String)]) {
-        var remaining = Dictionary(uniqueKeysWithValues: fetched.map { ($0.id, $0.name) })
+        // A provider that lists the same id twice must not take the page down
+        // with it: `uniqueKeysWithValues` traps on a duplicate key. Last wins,
+        // which matches what a dictionary literal would have produced.
+        var remaining = Dictionary(fetched.map { ($0.id, $0.name) }, uniquingKeysWith: { _, last in last })
         var merged: [[String: Any]] = []
 
         for item in items {

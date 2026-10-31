@@ -71,19 +71,15 @@ public enum ShortcutService: PushService {
         config.raw.bool(PrefKey.includeImage)
     }
 
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
         let name = (config.raw.string(ShortcutPrefKey.shortcutName) ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !name.isEmpty else {
-            PusherLog.info("[Shortcut] no shortcut selected")
-            return nil
-        }
+        guard !name.isEmpty else { throw RequestError.missingField("Shortcut") }
 
         let payload = self.payload(context: context, config: config)
         guard let json = encode(payload) else {
-            PusherLog.info("[Shortcut] could not encode payload")
-            return nil
+            throw RequestError.invalidField("Payload", reason: "could not be encoded as JSON")
         }
 
         // A shortcut run is not a fetch. The request carries the shortcut name

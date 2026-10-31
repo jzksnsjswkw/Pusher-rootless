@@ -12,12 +12,12 @@ public enum Pusher {
 
     // MARK: - Preference domains
 
-    public static let appID = "com.noahsaso.pusher"
-    public static let logDomain = "com.noahsaso.pusher~log"
+    public static let appID = "com.jzksnsjswkw.pusher"
+    public static let logDomain = "com.jzksnsjswkw.pusher~log"
 
     /// Darwin notifications posted after a preference write.
-    public static let prefsNotification = "com.noahsaso.pusher/prefs"
-    public static let logPrefsNotification = "com.noahsaso.pusher~log/prefs"
+    public static let prefsNotification = "com.jzksnsjswkw.pusher/prefs"
+    public static let logPrefsNotification = "com.jzksnsjswkw.pusher~log/prefs"
 
     // MARK: - Push request tuning
 
@@ -32,7 +32,13 @@ public enum Pusher {
 
     // MARK: - Logging
 
-    public static let logMaxStringLength = 50
+    /// How much of a string the log keeps before it elides the rest.
+    ///
+    /// This used to be 50, which is shorter than a webhook URL and shorter than
+    /// any JSON body — the things a log exists to show. The log viewer can
+    /// collapse a long line and copy it whole, so a generous limit costs nothing
+    /// the reader cannot fold away, while a short one destroys the evidence.
+    public static let logMaxStringLength = 2000
     /// Properties whose values are large Base64 image data, replaced with
     /// ``logImageDataReplacement`` in sanitized log copies.
     public static let logImageDataProperties = ["icon", "image"]
@@ -62,8 +68,13 @@ public enum Pusher {
 
     // MARK: - Test push
 
-    public static let messagingCenterName = "com.noahsaso.pusher/testpush"
+    public static let messagingCenterName = "com.jzksnsjswkw.pusher/testpush"
     public static let testPushMessageName = "sendTest"
+
+    // MARK: - SMS subscription lookup
+
+    /// Messages.app. Only its notifications have a SIM behind them.
+    public static let smsBundleID = "com.apple.MobileSMS"
 
     // MARK: - Installed bundle
 
@@ -293,6 +304,15 @@ public enum PrefKey {
     public static let bodyType = "bodyType"
 
     /// Log key suffix for one service (`<service>Log`).
+    /// The number and the name the user set for each SIM slot.
+    ///
+    /// Two slots, because no iPhone has more: the page asks for both numbers and
+    /// both names outright, and the pipeline matches a message's receiving number
+    /// against them. A slot's number is what ties a message to a card; the name is
+    /// only ever read for display.
+    public static func simNumberKey(slot: Int) -> String { "SIMSlot\(slot)Number" }
+    public static func simNameKey(slot: Int) -> String { "SIMSlot\(slot)Name" }
+
     public static func logKey(forService service: String) -> String { "\(service)Log" }
 
     /// Whether logging is enabled for one service.

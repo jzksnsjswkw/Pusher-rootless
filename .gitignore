@@ -12,3 +12,7 @@ Generated/
 reverse/
 .sisyphus/
 repo/
+# Raw screenshots as they come off the device. The ones the package page uses are
+# cropped and renamed into scripts/depiction/shots/.
+IMG_*.png
+IMG_*.jpeg

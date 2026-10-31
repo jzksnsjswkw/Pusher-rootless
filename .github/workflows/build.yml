@@ -74,6 +74,19 @@ jobs:
         cp -R ./.theos/obj/AltList.framework $THEOS/lib/iphone/roothide/
         cd ..
 
+    # SandyXpc: the SMS lookup reaches `imagent` over XPC, and the sandbox refuses
+    # a plain `bootstrap_look_up` from a tweak — libSandy is what allows it. The
+    # library is a package dependency at runtime, but the build needs its header
+    # and both scheme builds of the dylib, which `stage` puts in the right places.
+    - name: Prepare SandyXpc
+      run: |
+        git clone https://github.com/Lessica/SandyXpc.git
+        cd SandyXpc
+        make clean stage FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=
+        make clean stage FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+        make clean stage FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=roothide
+        cd ..
+
     - name: remove old package
       run: |
         rm -rf packages

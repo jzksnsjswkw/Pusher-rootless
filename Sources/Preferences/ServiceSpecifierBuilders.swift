@@ -636,11 +636,14 @@ public final class ServiceSpecifierBuilders: NSObject {
             rawValue: stored.string(BarkPrefKey.cipherAlgorithm) ?? ""
         ) else { return nil }
 
-        guard key.count == algorithm.keyLength else {
+        // Bytes, not characters — the same unit CCCrypt uses. A Chinese key would
+        // otherwise pass this check and fail at send time.
+        let bytes = key.utf8.count
+        guard bytes == algorithm.keyLength else {
             return String(
-                format: "The key must be exactly %d characters for %@ (currently %d)."
+                format: "The key must be exactly %d bytes for %@ (currently %d)."
                     .localized,
-                algorithm.keyLength, algorithm.rawValue, key.count
+                algorithm.keyLength, algorithm.rawValue, bytes
             )
         }
         return nil

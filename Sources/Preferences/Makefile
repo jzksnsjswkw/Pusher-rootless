@@ -5,6 +5,21 @@
 # copy of the pipeline and guarantees the UI and the tweak read prefs the same
 # way.
 
+# The same Swift optimisation setting the tweak uses: this bundle compiles the
+# identical Core sources, and two builds of one codebase that optimise differently
+# would be a difference nobody could explain later. `-num-threads` is what makes a
+# whole-module build use more than one core.
+SWIFT_OPTFLAG = -O -whole-module-optimization -num-threads $(shell sysctl -n hw.ncpu)
+
+# One architecture, matching the parent project: each scheme installs on one kind
+# of device only, so building both doubles the work for a binary half of which is
+# discarded.
+ifeq ($(THEOS_PACKAGE_SCHEME),rootless)
+	ARCHS = arm64
+else
+	ARCHS = arm64e
+endif
+
 include $(THEOS)/makefiles/common.mk
 
 BUNDLE_NAME = Pusher

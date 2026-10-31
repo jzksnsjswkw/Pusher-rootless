@@ -30,6 +30,27 @@ public final class PushRequest {
     /// Optional human-readable reason set by a service when it marks the
     /// request as failed through ``resendHandler``. The sender logs it.
     public var failureReason: String?
+    /// Which request of a script's sequence this is, 1-based, or `nil` for a
+    /// request that is not part of one.
+    ///
+    /// Every request a script pushes shares the notification's log section, so
+    /// without this the URL, body and response lines of three `push()` calls
+    /// interleave into one pile and the reader cannot tell which response answered
+    /// which request — the last one looked like the only one that had answered.
+    public var sequenceTag: String?
+
+    /// Called once when the request is finally done with — delivered, failed, or
+    /// out of retries.
+    ///
+    /// A push that a script awaits needs an answer, and the sender's retry logic is
+    /// asynchronous: the first attempt may fail and be repeated. This is how the
+    /// script learns the *final* outcome rather than the first one, without
+    /// duplicating any of the retrying, logging or image shrinking that lives in
+    /// the sender.
+    ///
+    /// Unset for an ordinary notification: nobody is waiting.
+    public var completion: ((JavaScriptRunner.FetchResult) -> Void)?
+
     /// Service-private state carried alongside the request. Never serialized
     /// into the body or the log — used to hand information from a service's
     /// request builder to its own resend handler (Wechat's rejected token, for
@@ -58,6 +79,8 @@ public final class PushRequest {
         copy.bodyType = bodyType
         copy.logInfoDict = logInfoDict
         copy.resendHandler = resendHandler
+        copy.sequenceTag = sequenceTag
+        copy.completion = completion
         copy.resendCount = resendCount
         copy.failureReason = failureReason
         copy.state = state
@@ -76,10 +99,31 @@ public final class PushRequest {
 ///
 /// The callback may be asynchronous — Wechat's expired-token path refreshes the
 /// token before answering.
+/// What a service's resend handler decided to do.
+///
+/// This used to be a `(PushRequest?, Bool)` pair, where a request meant "send this
+/// instead" and the *reason* was inferred from `failureReason` being nil and the
+/// object being new. That inference is what made a script's last `push()` repeat:
+/// a chained request was indistinguishable from a retry, so the transport attached
+/// the previous step's handler to it and the previous step handed the request back
+/// for ever. The intent has to be stated, not guessed.
+public enum ResendDecision {
+    /// Try again with this request (a refreshed token, a smaller image, or the
+    /// same request again). Spends one retry.
+    case retry(PushRequest)
+
+    /// Nothing to change; let the transport judge the response as usual.
+    case finish
+
+    /// The body said the request failed even though the transport succeeded, or
+    /// the handler could not continue. The reason goes in `failureReason`.
+    case fail
+}
+
 public typealias ResendHandler = (
     _ request: PushRequest,
     _ response: URLResponse?,
     _ data: Data?,
     _ error: Error?,
-    _ completion: @escaping (PushRequest?, Bool) -> Void
+    _ completion: @escaping (ResendDecision) -> Void
 ) -> Void

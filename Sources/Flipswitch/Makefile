@@ -3,6 +3,15 @@
 # Compiles only the shared preference layer plus the switch itself: the toggle
 # needs to read and write one preference, not the push pipeline.
 
+# One architecture, matching the parent project: each scheme installs on one kind
+# of device only, so building both doubles the work for a binary half of which is
+# discarded.
+ifeq ($(THEOS_PACKAGE_SCHEME),rootless)
+	ARCHS = arm64
+else
+	ARCHS = arm64e
+endif
+
 include $(THEOS)/makefiles/common.mk
 
 BUNDLE_NAME = PusherFlipswitch

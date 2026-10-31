@@ -25,13 +25,18 @@ public enum WeComRobotService: PushService {
         [WeComPrefKey.token: ""]
     }
 
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
         let token = config.raw.string(WeComPrefKey.token, default: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !token.isEmpty else { return nil }
-        guard let urlString = "\(endpoint)?key=\(token)"
-            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
-        else { return nil }
+        guard !token.isEmpty else {
+            throw RequestError.missingField("Key")
+        }
+        // `URLComponents` encodes the *value*, not the whole URL. Percent-encoding
+        // the assembled string would leave `&` and `=` in the key unescaped, which
+        // is how an imported key with a `&` silently becomes a second parameter.
+        var components = URLComponents(string: endpoint)
+        components?.queryItems = [URLQueryItem(name: "key", value: token)]
+        guard let urlString = components?.string else { return nil }
 
         // The same three lines as the DingTalk message, for the same reason: an
         // empty body is rejected, and a missing part should not leave a blank line.

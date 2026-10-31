@@ -86,3 +86,5 @@ typedef struct {
 #pragma mark - Test push IPC
 
 #import <AppSupport/CPDistributedMessagingCenter.h>
+
+#import "PusherBanner.h"

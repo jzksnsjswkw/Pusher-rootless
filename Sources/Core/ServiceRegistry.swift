@@ -24,11 +24,11 @@ public struct ServiceDescriptor {
     public let isAddable: Bool
 
     let url: (_ eventName: String, _ dbName: String, _ serverURL: String) -> String
-    let buildRequest: (BulletinContext, ServiceConfig) -> PushRequest?
+    let buildRequest: (BulletinContext, ServiceConfig) throws -> PushRequest?
     let buildRequestAsync: (
         _ context: BulletinContext,
         _ config: ServiceConfig,
-        _ completion: @escaping (PushRequest?) -> Void
+        _ completion: @escaping (Result<PushRequest, Error>) -> Void
     ) -> Void
     let defaultPrefs: () -> [String: Any]
 
@@ -76,7 +76,7 @@ public struct ServiceDescriptor {
         self.displayName = displayName ?? (S.serviceName.isEmpty ? "Custom" : S.serviceName)
         self.isAddable = isAddable
         url = { S.url(eventName: $0, dbName: $1, serverURL: $2) }
-        buildRequest = { S.request(context: $0, config: $1) }
+        buildRequest = { try S.request(context: $0, config: $1) }
         buildRequestAsync = { context, config, completion in
             S.request(context: context, config: config, completion: completion)
         }

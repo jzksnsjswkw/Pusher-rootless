@@ -20,13 +20,25 @@ enum ScriptingGuide {
                 .text(("The script runs once per notification. Call push(req) to "
                     + "send a request — call it more than once to send several, "
                     + "or not at all to skip this notification. Top-level await "
-                    + "works, so you can fetch a token before sending.").localized),
+                    + "works, so you can fetch a token before sending.\n"
+                    + "push() sends immediately and returns the response, so you "
+                    + "can read res.ok and stop early:").localized),
+                .code(("const res = push({ url: primary, body: bullet });\n"
+                    + "if (!res.ok) {\n"
+                    + "  push({ url: backup, body: { text: bullet.message } });\n"
+                    + "}").localized),
 
                 .heading("bullet — the notification".localized),
                 .text(("Read the notification's fields and decide. bullet.icon and "
                     + "bullet.image are undefined unless the service asks for the "
                     + "icon or the image.").localized),
                 .code(JavaScriptAPI.scriptBullet),
+
+                .heading("device — the device".localized),
+                .text(("Read-only, and the same object a hook sees. Useful for "
+                    + "branching on the charger or the network rather than on the "
+                    + "notification itself.").localized),
+                .code(JavaScriptAPI.scriptDevice),
 
                 .heading("Functions".localized),
                 .code(JavaScriptAPI.scriptFunctions),

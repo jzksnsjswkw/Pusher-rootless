@@ -24,10 +24,17 @@ public enum ServerChan3Service: PushService {
         ]
     }
 
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
         let key = config.raw.string(ServerChan3PrefKey.sendKey, default: "")
             .trimmingCharacters(in: .whitespaces)
-        guard let uid = Self.uid(fromSendKey: key) else { return nil }
+        guard !key.isEmpty else { throw RequestError.missingField("SendKey") }
+        guard let uid = Self.uid(fromSendKey: key) else {
+            // Documented shape is `/^sctp(\d+)t/`, and the account number in it
+            // becomes the host, so there is nothing to send to without it.
+            throw RequestError.invalidField(
+                "SendKey", reason: "expected the form sctp<account>t…"
+            )
+        }
 
         // A body is required when there is no title, and the title may be empty on
         // a test push, so the two swap roles rather than leaving one blank.

@@ -1,10 +1,18 @@
-Package: com.noahsaso.pusher
+Package: com.jzksnsjswkw.pusher
 Name: Pusher-rootless
-Depends: mobilesubstrate, com.opa334.altlist
+Depends: mobilesubstrate, firmware (>= 15.0), com.opa334.altlist, com.opa334.libsandy, com.82flex.libsandyxpc
+Conflicts: com.jzksnsjswkw.pusher, com.noahsaso.pusher
+Replaces: com.jzksnsjswkw.pusher, com.noahsaso.pusher
+Provides: com.jzksnsjswkw.pusher
 Version: 3.0.0~beta4
 Architecture: iphoneos-arm
-Description: Push notifications to other devices
 Maintainer: jzksnsjswkw
-Author: Noah Saso <noahsaso@gmail.com>
+Author: jzksnsjswkw <214893178@qq.com>
 Section: Tweaks
-Depiction: https://beta.noahsaso.com/depiction.php?pkg=pusher
+Icon: https://jzksnsjswkw.github.io/repo/icon.png
+Depiction: https://jzksnsjswkw.github.io/repo/
+Description: iOS版的 短信转发器 和 通知滤盒
+ 将设备上的通知转发到你想要的地方，不仅限于短信，还可拦截特定通知，让其不在设备上显示。
+ .
+ - 将通知转发到 Bark、钉钉、企业微信、飞书、邮件、Gotify、Webhook 等
+ - 写 JavaScript 自定义转发逻辑

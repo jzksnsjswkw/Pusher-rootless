@@ -4,57 +4,52 @@
 <dict>
 	<key>items</key>
 	<array>
-		<!-- Where to Download -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Where to Download</string>
 			<key>footerText</key>
 			<string>Pusher Receiver is a browser extension that displays pushes as desktop notifications.</string>
+			<key>label</key>
+			<string>Where to Download</string>
 		</dict>
 		<dict>
-			<key>cell</key>
-			<string>PSButtonCell</string>
-			<key>label</key>
-			<string>Open Firefox Extension</string>
-			<key>icon</key>
-			<string>firefox</string>
 			<key>action</key>
 			<string>openPusherReceiverFirefoxExtension</string>
-		</dict>
-		<dict>
 			<key>cell</key>
 			<string>PSButtonCell</string>
-			<key>label</key>
-			<string>Open Chrome Extension</string>
 			<key>icon</key>
-			<string>chrome</string>
+			<string>firefox</string>
+			<key>label</key>
+			<string>Open Firefox Extension</string>
+		</dict>
+		<dict>
 			<key>action</key>
 			<string>openPusherReceiverChromeExtension</string>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>icon</key>
+			<string>chrome</string>
+			<key>label</key>
+			<string>Open Chrome Extension</string>
 		</dict>
-
-		<!-- Support -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Support</string>
 			<key>footerText</key>
 			<string>Huge thanks to @burkybang for the awesome browser extension as well as all of his help with ideas and testing!</string>
+			<key>label</key>
+			<string>Support</string>
 		</dict>
 		<dict>
-			<key>cell</key>
-			<string>PSButtonCell</string>
-			<key>label</key>
-			<string>Developer: @burkybang</string>
-			<key>icon</key>
-			<string>twitter</string>
 			<key>action</key>
 			<string>openTwitterBurkybang</string>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>icon</key>
+			<string>twitter</string>
+			<key>label</key>
+			<string>Developer: @burkybang</string>
 		</dict>
-
-		<!-- Database -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -62,39 +57,37 @@
 			<string>Database</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSEditTextCell</string>
+			<key>defaults</key>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>detail</key>
 			<string>PSDetailController</string>
-			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
 			<string>dbName</string>
-			<key>service</key>
-			<string>Pusher Receiver</string>
 			<key>label</key>
 			<string>Database Name:</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSEditTextCell</string>
-			<key>detail</key>
-			<string>PSDetailController</string>
-			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
-			<key>key</key>
-			<string>key</string>
 			<key>service</key>
 			<string>Pusher Receiver</string>
+		</dict>
+		<dict>
+			<key>PostNotification</key>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>defaults</key>
+			<string>com.jzksnsjswkw.pusher</string>
+			<key>detail</key>
+			<string>PSDetailController</string>
+			<key>key</key>
+			<string>key</string>
 			<key>label</key>
 			<string>API Key:</string>
+			<key>service</key>
+			<string>Pusher Receiver</string>
 		</dict>
-
-		<!-- App List -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -102,14 +95,14 @@
 			<string>Apps</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSSegmentCell</string>
 			<key>default</key>
 			<true/>
 			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
@@ -128,6 +121,8 @@
 			</array>
 		</dict>
 		<dict>
+			<key>alphabeticIndexingEnabled</key>
+			<true/>
 			<key>cell</key>
 			<string>PSLinkCell</string>
 			<key>detail</key>
@@ -139,44 +134,38 @@
 			<key>service</key>
 			<string>Pusher Receiver</string>
 			<key>useSearchBar</key>
-			<true />
-			<key>alphabeticIndexingEnabled</key>
-			<true />
+			<true/>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSLinkCell</string>
-			<key>label</key>
-			<string>App Customization</string>
-			<key>icon</key>
-			<string>app_list</string>
-			<key>detail</key>
-			<string>NSPCustomizeAppsController</string>
-			<key>service</key>
-			<string>Pusher Receiver</string>
+			<key>defaultImageMaxHeightKey</key>
+			<string>imageMaxHeight</string>
+			<key>defaultImageMaxWidthKey</key>
+			<string>imageMaxWidth</string>
+			<key>defaultImageShrinkFactorKey</key>
+			<string>imageShrinkFactor</string>
 			<key>defaultIncludeIconKey</key>
 			<string>includeIcon</string>
 			<key>defaultIncludeImageKey</key>
 			<string>includeImage</string>
-			<key>defaultImageMaxWidthKey</key>
-			<string>imageMaxWidth</string>
-			<key>defaultImageMaxHeightKey</key>
-			<string>imageMaxHeight</string>
-			<key>defaultImageShrinkFactorKey</key>
-			<string>imageShrinkFactor</string>
+			<key>detail</key>
+			<string>NSPCustomizeAppsController</string>
+			<key>icon</key>
+			<string>app_list</string>
+			<key>label</key>
+			<string>App Customization</string>
+			<key>service</key>
+			<string>Pusher Receiver</string>
 		</dict>
-
-		<!-- Options -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Options</string>
 			<key>footerText</key>
 			<string>The server may reject the request if the data is too large, which is usually a result of the image being high resolution. Pusher will try to forward the notification 5 times, shrinking the image each time by the factor you specify. If by the last retry the image is too large, it will remove the image but leave an indication that one is attached so the application may display a placeholder. The image will initially be resized to fit the maximum width and height unless it is already smaller. The image shrink factor must be greater than 1.0 to work since it is division (a factor of 2 means it will divide the image dimensions in half).</string>
+			<key>label</key>
+			<string>Options</string>
 		</dict>
-
-		<!-- Date Format -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -197,30 +186,30 @@ HH:mm:ss.SSS = 03:12:11.678
 </string>
 		</dict>
 		<dict>
+			<key>action</key>
+			<string>openDateFormatInstructions</string>
 			<key>cell</key>
 			<string>PSButtonCell</string>
 			<key>label</key>
 			<string>Open Date Format Instructions</string>
-			<key>action</key>
-			<string>openDateFormatInstructions</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSEditTextCell</string>
+			<key>defaults</key>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>detail</key>
 			<string>PSDetailController</string>
-			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
 			<string>dateFormat</string>
-			<key>service</key>
-			<string>Pusher Receiver</string>
 			<key>label</key>
 			<string>Date Format:</string>
 			<key>noAutoCorrect</key>
 			<true/>
+			<key>service</key>
+			<string>Pusher Receiver</string>
 		</dict>
 	</array>
 	<key>title</key>

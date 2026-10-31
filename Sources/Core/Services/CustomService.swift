@@ -28,7 +28,7 @@ public enum CustomService: PushService {
         case body = 2
     }
 
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
         var infoDict = baseInfoDict(context: context, config: config)
 
         let key = config.raw.string(PrefKey.key, default: "")
@@ -46,8 +46,17 @@ public enum CustomService: PushService {
             infoDict[paramName.isEmpty ? "key" : paramName] = key
         }
 
+        // A webhook with no URL has nothing to send to. Returning the request
+        // anyway produced "https://" — an invalid URL the transport reported as a
+        // failure, and a test push that said "sent" because a request object existed.
+        let urlString = config.raw.string(PrefKey.url, default: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !urlString.isEmpty else {
+            throw RequestError.missingField("URL")
+        }
+
         let request = PushRequest(
-            urlString: config.raw.string(PrefKey.url, default: ""),
+            urlString: urlString,
             headers: headers,
             infoDict: infoDict,
             method: config.raw.string(PrefKey.method, default: "POST")

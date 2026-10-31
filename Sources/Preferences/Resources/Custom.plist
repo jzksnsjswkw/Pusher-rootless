@@ -4,14 +4,13 @@
 <dict>
 	<key>items</key>
 	<array>
-		<!-- Endpoint -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Endpoint</string>
 			<key>footerText</key>
 			<string>GET/HEAD send the data in the query string. Other methods send the data in the request body; choose JSON or Form (application/x-www-form-urlencoded).</string>
+			<key>label</key>
+			<string>Endpoint</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -83,15 +82,13 @@
 				<string>form</string>
 			</array>
 		</dict>
-
-		<!-- Authentication -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Authentication</string>
 			<key>footerText</key>
 			<string>Param/Header Name is used to determine the name of the parameter to pass. For example, header authentication is typically passed through the 'Access-Token' header. If you are using the Request Body option and your API takes a parameter named 'token', you would enter 'token' as the name.</string>
+			<key>label</key>
+			<string>Authentication</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -139,8 +136,6 @@
 			<key>noAutoCorrect</key>
 			<true/>
 		</dict>
-
-		<!-- App List -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -148,14 +143,14 @@
 			<string>Apps</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSSegmentCell</string>
 			<key>default</key>
 			<true/>
 			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
@@ -172,6 +167,8 @@
 			</array>
 		</dict>
 		<dict>
+			<key>alphabeticIndexingEnabled</key>
+			<true/>
 			<key>cell</key>
 			<string>PSLinkCell</string>
 			<key>detail</key>
@@ -181,46 +178,40 @@
 			<key>label</key>
 			<string>App List</string>
 			<key>useSearchBar</key>
-			<true />
-			<key>alphabeticIndexingEnabled</key>
-			<true />
+			<true/>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSLinkCell</string>
-			<key>label</key>
-			<string>App Customization</string>
-			<key>icon</key>
-			<string>app_list</string>
-			<key>detail</key>
-			<string>NSPCustomizeAppsController</string>
+			<key>defaultImageMaxHeightKey</key>
+			<string>imageMaxHeight</string>
+			<key>defaultImageMaxWidthKey</key>
+			<string>imageMaxWidth</string>
+			<key>defaultImageShrinkFactorKey</key>
+			<string>imageShrinkFactor</string>
 			<key>defaultIncludeIconKey</key>
 			<string>includeIcon</string>
 			<key>defaultIncludeImageKey</key>
 			<string>includeImage</string>
-			<key>defaultImageMaxWidthKey</key>
-			<string>imageMaxWidth</string>
-			<key>defaultImageMaxHeightKey</key>
-			<string>imageMaxHeight</string>
-			<key>defaultImageShrinkFactorKey</key>
-			<string>imageShrinkFactor</string>
+			<key>detail</key>
+			<string>NSPCustomizeAppsController</string>
+			<key>icon</key>
+			<string>app_list</string>
+			<key>label</key>
+			<string>App Customization</string>
 		</dict>
-
-		<!-- Options -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Options</string>
 			<key>footerText</key>
 			<string>The server may reject the request if the data is too large, which is usually a result of the image being high resolution. Pusher will try to forward the notification 5 times, shrinking the image each time by the factor you specify (if the body is too large). If by the last retry the image is too large, it will remove the image but set the "image" property to a 1 to indicate that an image is attached. The image will initially be resized to fit the maximum width and height unless it is already smaller. The image shrink factor must be greater than 1.0 to work since it is division (a factor of 2 means it will divide the image dimensions in half).
 
 The following properties will be passed to the URL endpoint (via the selected HTTP method/body format) specified above (property names in parentheses) [Must Turn on "Include Icon" and "Include Image" switches above in order to get the corresponding properties below]:
 
 Device Name (deviceName), App Name (appName), App Bundle ID (appID), Title (title), Subtitle (subtitle), Message (message), Date (date), Base64 Encoded PNG Icon 58x58 (icon), Base64 Encoded Image (image)</string>
+			<key>label</key>
+			<string>Options</string>
 		</dict>
-
-		<!-- Date Format -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -241,12 +232,12 @@ HH:mm:ss.SSS = 03:12:11.678
 </string>
 		</dict>
 		<dict>
+			<key>action</key>
+			<string>openDateFormatInstructions</string>
 			<key>cell</key>
 			<string>PSButtonCell</string>
 			<key>label</key>
 			<string>Open Date Format Instructions</string>
-			<key>action</key>
-			<string>openDateFormatInstructions</string>
 		</dict>
 		<dict>
 			<key>cell</key>

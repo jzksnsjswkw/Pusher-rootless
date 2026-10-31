@@ -62,6 +62,13 @@ public final class BulletinAdapter: NSObject {
     /// hook is not the owner.
     @objc public weak var server: BBServer?
 
+    /// Whether this process holds the live server.
+    ///
+    /// `false` in Preferences, which is a separate process with no `BBServer` at
+    /// all: callers that would otherwise read `sectionInfo` have to reach it some
+    /// other way rather than build a context the pipeline cannot use.
+    public static var hasServer: Bool { shared.server != nil }
+
     private override init() {
         super.init()
     }
@@ -76,48 +83,72 @@ public final class BulletinAdapter: NSObject {
 
     /// Whether the bulletin was actually presented by SpringBoard.
     ///
-    /// Bulletins that were never shown (`lastInterruptDate` is `nil`) are
-    /// queued bulletins being replayed, e.g. right after a SpringBoard restart,
-    /// and must not be forwarded.
+    /// `lastInterruptDate` is how the system marks a bulletin it has shown. A
+    /// bulletin without one is a replay of something queued before a restart, and
+    /// forwarding it would send a notification the user already lived through.
+    ///
+    /// Two exceptions, both observed rather than assumed:
+    ///
+    /// - A composed notification goes through the publish path from a thread
+    ///   outside SpringBoard's own, and `BBServer` copies the request into a fresh
+    ///   bulletin — so the date stamped on the request never reaches the object
+    ///   the hook sees. Its presence on screen was asked for by the user.
+    /// - A notification with a `publisherBulletinID` came from an app, not from
+    ///   the replay queue: the queue is what has no publisher.
     public static func wasPresented(_ bulletin: BBBulletin) -> Bool {
-        bulletin.lastInterruptDate != nil
+        if bulletin.lastInterruptDate != nil { return true }
+        if (bulletin.context?["PusherComposed"] as? NSNumber)?.boolValue == true {
+            return true
+        }
+        return !(bulletin.publisherBulletinID ?? "").isEmpty
     }
 
     // MARK: - Bulletin conversion
 
     /// Converts one bulletin into the pipeline's value type.
     public static func context(for bulletin: BBBulletin) -> BulletinContext {
-        makeContext(bulletin, isTest: false, appName: nil, displayTitle: nil, displayMessage: nil)
+        makeContext(bulletin, test: nil, appName: nil, displayTitle: nil, displayMessage: nil)
     }
 
     /// The same conversion for synthetic test-push bulletins, where the caller
     /// supplies the display strings and app name instead of deriving them.
     public static func context(
         for bulletin: BBBulletin,
-        isTest: Bool,
+        test: TestOrigin?,
         appName: String?,
         displayTitle: String?,
-        displayMessage: String?
+        displayMessage: String?,
+        skipsSectionLookup: Bool = false
     ) -> BulletinContext {
-        makeContext(bulletin, isTest: isTest, appName: appName,
-                    displayTitle: displayTitle, displayMessage: displayMessage)
+        makeContext(bulletin, test: test, appName: appName,
+                    displayTitle: displayTitle, displayMessage: displayMessage,
+                    skipsSectionLookup: skipsSectionLookup)
     }
 
     private static func makeContext(
         _ bulletin: BBBulletin,
-        isTest: Bool,
+        test: TestOrigin?,
         appName: String?,
         displayTitle: String?,
-        displayMessage: String?
+        displayMessage: String?,
+        skipsSectionLookup: Bool = false
     ) -> BulletinContext {
         var context = BulletinContext()
         let appID = bulletin.sectionID ?? ""
         context.appID = appID
-        context.bulletinID = bulletin.bulletinID ?? ""
+        context.publisherBulletinID = bulletin.publisherBulletinID ?? ""
+        // The group key for the log. A bulletin reaches the hook more than once —
+        // the data provider publishes it, SpringBoard assigns an identifier, and it
+        // is published again — so `bulletinID` changes between those passes while
+        // the publisher's identifier does not. Grouping on the stable one keeps a
+        // notification's lines in one section.
+        context.bulletinID = context.publisherBulletinID.isEmpty
+            ? (bulletin.bulletinID ?? "")
+            : context.publisherBulletinID
         // Default the date here (rather than mutating the bulletin) so the
         // context always carries the timestamp the log and date string use.
         context.date = bulletin.date ?? Date()
-        context.isTest = isTest
+        context.test = test
 
         context.title = bulletin.title
         context.subtitle = bulletin.subtitle
@@ -137,6 +168,29 @@ public final class BulletinAdapter: NSObject {
             )
         }
 
+        // A notification composed by the user, published to be looked at.
+        //
+        // It arrives through the normal publish path, so without this marker it
+        // would be indistinguishable from a live one and the app rules would
+        // filter it — a test that gets blocked by a rule answers a question nobody
+        // asked. Marked as a test, so the rules skip it exactly as they skip the
+        // instance page's test push.
+        if (bulletin.context?["PusherComposed"] as? NSNumber)?.boolValue == true {
+            context.test = .composed
+        }
+
+        // A card the user chose on the compose page. A real message's card is
+        // resolved later by asking `imagent`; a composed one has no database row,
+        // so the choice is carried here instead. Read before the `isTest` early
+        // return, because the lookup below never runs for a composed notification.
+        if let slot = bulletin.context?["PusherSIMSlot"] as? NSNumber, slot.intValue > 0 {
+            context.simSubscription = SIMSubscription(
+                slot: slot.intValue,
+                phoneNumber: bulletin.context?["PusherSIMPhone"] as? String ?? "",
+                label: bulletin.context?["PusherSIMLabel"] as? String ?? ""
+            )
+        }
+
         context.attachmentURL = bulletin.primaryAttachment?.url
 
         // Capture only the bundle ID string, never the bulletin: the provider
@@ -152,7 +206,7 @@ public final class BulletinAdapter: NSObject {
         // `SIGTRAP`. The look-up is also pointless for a test: the synthetic
         // bulletin has no real app behind it, and the SNS/device filters that
         // consume these settings are skipped for a test push anyway.
-        guard !context.isTest else { return context }
+        guard !context.isTest, !skipsSectionLookup else { return context }
 
         guard let server = shared.server else {
             context.notificationSettingsUnavailableReason = "Server is nil, it shouldn't be"
@@ -167,6 +221,18 @@ public final class BulletinAdapter: NSObject {
     }
 
     /// Reduces a `BBSectionInfo` to the filter's value type.
+    /// The notification settings for an app, as the pipeline sees them.
+    ///
+    /// Available only in a process that holds the server — the lookup asserts it
+    /// runs on `BBServer`'s queue. Preferences has no server, which is why the
+    /// pipeline asks for these over IPC instead.
+    static func sectionSettings(for appID: String) -> NotificationSettings? {
+        guard let server = shared.server,
+              let sectionInfo = server._sectionInfo(forSectionID: appID, effective: true)
+        else { return nil }
+        return settings(from: sectionInfo)
+    }
+
     private static func settings(from sectionInfo: BBSectionInfo) -> NotificationSettings {
         var settings = NotificationSettings()
         settings.allowsNotifications = sectionInfo.allowsNotifications
@@ -218,6 +284,24 @@ public final class BulletinAdapter: NSObject {
         }
         state.network = NetworkReachability.current()
         state.isOnWiFi = state.network == .wifi
+
+        // Battery monitoring has to be switched on before `batteryLevel` reports
+        // anything but -1, and this runs on a background queue for a hook — so it
+        // is enabled here, on the same thread that reads it.
+        let device = UIDevice.current
+        if !device.isBatteryMonitoringEnabled {
+            device.isBatteryMonitoringEnabled = true
+        }
+        let level = device.batteryLevel
+        state.batteryLevel = level >= 0 ? Double(level) : nil
+        switch device.batteryState {
+        case .charging: state.batteryState = "charging"
+        case .full: state.batteryState = "full"
+        default: state.batteryState = "unplugged"
+        }
+        state.isCharging = device.batteryState == .charging || device.batteryState == .full
+
+        state.osVersion = device.systemVersion
         return state
     }
 
@@ -271,14 +355,45 @@ public final class BulletinAdapter: NSObject {
             return result
         }
 
-        guard let iconController = Runtime.sharedInstance("SBIconController"),
-              let model = Runtime.send(iconController, "model"),
-              let icon = Runtime.send(model, "expectedIconForDisplayIdentifier:", bundleID as NSString)
-        else { return nil }
+        // Two ways, because the process differs.
+        //
+        // `SBIconController` exists only in SpringBoard. Preferences has none, so
+        // the same call returned nil there — and every editor's Run, which runs in
+        // Preferences, showed a notification with no `icon` while the identical
+        // hook running for real carried one. That is the whole difference between
+        // the two results.
+        //
+        // UIKit's own `_applicationIconImageForBundleIdentifier:format:scale:` is
+        // available in both processes, so it is the fallback.
+        if let iconController = Runtime.sharedInstance("SBIconController"),
+           let model = Runtime.send(iconController, "model"),
+           let icon = Runtime.send(
+               model, "expectedIconForDisplayIdentifier:", bundleID as NSString
+           ) {
+            // iOS 13+ takes a struct; the earlier signature takes a variant int.
+            if let image = generateIconImage(icon, variant: 2) { return image }
+            if let image = generateIconImage(icon) { return image }
+        }
+        return applicationIcon(forBundleID: bundleID)
+    }
 
-        // iOS 13+ takes a struct; the earlier signature takes a variant int.
-        if let image = generateIconImage(icon, variant: 2) { return image }
-        return generateIconImage(icon)
+    /// The installed app's icon through UIKit, which works in every process.
+    ///
+    /// `_applicationIconImageForBundleIdentifier:format:scale:` is private but
+    /// present in UIKit on every supported system, and — unlike the SpringBoard
+    /// route above — it does not need a process that has SpringBoard in it.
+    public static func applicationIcon(forBundleID bundleID: String) -> UIImage? {
+        typealias IconFunction = @convention(c) (
+            AnyObject, Selector, NSString, Int32, CGFloat
+        ) -> AnyObject?
+        let selector = NSSelectorFromString(
+            "_applicationIconImageForBundleIdentifier:format:scale:"
+        )
+        guard let cls = Runtime.cls("UIImage"),
+              let method = class_getClassMethod(cls, selector)
+        else { return nil }
+        let call = unsafeBitCast(method_getImplementation(method), to: IconFunction.self)
+        return call(cls, selector, bundleID as NSString, 0, UIScreen.main.scale) as? UIImage
     }
 
     /// `-[SBIcon generateIconImageWithInfo:]` (iOS 13+).

@@ -1,0 +1,81 @@
+{
+ "class": "DepictionTabView",
+ "tintColor": "#00B14F",
+ "minVersion": "0.3",
+ "tabs": [
+  {
+   "class": "DepictionStackView",
+   "tabname": "插件描述",
+   "views": [
+    {
+     "class": "DepictionMarkdownView",
+     "markdown": "**iOS版的 短信转发器 和 通知滤盒**\n\n将设备上的通知转发到你想要的地方，不仅限于短信，还可拦截特定通知，让其不在设备上显示。\n\n- 将通知转发到 Bark、钉钉、企业微信、飞书、邮件、Gotify、Webhook 等\n- 写 JavaScript 自定义转发逻辑"
+    },
+    {
+     "class": "DepictionSpacerView",
+     "spacing": 16
+    },
+    {
+     "class": "DepictionScreenshotsView",
+     "itemCornerRadius": 6,
+     "itemSize": "{207, 448}",
+     "screenshots": [
+      {
+       "accessibilityText": "Pusher",
+       "url": "https://jzksnsjswkw.github.io/repo/depiction/shots/1-settings.png"
+      },
+      {
+       "accessibilityText": "Pusher",
+       "url": "https://jzksnsjswkw.github.io/repo/depiction/shots/2-add.png"
+      },
+      {
+       "accessibilityText": "Pusher",
+       "url": "https://jzksnsjswkw.github.io/repo/depiction/shots/3-instance.png"
+      },
+      {
+       "accessibilityText": "Pusher",
+       "url": "https://jzksnsjswkw.github.io/repo/depiction/shots/4-filter.png"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "class": "DepictionStackView",
+   "tabname": "Description",
+   "views": [
+    {
+     "class": "DepictionMarkdownView",
+     "markdown": "**The SMS forwarder and notification filter for iOS**\n\nForward the notifications on your device wherever you want — not just SMS — and block the ones you would rather not see.\n\n- Forward to Bark, DingTalk, WeCom, Feishu, email, Gotify, webhooks and more\n- Write JavaScript for the forwarding logic"
+    },
+    {
+     "class": "DepictionSpacerView",
+     "spacing": 16
+    },
+    {
+     "class": "DepictionScreenshotsView",
+     "itemCornerRadius": 6,
+     "itemSize": "{207, 448}",
+     "screenshots": [
+      {
+       "accessibilityText": "Pusher",
+       "url": "https://jzksnsjswkw.github.io/repo/depiction/shots/1-settings.png"
+      },
+      {
+       "accessibilityText": "Pusher",
+       "url": "https://jzksnsjswkw.github.io/repo/depiction/shots/2-add.png"
+      },
+      {
+       "accessibilityText": "Pusher",
+       "url": "https://jzksnsjswkw.github.io/repo/depiction/shots/3-instance.png"
+      },
+      {
+       "accessibilityText": "Pusher",
+       "url": "https://jzksnsjswkw.github.io/repo/depiction/shots/4-filter.png"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

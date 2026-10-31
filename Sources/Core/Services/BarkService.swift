@@ -9,7 +9,8 @@ public enum BarkService: PushService {
 
     // Bark builds its own body (`title` and `body`), and its API takes image
     // *URLs* rather than Base64 data, so the shared payload's icon/image fields
-    // have nowhere to go. Bark's own `Image:` field is a separate, free-form URL.
+    // have nowhere to go — the attachment is uploaded and its link goes in Bark's
+    // own `image` parameter instead. See the `ImageHost` branch in `request`.
     public static var supportsIcon: Bool { false }
     public static var supportsImage: Bool { false }
 
@@ -71,7 +72,7 @@ public enum BarkService: PushService {
         )
     }
 
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
         var infoDict: [String: Any] = [
             "title": context.displayTitle,
             "body": context.message ?? "",
@@ -92,6 +93,19 @@ public enum BarkService: PushService {
             let value = config.raw.string(prefKey) ?? ""
             if !value.isEmpty { infoDict[apiName] = value }
         }
+
+        // The notification's own attachment, as a link.
+        //
+        // Bark takes `image` as a URL, so a Base64 attachment has to be uploaded
+        // before it can ride along. A link the user typed wins — they asked for
+        // that picture on every push — and an upload that fails leaves the field
+        // alone rather than failing the push: the notification itself is the
+        // message, the picture is the extra.
+        if infoDict["image"] == nil, let url = context.attachmentURL,
+           let data = try? Data(contentsOf: url),
+           let hosted = ImageHost.url(for: data, storage: config.name) {
+            infoDict["image"] = hosted
+        }
         // `delete` is only meaningful together with an id.
         if infoDict["delete"] != nil, infoDict["id"] == nil {
             infoDict.removeValue(forKey: "delete")
@@ -101,6 +115,7 @@ public enum BarkService: PushService {
         // decrypted dictionary in the body's place, so anything sent beside the
         // ciphertext would either be ignored or shown unencrypted — which defeats
         // the point of turning it on.
+        var encryptionFailure: String?
         let settings = cipherSettings(from: config)
         if settings.isUsable {
             let json = (try? JSONSerialization.data(withJSONObject: infoDict))
@@ -108,17 +123,39 @@ public enum BarkService: PushService {
             if let json, let encrypted = try? BarkCipher.encrypt(json: json, settings: settings) {
                 infoDict = encrypted
             }
-            // A failure leaves the plaintext body: the push arrives readable
-            // rather than not arriving at all, and the log shows the request.
+            // A failure leaves the plaintext body so the push still arrives, but
+            // silently is wrong: the user turned encryption on to keep the
+            // notification from being readable in transit, and a fallback they were
+            // never told about is the one outcome that defeats the setting. The
+            // footer already warns about the key length in the UI, so this is the
+            // second half of the same warning — for the case where it went
+            // unnoticed.
+            // The note goes in the *log copy*, not the body: the server should not
+            // receive a stray key, and the user reads it in the log viewer.
+            if infoDict["ciphertext"] == nil {
+                encryptionFailure = settings.problem()?.localizedDescription
+                    ?? "Bark encryption failed; the body was sent unencrypted"
+            }
         }
 
         // The configured URL is `{server}/`; the key is the last path segment.
-        let urlString = config.raw.string(PrefKey.url, default: "")
-            + config.raw.string(PrefKey.key, default: "")
-        return withLogBody(
-            PushRequest(urlString: urlString, infoDict: infoDict),
-            infoDict
-        )
+        // The key is the last path segment of the endpoint, so a missing one
+        // produces a URL that looks valid — `https://api.day.app/` — and the
+        // request goes out to the server root. Bark answers that with an error the
+        // user never sees, and a test push reported "sent". There is nothing to
+        // build here without it.
+        let key = config.raw.string(PrefKey.key, default: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            throw RequestError.missingField("Key")
+        }
+
+        let urlString = config.raw.string(PrefKey.url, default: "") + key
+        let request = withLogBody(PushRequest(urlString: urlString, infoDict: infoDict), infoDict)
+        if let encryptionFailure {
+            request.failureReason = encryptionFailure
+        }
+        return request
     }
 
     public static func defaultPrefs() -> [String: Any] {

@@ -4,7 +4,6 @@
 <dict>
 	<key>items</key>
 	<array>
-		<!-- Credentials -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -12,59 +11,57 @@
 			<string>Credentials</string>
 		</dict>
 		<dict>
+			<key>action</key>
+			<string>openPushoverAppBuild</string>
 			<key>cell</key>
 			<string>PSButtonCell</string>
 			<key>label</key>
 			<string>Create Pushover App</string>
-			<key>action</key>
-			<string>openPushoverAppBuild</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSEditTextCell</string>
+			<key>defaults</key>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>detail</key>
 			<string>PSDetailController</string>
-			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
 			<string>token</string>
-			<key>service</key>
-			<string>Pushover</string>
 			<key>label</key>
 			<string>API Token/Key:</string>
 			<key>noAutoCorrect</key>
 			<true/>
+			<key>service</key>
+			<string>Pushover</string>
 		</dict>
 		<dict>
+			<key>action</key>
+			<string>openPushoverDashboard</string>
 			<key>cell</key>
 			<string>PSButtonCell</string>
 			<key>label</key>
 			<string>Open Pushover Dashboard</string>
-			<key>action</key>
-			<string>openPushoverDashboard</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSEditTextCell</string>
+			<key>defaults</key>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>detail</key>
 			<string>PSDetailController</string>
-			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
 			<string>user</string>
-			<key>service</key>
-			<string>Pushover</string>
 			<key>label</key>
 			<string>User Key:</string>
 			<key>noAutoCorrect</key>
 			<true/>
+			<key>service</key>
+			<string>Pushover</string>
 		</dict>
-
-		<!-- App List -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -72,14 +69,14 @@
 			<string>Apps</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSSegmentCell</string>
 			<key>default</key>
 			<true/>
 			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
@@ -98,6 +95,8 @@
 			</array>
 		</dict>
 		<dict>
+			<key>alphabeticIndexingEnabled</key>
+			<true/>
 			<key>cell</key>
 			<string>PSLinkCell</string>
 			<key>detail</key>
@@ -109,33 +108,27 @@
 			<key>service</key>
 			<string>Pushover</string>
 			<key>useSearchBar</key>
-			<true />
-			<key>alphabeticIndexingEnabled</key>
-			<true />
+			<true/>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSLinkCell</string>
-			<key>label</key>
-			<string>App Customization</string>
-			<key>icon</key>
-			<string>app_list</string>
-			<key>detail</key>
-			<string>NSPCustomizeAppsController</string>
-			<key>service</key>
-			<string>Pushover</string>
 			<key>defaultDevicesKey</key>
 			<string>devices</string>
 			<key>defaultSoundsKey</key>
 			<string>sounds</string>
+			<key>detail</key>
+			<string>NSPCustomizeAppsController</string>
+			<key>icon</key>
+			<string>app_list</string>
+			<key>label</key>
+			<string>App Customization</string>
+			<key>service</key>
+			<string>Pushover</string>
 		</dict>
-
-		<!-- Options -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Options</string>
 			<key>footerText</key>
 			<string>SETUP:
 1. Click 'Create Pushover App' above (https://pushover.net/apps/build).
@@ -146,6 +139,8 @@
 6. Click 'Open Pushover Dashboard' above (https://pushover.net/dashboard).
 7. Copy 'Your User Key' into the associated field above.
 8. Click 'Receiving Devices' to validate your credentials and load the receiving device list.</string>
+			<key>label</key>
+			<string>Options</string>
 		</dict>
 	</array>
 	<key>title</key>

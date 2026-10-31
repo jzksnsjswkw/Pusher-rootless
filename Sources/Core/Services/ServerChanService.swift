@@ -16,7 +16,7 @@ public enum ServerChanService: PushService {
         [ServerChanPrefKey.sendKey: ""]
     }
 
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
         let infoDict: [String: Any] = [
             "title": context.displayTitle,
             "desp": context.displayMessage,
@@ -24,6 +24,9 @@ public enum ServerChanService: PushService {
         let urlString = urlBase
             + config.raw.string(ServerChanPrefKey.sendKey, default: "")
             + ".send"
+        guard !urlString.isEmpty else {
+            throw RequestError.missingField("SendKey")
+        }
         let request = PushRequest(urlString: urlString, infoDict: infoDict)
         // The API documents `curl -d`, which is form encoding; its JSON support is
         // an addition rather than the documented shape.

@@ -538,7 +538,7 @@
 "Opened for you to add. Only needs signing once the copy in Pusher has expired." = "打开即可添加。仅在 Pusher 内置的那份过期后才需要联网签名。";
 "Encryption" = "加密";
 "Encrypts the whole request, so the server and Apple cannot read it. Set the same values in the app under Push Encryption.\nKey length: AES128 needs 16 characters, AES192 24, AES256 32.\nThe IV is generated for each push and sent with it.\nA key of the wrong length leaves the request unencrypted rather than failing it, so the push still arrives." = "整个请求都会被加密，服务器和 Apple 都无法读取。请在 App 的「推送加密」里填同样的值。\n密钥长度：AES128 需 16 位，AES192 需 24 位，AES256 需 32 位。\n初始向量每次推送随机生成，并随请求一起发送。\n密钥长度不对时不会加密，但仍然会发送，通知照常到达。";
-"The key must be exactly %d characters for %@ (currently %d)." = "密钥必须是 %d 位（%@），当前 %d 位。";
+"The key must be exactly %d bytes for %@ (currently %d)." = "密钥必须是 %d 字节（%@），当前 %d 字节。";
 "Enable" = "启用";
 "Using Bark" = "使用 Bark";
 "The key" = "密钥";
@@ -579,7 +579,7 @@
 "Create an app token (starts with AT_) at wxpusher.zjiecode.com/admin. UIDs are the recipients, comma-separated." = "应用 Token（AT_ 开头）在 wxpusher.zjiecode.com/admin 创建。用户 UID 是接收者的 ID，多个用逗号隔开。";
 "Topic IDs broadcast to a group, comma-separated, instead of UIDs. Content type: 1 text, 2 HTML, 3 Markdown." = "主题 ID 用于群发，多个用逗号隔开，与用户 UID 二选一。内容类型：1 文本、2 HTML、3 Markdown。";
 "Get it from sct.ftqq.com." = "从 sct.ftqq.com 获取。";
-"Message" = "消息";
+"Message" = "内容";
 "ServerChan3" = "Server酱³";
 "Tags:" = "标签：";
 "From sc3.ft07.com, on the SendKey page. ServerChan³ keys start with sctp." = "从 sc3.ft07.com 的 SendKey 页面获取。Server酱³ 的密钥以 sctp 开头。";
@@ -727,3 +727,98 @@
 "Default takes all three from the sender address. SSL uses port 465, STARTTLS uses 587, None uses 25. A server typed here is used as given." = "默认会根据发件邮箱自动选择服务器、加密方式和端口。SSL 用 465，STARTTLS 用 587，不加密用 25。手动填写的服务器按填写的值使用。";
 "SSL" = "SSL";
 "STARTTLS" = "STARTTLS";
+"Mention everyone" = "提醒所有人";
+"Comma-separated. Ignored when everyone is mentioned." = "多个手机号用逗号分隔。提醒所有人时忽略此项。";
+"%@No such instance" = "%@实例已不存在";
+"%@Could not build a request" = "%@无法构造请求（检查凭证是否填全）";
+"Token:" = "令牌：";
+"SPT" = "SPT";
+"App Token" = "App Token";
+"SETUP:\n1. Click 'Create Pushover App' above (https://pushover.net/apps/build) and create a new application. Choose a name and accept the terms of service.\n2. Copy the API Token/Key. Paste it back here.\n3. Copy your User Key from the Pushover dashboard and paste it back here.\n4. Optionally add an app icon by attaching a suitable 72x72 png image, to be displayed in your notification.\n5. Tap 'Send Test Notification' below." = "设置步骤：\n1. 点击上方「创建 Pushover 应用」（https://pushover.net/apps/build）并新建一个应用。填写名称并接受服务条款。\n2. 复制 API Token/Key，粘贴回这里。\n3. 从 Pushover 控制台复制你的 User Key，粘贴回这里。\n4. 可选：附加一张 72x72 的 png 图片作为应用图标，它会显示在通知里。\n5. 点击下方「发送测试通知」。";
+"SETUP:\n1. Click 'Open IFTTT Maker Webhooks Account' above (https://ifttt.com/services/maker_webhooks/settings) and set up a new applet.\n2. Click the 'Connect' button if it is not already connected.\n3. Copy the key at the end of the URL displayed (https://maker.ifttt.com/use/YOUR_KEY) into the associated field above.\n4. When you make an applet on IFTTT with the Maker Webhooks service, it will ask you for an event name. Enter that event name in the associated field above." = "设置步骤：\n1. 点击上方「打开 IFTTT Maker Webhooks 账户」（https://ifttt.com/services/maker_webhooks/settings）并新建一个 Applet。\n2. 如果尚未连接，点击「连接」按钮。\n3. 复制页面显示 URL（https://maker.ifttt.com/use/YOUR_KEY）末尾的 Key，填入上面对应字段。\n4. 在 IFTTT 上用 Maker Webhooks 服务创建 Applet 时会要求填事件名，把该名称填入上面对应字段。";
+"SETUP:\n1. Click 'Open Pushbullet Account' above (https://www.pushbullet.com/#settings/account) and create a new Access Token.\n2. Copy your new Access Token. Paste it in the field above." = "设置步骤：\n1. 点击上方「打开 Pushbullet 账户」（https://www.pushbullet.com/#settings/account）并新建一个 Access Token。\n2. 复制生成的 Access Token，填入上方字段。";
+"The server may reject the request if the data is too large, which is usually due to an extremely large image. Decrease the image size using the settings on the service customization page." = "数据过大时服务器可能拒绝请求，通常是图片太大。请在服务自定义页面调小图片尺寸。";
+"Use touser to specify message recipients.\nSeparate usernames with \"|\", for example: \"zhangsan|wangwu\".\nUse \"@all\" to specify all users in the application." = "用 touser 指定消息接收人。\n多个用户名用「|」分隔，例如：\"zhangsan|wangwu\"。\n填 \"@all\" 表示应用内所有用户。";
+"INSTRUCTIONS:\n1. Click 'Open Date Format Instructions' above (https://nsdateformatter.com).\n2. Using the reference and examples, create your desired date format and enter it above. If you don't care about the date, you may leave it as the default\n\nExample formats for Saturday, April 13, 2019 @ 3:12 AM:\nEEEE, MMM d, yyyy = Saturday, Apr 13, 2019\nMM/dd/yyyy = 04/13/2019\nMM-dd-yyyy HH:mm = 04-13-2019 03:12\nMMM d, h:mm a = Apr 13, 3:12 AM\nE, d MMM yyyy HH:mm:ss Z = Sat, 13 Apr 2019 03:12:11 +0000\nyyyy-MM-dd'T'HH:mm:ssZ = 2019-04-13T03:12:11+0000\ndd.MM.yy = 13.04.19\nHH:mm:ss.SSS = 03:12:11.678\n" = "格式说明：\n1. 点击上方「打开日期格式说明」（https://nsdateformatter.com）。\n2. 参照页面上的参考和示例，写出你想要的日期格式并填入上方。不在意日期的话可以保持默认值。\n\n以下示例对应 2019 年 4 月 13 日（周六）凌晨 3:12：\nEEEE, MMM d, yyyy = Saturday, Apr 13, 2019\nMM/dd/yyyy = 04/13/2019\nMM-dd-yyyy HH:mm = 04-13-2019 03:12\nMMM d, h:mm a = Apr 13, 3:12 AM\nE, d MMM yyyy HH:mm:ss Z = Sat, 13 Apr 2019 03:12:11 +0000\nyyyy-MM-dd'T'HH:mm:ssZ = 2019-04-13T03:12:11+0000\ndd.MM.yy = 13.04.19\nHH:mm:ss.SSS = 03:12:11.678\n";
+"留空则使用发件邮箱里尖括号前的那段文字。" = "留空则使用发件邮箱里尖括号前的那段文字。";
+"发件邮箱。也可以直接粘贴邮件客户端里显示的形式，例如 \"通知转发\" <you@qq.com>，只取尖括号里的地址。" = "发件邮箱。也可以直接粘贴邮件客户端里显示的形式，例如 \"通知转发\" <you@qq.com>，只取尖括号里的地址。";
+"Sends now and returns the response, so you can check res.ok and decide whether to push again." = "立即发送并返回响应，可以读 res.ok 决定要不要继续推送。";
+"The script runs once per notification. Call push(req) to send a request — call it more than once to send several, or not at all to skip this notification. Top-level await works, so you can fetch a token before sending.\npush() sends immediately and returns the response, so you can read res.ok and stop early:" = "脚本对每条通知运行一次。调用 push(req) 发送请求——调用多次就是发多条，一次都不调就是跳过这条通知。顶层 await 可用，所以可以先取 token 再发送。\npush() 立即发送并返回响应，可以读 res.ok 提前收手：";
+"const res = push({ url: primary, body: bullet });\nif (!res.ok) {\n  push({ url: backup, body: { text: bullet.message } });\n}" = "const res = push({ url: 主地址, body: bullet });\nif (!res.ok) {\n  push({ url: 备用地址, body: { text: bullet.message } });\n}";
+"Hook (On Receiving)" = "Hook (收到通知时)";
+"Hook (After Filtering)" = "Hook (筛选之后)";
+"Hook (On Receiving) failed" = "Hook (收到通知时) 失败";
+"Hook (After Filtering) failed" = "Hook (筛选之后) 失败";
+"Hook (On Receiving) dropped the notification" = "Hook (收到通知时) 拦下了这条通知";
+"Hook (After Filtering) dropped the notification" = "Hook (筛选之后) 拦下了这条通知";
+"Hook (On Receiving) forced the push past the filters" = "Hook (收到通知时) 强制越过筛选";
+"Hook (After Filtering) forced the push past the filters" = "Hook (筛选之后) 强制越过筛选";
+"Hook (On Receiving) changed title" = "Hook (收到通知时) 修改了标题";
+"Hook (On Receiving) changed subtitle" = "Hook (收到通知时) 修改了子标题";
+"Hook (On Receiving) changed message" = "Hook (收到通知时) 修改了内容";
+"Hook (After Filtering) changed title" = "Hook (筛选之后) 修改了标题";
+"Hook (After Filtering) changed subtitle" = "Hook (筛选之后) 修改了子标题";
+"Hook (After Filtering) changed message" = "Hook (筛选之后) 修改了内容";
+
+/* SIM 昵称页 */
+"获取" = "获取";
+"OK" = "好";
+"手机号" = "手机号";
+"昵称" = "昵称";
+
+/* SIM 昵称页 */
+"卡 1" = "卡 1";
+"卡 2" = "卡 2";
+
+/* SIM 昵称（全局设置内嵌） */
+"短信到达时显示收件卡槽的名字。点「获取」用手机号填入。" = "短信到达时显示收件卡槽的名字。点「获取」用手机号填入。";
+
+/* SIM in JS */
+
+"only in SMS notifications" = "短信元数据，仅在短信通知时存在";
+"the slot number, 1 or 2" = "卡槽序号，值为 1 或 2";
+"the receiving card's number" = "收信卡号";
+"the nickname set in Global Settings" = "全局设置中填写的自定义昵称";
+"The Shortcuts app is not installed." = "未安装「快捷指令」应用。";
+"The example Shortcut could not be read." = "无法读取示例快捷指令。";
+
+/* 快捷指令指南字段 */
+"副标题" = "副标题";
+"通知正文" = "通知正文";
+"应用名" = "应用名";
+"应用Bundle ID" = "应用 Bundle ID";
+"通知到达时间" = "通知到达时间";
+"设备名称" = "设备名称";
+"发送通知的App图标" = "发送通知的 App 图标";
+"通知中的图片附件" = "通知中的图片附件";
+"短信元数据" = "短信元数据";
+"收信卡号" = "收信卡号";
+"Runs one of your Shortcuts instead of sending a request. payload is required and is passed to it exactly as written." = "运行你的某个快捷指令，而不是发送请求。payload 必填，原样序列化后传给快捷指令。";
+"e.g. 16.5" = "例如 16.5";
+"0 to 1, absent when unreadable" = "0 到 1，读不到时不存在";
+"plugged in" = "已接电源";
+"Read-only, and the same object a hook sees. Useful for branching on the charger or the network rather than on the notification itself." = "只读，和 hook 看到的是同一个对象。用来按充电状态或网络分流，而不是按通知本身。";
+
+/* 自定义通知 */
+"Custom Notification" = "自定义通知";
+"Send Custom Notification" = "发送自定义通知";
+"Send" = "发送";
+"App" = "应用";
+"Attachment" = "附件";
+"Image" = "图片";
+"SIM Slot" = "卡槽";
+"Slot %d" = "卡槽 %d";
+"Slot %d — %@" = "卡槽 %d — %@";
+"Test Notification" = "测试通知";
+
+"SpringBoard has not been restarted since installation" = "安装后尚未重启 SpringBoard";
+"No notification to show" = "没有可显示的通知";
+"SpringBoard could not publish for this app" = "SpringBoard 无法为此应用发布通知";
+"Notification" = "通知";
+"Show Notification" = "显示通知";
+/* dup skipped: "Title" = "标题"; */
+/* dup skipped: "Subtitle" = "副标题"; */
+/* dup skipped: "Message" = "内容"; */
+"Show Custom Notification" = "显示自定义通知";
+"Forwarded to this instance — the result is in Log" = "已交由该实例转发，结果见日志";
+"Could not save the attachment: %@" = "无法保存附件：%@";

@@ -8,7 +8,13 @@ on:
   release:
     types:
       - published
+  # Manual runs need the tag explicitly: `github.event.release` does not exist for
+  # a dispatch, so the download step would look for a release called "".
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to index (e.g. v3.0.0-beta4)'
+        required: true
 
 permissions:
   contents: write
@@ -19,12 +25,23 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # One tag either way: from the release event, or from the dispatch input.
+      - name: Resolve the tag
+        id: tag
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            echo "no tag — a dispatch must supply one" >&2
+            exit 1
+          fi
+          echo "value=$TAG" >> "$GITHUB_OUTPUT"
+
       - name: Fetch the release's debs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p staged
-          gh release download "${{ github.event.release.tag_name }}" \
+          gh release download "${{ steps.tag.outputs.value }}" \
             --pattern '*.deb' --dir staged
           ls -la staged
 
@@ -32,16 +49,22 @@ jobs:
         run: |
           # dpkg-deb is what reads the control fields, and macOS has no dpkg.
           brew install dpkg
-          ./scripts/make_repo.sh "${{ github.event.release.tag_name }}" staged/*.deb
+          ./scripts/make_repo.sh "${{ steps.tag.outputs.value }}" staged/*.deb
 
       - name: Publish to Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # The source lives in `jzksnsjswkw/repo`, which is what
+          # https://jzksnsjswkw.github.io/repo/ serves. Publishing to this
+          # repository's own gh-pages would put the index at /Pusher-rootless/
+          # instead, and every URL `make_repo.sh` writes points at /repo/ — so the
+          # debs, the icons and the package page would all 404.
+          #
+          # That needs a token with write access to the other repository; the
+          # workflow's own token cannot reach it.
+          deploy_key: ${{ secrets.REPO_DEPLOY_KEY }}
+          external_repository: jzksnsjswkw/repo
           publish_dir: ./repo
           publish_branch: gh-pages
-          # The source lives in another repository (jzksnsjswkw/repo), so pushing
-          # there needs a token that can write to it. Falls back to this repository
-          # when the secret is absent, which is enough to try the workflow out.
           destination_dir: .
           keep_files: false

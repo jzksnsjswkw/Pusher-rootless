@@ -557,6 +557,17 @@ public final class GlobalSettingsListController: ListController {
         buildSpecifiers()
     }
 
+    /// Fills both SIM names from the device, then redraws the page so the text
+    /// fields show the new values.
+    ///
+    /// A page method rather than a helper elsewhere: `buttonAction` is sent to the
+    /// button's `target`, which is this controller, so the selector has to exist
+    /// here.
+    @objc func fetchSIMNumbers(_ sender: Any?) {
+        ActiveSIMRows.fillNamesFromDevice()
+        refreshActiveSIMRows()
+    }
+
     /// The page's cells are two plists combined; see `rebuildSpecifiers()`.
     private var builtSpecifiers: NSMutableArray?
 
@@ -569,7 +580,11 @@ public final class GlobalSettingsListController: ListController {
         guard !hasInstalledSpecifiers else { return }
 
         let appList = (loadSpecifiers(named: "GlobalAppList") as? [PSSpecifier]) ?? []
-        let conditions = (loadSpecifiers(named: "GlobalAndServices") as? [PSSpecifier]) ?? []
+        var conditions = (loadSpecifiers(named: "GlobalAndServices") as? [PSSpecifier]) ?? []
+
+        // The SIM names sit inline rather than on a page of their own: there are
+        // only two of them, and they belong with the other per-device settings.
+        conditions += ActiveSIMRows.rows(target: self)
 
         // The app-list cells are stored nested under `Global[appList]`, while
         // the condition cells (`WhenToPush` / `WhatNetwork`) *are* the global

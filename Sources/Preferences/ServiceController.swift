@@ -1225,7 +1225,25 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // reason as the value setters: it is an ObjC ivar.
         button.buttonAction = #selector(sendTestNotification(_:))
         button.setProperty(true, forKey: "enabled")
-        return [group, button]
+
+        // The fixed notification answers "does my credential work" and nothing
+        // else. This one opens a page where the notification itself is the
+        // question — which app, which fields, which card — and sends whatever the
+        // user composes through the same pipeline.
+        guard let custom = PSSpecifier.preferenceSpecifierNamed(
+            "Show Custom Notification".localized,
+            target: self, set: nil, get: nil, detail: nil, cell: .buttonCell, edit: nil
+        ) else { return [group, button] }
+
+        custom.buttonAction = #selector(sendCustomNotification(_:))
+        custom.setProperty(true, forKey: "enabled")
+        return [group, button, custom]
+    }
+
+    /// Opens the page that composes a notification, then sends it.
+    @objc public func sendCustomNotification(_ specifier: PSSpecifier) {
+        view.endEditing(true)
+        push(NotificationDraftController(serviceID: serviceInstanceID))
     }
 
     // MARK: - Rows
@@ -1291,19 +1309,31 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // No server is listening until SpringBoard has been restarted after
         // installation, which is reported as a failed send rather than as an
         // error.
-        var success = false
+        var reply: [String: Any]?
         if let center = CPDistributedMessagingCenter(named: Pusher.messagingCenterName) {
-            // The reply is optional: a `nil` result means no server answered,
-            // which is treated as a failed send rather than an error.
-            let reply = center.sendMessageAndReceiveReplyName(
+            reply = center.sendMessageAndReceiveReplyName(
                 Pusher.testPushMessageName, userInfo: ["service": serviceInstanceID]
             ) as? [String: Any]
-            success = (reply?["success"] as? NSNumber)?.boolValue ?? false
         }
 
-        let result = success
-            ? String(format: "%@Sent".localized, testPushResultPrefix)
-            : String(format: "%@Failed to Send".localized, testPushResultPrefix)
+        // Three outcomes, not two. The banner used to say "Sent" as soon as
+        // SpringBoard accepted the call, which is before anything had been built
+        // or sent — a wrong token reported success. What can be known now is
+        // whether a request exists; the delivery itself shows up in the log.
+        let result: String
+        let hasInstance = (reply?["hasInstance"] as? NSNumber)?.boolValue
+        let built = (reply?["built"] as? NSNumber)?.boolValue
+        if hasInstance == nil {
+            // No reply: SpringBoard has not been restarted since installation.
+            result = String(format: "%@Failed to Send".localized, testPushResultPrefix)
+        } else if hasInstance == false {
+            result = String(format: "%@No such instance".localized, testPushResultPrefix)
+        } else if built == false {
+            result = String(format: "%@Could not build a request".localized,
+                            testPushResultPrefix)
+        } else {
+            result = String(format: "%@Sent".localized, testPushResultPrefix)
+        }
         displayNotification(result)
     }
 

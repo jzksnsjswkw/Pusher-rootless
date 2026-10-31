@@ -556,15 +556,20 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
     private var gutterNeedsRebuild = true
 
     /// The sample notification the run button feeds the script.
-    private static let testBullet: [String: Any] = [
-        "deviceName": UIDevice.current.name,
-        "appName": "Bark",
-        "appID": "me.fin.bark",
-        "title": "Test Title",
-        "subtitle": "Test Subtitle",
-        "message": "Hello from Pusher",
-        "date": "Jan 1, 12:00 PM",
-    ]
+    /// The notification a Run shows.
+    ///
+    /// Built through ``NotificationDraft`` rather than written out here, so the
+    /// fields the editor shows a script are the ones the pipeline produces: the
+    /// same names, the same optional `sim`, the same date format. A hand-written
+    /// sample drifts the moment a field is added, and a script written against
+    /// the old shape then fails on a real notification.
+    /// The notification a script's Run is given.
+    ///
+    /// Built by the same call every other test uses, so the sample a script is
+    /// written against and the notification a real one delivers are one shape.
+    private static var testBullet: [String: Any] {
+        BulletinHookRunner.bulletFields(from: NotificationDraft().makeContext())
+    }
 
     /// The framework builds a `detail`-named controller through these, so both
     /// are written out even though this page is normally pushed directly: a
@@ -952,39 +957,58 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         save()
         guard let script = textView.text, !script.isEmpty else { return }
 
+        // `push()` now delivers as it is called, so the editor passes the same
+        // delivery the pipeline does and the trace records the real answer. The
+        // alternative — collecting requests here and sending them afterwards —
+        // would send every push twice.
         let outcome = JavaScriptRunner.run(
             script: script,
             bullet: Self.testBullet,
             options: .init(usesOwnContext: true, usesOwnThread: true,
                            timeout: Pusher.defaultScriptTimeout,
                            maximumResponseBytes: Pusher.defaultMaxResponseBytes),
-            fetch: ScriptHTTP.perform
+            // The editor runs in Preferences, which has no SpringBoard lock screen
+            // or reachability, so the real device state comes from the same
+            // UIKit calls the pipeline uses rather than from SpringBoard.
+            device: EditorDeviceState.current(),
+            fetch: ScriptHTTP.perform,
+            deliver: { request in
+                // Deliberately not a private copy of the transport: the editor
+                // runs in the Preferences process, where `RequestSender` works
+                // without SpringBoard, and going through it means a Run produces
+                // the same log lines and the same retries a real push would.
+                let done = DispatchSemaphore(value: 0)
+                let box = ResumeBox()
+                request.completion = { result in
+                    box.result = result
+                    done.signal()
+                }
+                RequestSender.shared.send(
+                    request,
+                    logString: "[Editor,A:test]",
+                    service: "Editor",
+                    context: Self.testContext
+                )
+                _ = done.wait(timeout: .now() + 60)
+                return box.result ?? JavaScriptRunner.FetchResult(
+                    status: 0, error: "timed out"
+                )
+            }
         )
 
         // The trace is the run, in script order, each entry colored by kind:
         // console stays default, the raw HTTP is purple, and the response is
         // green or red by outcome.
         let output = NSMutableAttributedString()
-        var requestIndex = 0
         for entry in outcome.trace {
             switch entry {
             case .console(let line):
                 output.appendColored(line, .label)
             case .request(_, let raw):
                 output.appendColored(raw, .systemPurple)
-                // A push(req) request is only described by the runner; the
-                // caller performs it, so its result is fetched here and shown
-                // after the request it belongs to.
-                if requestIndex < outcome.requests.count {
-                    let sent = Self.send(outcome.requests[requestIndex])
-                    output.appendColored(
-                        sent, sent.hasPrefix("← failed") ? .systemRed : Self.successColor
-                    )
-                    requestIndex += 1
-                }
             case .response(let text):
                 output.appendColored(
-                    text, text.hasPrefix("failed") ? .systemRed : Self.successColor
+                    text, text.contains("failed") ? .systemRed : UIColor.successResponse
                 )
             }
         }
@@ -1001,87 +1025,27 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
         showOutput(output)
     }
 
-    /// The color a successful response line is drawn in.
-    ///
-    /// A deep green rather than the system's: the system green is tuned for
-    /// glyphs and fills, and at text size on a light background it reads as
-    /// pale. This resolves per theme, because a green dark enough for white
-    /// paper is unreadable on a black one.
-    private static var successColor: UIColor {
-        UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(red: 0.35, green: 0.78, blue: 0.40, alpha: 1)
-                : UIColor(red: 0.00, green: 0.42, blue: 0.17, alpha: 1)
-        }
-    }
-
     /// Sends one `push(req)` request and describes the outcome in one line.
     ///
     /// Run performs the requests for real — that is the point of the button:
     /// what the script builds is only half of it, and a service's rejection
     /// (a bad token, a wrong field name) is invisible until the request is
     /// actually made.
-    private static func send(_ request: PushRequest) -> String {
-        guard let url = URL(string: request.urlString) else {
-            return "← failed: invalid URL"
-        }
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = request.method
-        urlRequest.timeoutInterval = Pusher.scriptFetchTimeout
-        for (field, value) in request.headers {
-            urlRequest.setValue(value, forHTTPHeaderField: field)
-        }
+    private final class ResumeBox: @unchecked Sendable {
+        var result: JavaScriptRunner.FetchResult?
+    }
 
-        let method = request.method.uppercased()
-        let isBodyless = method == "GET" || method == "HEAD"
-        if !isBodyless {
-            let body = request.infoDict
-            if let data = try? JSONSerialization.data(withJSONObject: body) {
-                urlRequest.httpBody = data
-                if urlRequest.value(forHTTPHeaderField: "Content-Type") == nil {
-                    urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                }
-            }
-        } else if !request.infoDict.isEmpty,
-                  var components = URLComponents(string: request.urlString) {
-            var items = components.queryItems ?? []
-            for (key, value) in request.infoDict {
-                items.append(URLQueryItem(name: key, value: String(describing: value)))
-            }
-            components.queryItems = items
-            urlRequest.url = components.url
-        }
-
-        let semaphore = DispatchSemaphore(value: 0)
-        final class Box: @unchecked Sendable { var line = "← failed: no response" }
-        let box = Box()
-        URLSession.shared.dataTask(with: urlRequest) { data, response, error in
-            defer { semaphore.signal() }
-            if let error {
-                box.line = "← failed: \(error.localizedDescription)"
-                return
-            }
-            guard let http = response as? HTTPURLResponse else {
-                box.line = "← failed: no response"
-                return
-            }
-            let bytes = data?.count ?? 0
-            let size = bytes < 1024
-                ? "\(bytes) B"
-                : String(format: "%.1f KB", Double(bytes) / 1024)
-            // The status alone is not enough to debug a service: its error text
-            // is what names the wrong field.
-            var detail = "\(http.statusCode)  \(size)"
-            if !(200..<300).contains(http.statusCode),
-               let data, let text = String(data: data, encoding: .utf8), !text.isEmpty {
-                let trimmed = text.count > 300 ? String(text.prefix(300)) + "…" : text
-                detail += "  \(trimmed.replacingOccurrences(of: "\n", with: " "))"
-            }
-            box.line = "← \(detail)"
-        }.resume()
-
-        _ = semaphore.wait(timeout: .now() + Pusher.scriptFetchTimeout + 5)
-        return box.line
+    /// A bulletin context for a Run. The log needs one to key its section by, and
+    /// nothing in it is used for anything but that.
+    static var testContext: BulletinContext {
+        var context = BulletinContext()
+        context.bulletinID = "editor"
+        context.appID = "com.jzksnsjswkw.pusher"
+        context.appName = "Pusher"
+        context.title = "Editor"
+        context.displayTitle = "Pusher: Editor"
+        context.test = .composed
+        return context
     }
 
     /// Presents the run's report below the editor.
@@ -1302,5 +1266,42 @@ private extension NSMutableAttributedString {
             attributes: [.font: UIFont.monospacedSystemFont(ofSize: 12, weight: .regular),
                          .foregroundColor: color]
         ))
+    }
+}
+
+/// The `device` object the script editor shows a run.
+///
+/// The pipeline's version comes from SpringBoard — the lock-screen manager and an
+/// `SBLockScreenManager` instance that does not exist in the Preferences process.
+/// So this builds the same dictionary from plain UIKit: everything except `locked`,
+/// which Preferences cannot know and reports as `false`.
+enum EditorDeviceState {
+    static func current() -> [String: Any] {
+        let device = UIDevice.current
+        if !device.isBatteryMonitoringEnabled {
+            device.isBatteryMonitoringEnabled = true
+        }
+
+        var value: [String: Any] = [
+            "locked": false,
+            "wifi": NetworkReachability.current() == .wifi,
+            "cellular": NetworkReachability.current() == .cellular,
+            "online": NetworkReachability.current() != .none,
+            "network": NetworkReachability.current().rawValue,
+            "charging": device.batteryState == .charging || device.batteryState == .full,
+            "batteryState": batteryState(device.batteryState),
+            "osVersion": device.systemVersion,
+            "name": device.name,
+        ]
+        if device.batteryLevel >= 0 { value["battery"] = Double(device.batteryLevel) }
+        return value
+    }
+
+    private static func batteryState(_ state: UIDevice.BatteryState) -> String {
+        switch state {
+        case .charging: return "charging"
+        case .full: return "full"
+        default: return "unplugged"
+        }
     }
 }

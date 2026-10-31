@@ -4,12 +4,12 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
+	<key>CFBundleDisplayName</key>
+	<string>Pusher</string>
 	<key>CFBundleExecutable</key>
 	<string>PusherFlipswitch</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.noahsaso.pusher</string>
-	<key>CFBundleDisplayName</key>
-	<string>Pusher</string>
+	<string>com.jzksnsjswkw.pusher</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundlePackageType</key>

@@ -9,6 +9,29 @@ enum LogFilter {
     static let networkResponses = ["Any", "Success", "No Data", "Error"]
     static let endResults = ["Any", "Blocked", "Pushed"]
 
+    /// Lines the pipeline writes as markers rather than content.
+    ///
+    /// "Pushed" says only that a request was handed to the transport, which the
+    /// URL, headers and network response right below it already say in full. It
+    /// stays in the stored log because the end-result filter reads it; it is
+    /// skipped when the log is drawn.
+    static let markers: Set<String> = ["Pushed"]
+
+    /// A log line as it should be shown.
+    ///
+    /// Lines are written by the pipeline in English and drawn verbatim; the hook
+    /// markers are the exception, because they name which of the two hooks spoke
+    /// and that name has to match the settings page's wording.
+    static func translated(_ line: String) -> String {
+        guard line.hasPrefix("Hook (") else { return line }
+        return line.localized
+    }
+
+    /// A stored log section with its marker lines removed, for display.
+    static func visible(_ logs: [String]) -> [String] {
+        logs.filter { !markers.contains($0.trimmingCharacters(in: .whitespaces)) }
+    }
+
     static func networkResponse(at index: Int) -> String? {
         guard index > 0, index < networkResponses.count else { return nil }
         return networkResponses[index]

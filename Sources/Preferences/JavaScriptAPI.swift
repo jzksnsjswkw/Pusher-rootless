@@ -24,6 +24,32 @@ enum JavaScriptAPI {
           date: string         // \("a formatted timestamp".localized)
           icon?: string        // \("base64 PNG of the app icon, when there is one".localized)
           image?: string       // \("base64 PNG of the attachment, when there is one".localized)
+          sim?: {              // \("only in SMS notifications".localized)
+            slot: number        // \("the slot number, 1 or 2".localized)
+            phoneNumber: string // \("the receiving card's number".localized)
+            label: string       // \("the nickname set in Global Settings".localized)
+          }
+        }
+        """
+    }
+
+    /// The `device` a *script* gets: the same object a hook sees.
+    ///
+    /// Which notification arrives does not depend on it, but what a script does
+    /// with one can — only forward while charging, stay quiet on cellular.
+    static var scriptDevice: String {
+        """
+        device: {                // \("read-only".localized)
+          name: string            // \("this iPhone's name".localized)
+          osVersion: string       // \("e.g. 16.5".localized)
+          locked: boolean         // \("the screen is locked".localized)
+          wifi: boolean           // \("on Wi-Fi".localized)
+          cellular: boolean       // \("on cellular data".localized)
+          online: boolean         // \("has any network at all".localized)
+          network: "wifi" | "cellular" | "none"
+          battery?: number        // \("0 to 1, absent when unreadable".localized)
+          charging: boolean       // \("plugged in".localized)
+          batteryState: "unplugged" | "charging" | "full"
         }
         """
     }
@@ -64,8 +90,11 @@ enum JavaScriptAPI {
           method?: "GET" | "POST" | "PUT" | ...    // \("default \"POST\"".localized)
           headers?: { [name: string]: string }
           body?: object | string                   // \("an object is sent as JSON".localized)
-        }): void
-        // \("Call push() to send. Call it more than once to send several, or not at all to skip this notification.".localized)
+        }): Response
+        // \("Sends now and returns the response, so you can check res.ok and decide whether to push again.".localized)
+
+        push({ shortcut: string, payload: object }): Response
+        // \("Runs one of your Shortcuts instead of sending a request. payload is required and is passed to it exactly as written.".localized)
 
         fetch(url: string, init?: object): Promise<Response>
         // \("Real HTTP: Response has ok, status, headers, url, json() and text().".localized)
@@ -80,6 +109,7 @@ enum JavaScriptAPI {
 
         console.log / console.warn / console.error
         // \("Shown in the editor's Run output.".localized)
+
         """
     }
 
@@ -93,12 +123,17 @@ enum JavaScriptAPI {
     static var hookBullet: String {
         """
         bullet: {
-          appID: string      // \("the sending app's bundle ID".localized)
-          appName: string    // \("the sending app's display name".localized)
-          title: string      // \("editable — keep() carries your change onward".localized)
-          subtitle: string   // \("editable".localized)
-          message: string    // \("editable".localized)
-          date: string       // \("a formatted timestamp".localized)
+          appID: string       // 发送方应用的包名
+          appName: string     // 发送方应用的显示名称
+          title: string       // 可改写——keep() 会把改动传下去
+          subtitle: string    // 可改写
+          message: string     // 可改写
+          date: string        // 格式化时间
+          sim?: {             // \("only in SMS notifications".localized)
+            slot: number        // \("the slot number, 1 or 2".localized)
+            phoneNumber: string // \("the receiving card's number".localized)
+            label: string       // \("the nickname set in Global Settings".localized)
+          }
         }
         """
     }
@@ -107,11 +142,16 @@ enum JavaScriptAPI {
     static var hookDevice: String {
         """
         device: {                // \("read-only".localized)
-          locked: boolean   // \("the screen is locked".localized)
-          wifi: boolean     // \("on Wi-Fi".localized)
-          cellular: boolean // \("on cellular data".localized)
-          online: boolean   // \("has any network at all".localized)
+          name: string            // \("this iPhone's name".localized)
+          osVersion: string       // \("e.g. 16.5".localized)
+          locked: boolean         // \("the screen is locked".localized)
+          wifi: boolean           // \("on Wi-Fi".localized)
+          cellular: boolean       // \("on cellular data".localized)
+          online: boolean         // \("has any network at all".localized)
           network: "wifi" | "cellular" | "none"
+          battery?: number        // \("0 to 1, absent when unreadable".localized)
+          charging: boolean       // \("plugged in".localized)
+          batteryState: "unplugged" | "charging" | "full"
         }
         """
     }
@@ -138,6 +178,7 @@ enum JavaScriptAPI {
 
         console.log / console.warn / console.error
         // \("Shown in the editor's Run output.".localized)
+
         """
     }
 
@@ -161,7 +202,8 @@ enum JavaScriptAPI {
                 + "Modern syntax (const/let, arrow functions, destructuring, "
                 + "optional chaining, async/await, Promise) is available. There "
                 + "is no DOM, no Node APIs and no timers.").localized + "\n\n"
-            + "API:".localized + "\n" + scriptBullet + "\n" + prefs + scriptFunctions + "\n"
+            + "API:".localized + "\n" + scriptBullet + "\n" + scriptDevice + "\n"
+            + prefs + scriptFunctions + "\n"
             + ("Rules:".localized + "\n"
                 + rule
                 + "- " + "Call push() to forward the notification; without it nothing is sent.".localized + "\n"

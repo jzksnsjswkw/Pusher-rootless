@@ -29,6 +29,10 @@ public final class PusherSwitch: NSObject, FSSwitchDataSource {
 
     /// Reads the current state straight from prefs.
     public func state(forSwitchIdentifier switchIdentifier: String) -> FSSwitchState {
+        // A third process that reads the preference, so a third entry point for
+        // the migration. Reading a not-yet-migrated `Enabled` would leave the
+        // toggle showing "off" for a tweak that is on.
+        NSPMigrateLegacyPreferences()
         let enabled = PrefsStore.prefs().bool(PrefKey.enabled, default: true)
         return FSSwitchState(enabled ? State.on : State.off)
     }

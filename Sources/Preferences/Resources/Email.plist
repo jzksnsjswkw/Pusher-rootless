@@ -15,6 +15,8 @@
 		<dict>
 			<key>cell</key>
 			<string>PSEditTextCell</string>
+			<key>footerText</key>
+			<string>发件邮箱。也可以直接粘贴邮件客户端里显示的形式，例如 "通知转发" &lt;you@qq.com&gt;，只取尖括号里的地址。</string>
 			<key>key</key>
 			<string>fromEmail</string>
 			<key>label</key>
@@ -43,6 +45,8 @@
 		<dict>
 			<key>cell</key>
 			<string>PSEditTextCell</string>
+			<key>footerText</key>
+			<string>留空则使用发件邮箱里尖括号前的那段文字。</string>
 			<key>key</key>
 			<string>senderName</string>
 			<key>label</key>
@@ -88,7 +92,7 @@
 			<key>cell</key>
 			<string>PSSegmentCell</string>
 			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
@@ -114,11 +118,11 @@
 		</dict>
 		<dict>
 			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSSegmentCell</string>
 			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>

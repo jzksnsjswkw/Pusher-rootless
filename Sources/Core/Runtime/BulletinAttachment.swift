@@ -9,6 +9,24 @@ import Foundation
 ///
 /// The initializer changed in iOS 14. Both are attempted, newest first, so a
 /// test push carries its image on every supported system.
+@objc(NSPBulletinAttachment)
+final class BulletinAttachmentBridge: NSObject {
+    /// The same builder the pipeline uses, for callers in Objective-C.
+    ///
+    /// One implementation: this used to exist twice — a Swift copy for the
+    /// pipeline and a second, hand-transcribed one in `PusherBanner.m` for the
+    /// composed banner — and the copies disagreed about the identifier, which is
+    /// what made a composed notification's attachment fail to load.
+    @objc(metadataForPath:)
+    static func metadata(forPath path: String) -> Any? {
+        guard !path.isEmpty else { return nil }
+        return BulletinAttachment.make(
+            url: URL(fileURLWithPath: path),
+            identifier: URL(fileURLWithPath: path).lastPathComponent
+        )
+    }
+}
+
 enum BulletinAttachment {
 
     /// `- (_initWithUUID:type:URL:)` — pre-iOS 14.
@@ -39,12 +57,15 @@ enum BulletinAttachment {
             let initialize = unsafeBitCast(
                 method_getImplementation(method), to: TypedInitializer.self
             )
-            // `thumbnailGeneratorUserInfo` is undocumented and unused here;
-            // the values below match what the original tweak sent.
+            // `thumbnailGeneratorUserInfo` is undocumented and unused here.
+            //
+            // `thumbnailHidden` is `false`: with it `true` the attachment is
+            // delivered but never drawn, which reads as "the attachment is
+            // missing" rather than "the attachment is hidden".
             let result = initialize(
                 metadata, modern,
                 type, url as NSURL, identifier as NSString, "public.png" as NSString,
-                nil, true, false
+                nil, false, false
             )
             if let attachment = result as? BBAttachmentMetadata { return attachment }
         }

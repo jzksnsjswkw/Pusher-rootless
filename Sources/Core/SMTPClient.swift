@@ -88,6 +88,13 @@ enum SMTPClient {
     private static func converse(_ message: Message) -> Result<Void, Failure> {
         var socket = BSDSocket()
 
+        // Per-read `SO_RCVTIMEO` bounds one `recv`, not the conversation. A server
+        // that drips one byte every two seconds never trips it: the documented
+        // report is a 38-second wait with a 25-second timeout. This is the
+        // conversation's own wall clock, checked before every exchange.
+        let deadline = Date().addingTimeInterval(timeout)
+        func expired() -> Bool { Date() > deadline }
+
         switch socket.connect(host: message.host, port: message.port, timeout: timeout) {
         case .failure(let error):
             return .failure(.connection(error.detail))
@@ -100,6 +107,9 @@ enum SMTPClient {
 
         /// Sends a command and reads the reply code.
         func exchange(_ command: String?, expecting: String, step: String) -> Result<Void, Failure> {
+            guard !expired() else {
+                return .failure(.connection("timed out after \(Int(timeout))s at \(step)"))
+            }
             if let command {
                 if let secure {
                     if case .failure(let error) = secure.writeAll(command) {
@@ -109,16 +119,36 @@ enum SMTPClient {
                     return .failure(.connection(error.detail))
                 }
             }
-            let reply: String
-            if let secure {
-                switch secure.readLine() {
-                case .success(let line): reply = line
-                case .failure(let error): return .failure(.connection(error.detail))
+            // A reply is one *or more* lines. `250-EXTENSION` means "more
+            // follows"; the reply ends at the line whose fourth character is a
+            // space. Reading only the first line leaves the rest in the socket,
+            // where the next command reads them as its own answer and the whole
+            // conversation shifts by one.
+            var reply = ""
+            var lines = 0
+            while true {
+                let line: String
+                if let secure {
+                    switch secure.readLine() {
+                    case .success(let value): line = value
+                    case .failure(let error): return .failure(.connection(error.detail))
+                    }
+                } else {
+                    switch socket.readLine() {
+                    case .success(let value): line = value
+                    case .failure(let error): return .failure(.connection(error.detail))
+                    }
                 }
-            } else {
-                switch socket.readLine() {
-                case .success(let line): reply = line
-                case .failure(let error): return .failure(.connection(error.detail))
+                reply = line
+                lines += 1
+                // `250-…` continues; `250 …` or a bare `250` ends.
+                let continues = line.count >= 4
+                    && line[line.index(line.startIndex, offsetBy: 3)] == "-"
+                if !continues { break }
+                // A server that keeps sending continuation lines is broken; stop
+                // rather than reading forever.
+                if lines > 64 {
+                    return .failure(.connection("SMTP reply did not terminate"))
                 }
             }
             guard reply.hasPrefix(expecting) else {
@@ -132,13 +162,26 @@ enum SMTPClient {
             return .success(())
         }
 
-        // A STARTTLS server greets in the clear; the socket is upgraded after EHLO.
+        // The order differs by security mode, and getting it wrong deadlocks:
+        // over implicit TLS (port 465) the server speaks TLS before anything else,
+        // so it is waiting for a ClientHello and will never send the greeting in
+        // the clear. Only with plain or STARTTLS does the server greet first.
+        if message.security == .tls {
+            switch SSLSession.over(socket: socket, host: message.host) {
+            case .failure(let error):
+                return .failure(.connection(error.detail))
+            case .success(let session):
+                secure = session
+            }
+        }
+
+        // The greeting, in the clear for plain and STARTTLS, inside TLS for
+        // implicit TLS. Either way it is the first thing the server says.
         if case .failure(let error) = exchange(nil, expecting: "220", step: "greeting") {
             return .failure(error)
         }
 
-        switch message.security {
-        case .starttls:
+        if message.security == .starttls {
             // The EHLO before the upgrade exists only to ask whether STARTTLS is
             // offered; the conversation proper begins after it.
             if case .failure(let error) = exchange("EHLO pusher\r\n",
@@ -155,19 +198,6 @@ enum SMTPClient {
             case .success(let session):
                 secure = session
             }
-        case .tls:
-            switch SSLSession.over(socket: socket, host: message.host) {
-            case .failure(let error):
-                return .failure(.connection(error.detail))
-            case .success(let session):
-                secure = session
-            }
-        case .plain:
-            // Nothing to set up. The conversation continues in the clear, which is
-            // what this mode was chosen for — a server on a private network that
-            // offers neither TLS option, or a user isolating a TLS failure from an
-            // authentication one.
-            break
         }
 
         // After a STARTTLS upgrade the server forgets everything it was told, so
@@ -208,26 +238,16 @@ enum SMTPClient {
             if case .failure(let error) = secure.writeAll(payload) {
                 return .failure(.connection(error.detail))
             }
-            switch secure.readLine() {
-            case .success(let reply) where reply.hasPrefix("250"):
-                break
-            case .success(let reply):
-                return .failure(.rejected("message body (\(reply.prefix(60)))"))
-            case .failure(let error):
-                return .failure(.connection(error.detail))
-            }
         } else {
             if case .failure(let error) = socket.writeAll(payload) {
                 return .failure(.connection(error.detail))
             }
-            switch socket.readLine() {
-            case .success(let reply) where reply.hasPrefix("250"):
-                break
-            case .success(let reply):
-                return .failure(.rejected("message body (\(reply.prefix(60)))"))
-            case .failure(let error):
-                return .failure(.connection(error.detail))
-            }
+        }
+        // The final reply, read through `exchange` so that the multi-line handling
+        // above applies here too — a relay that answers the end-of-data with
+        // `250-` continuation lines would otherwise leave them in the socket.
+        if case .failure(let error) = exchange(nil, expecting: "250", step: "message body") {
+            return .failure(error)
         }
 
         _ = exchange("QUIT\r\n", expecting: "221", step: "QUIT")
@@ -249,9 +269,20 @@ enum SMTPClient {
         let from = message.senderName.isEmpty
             ? message.from
             : "=?UTF-8?B?\(base64(message.senderName))?= <\(message.from)>"
+        // The body is normalized to CRLF *before* dot-stuffing, and by splitting on
+        // any of CRLF / lone CR / lone LF. Splitting on "\n" alone left the CR of
+        // an existing CRLF on the end of the line, and joining with CRLF then
+        // produced "line\r\r\n" — a blank line the sender never wrote. A lone CR
+        // in the input was not split at all, so the line arrived with the break
+        // still inside it.
+        //
         // A line holding a single "." ends the DATA section, so any line starting
-        // with one is escaped by doubling it.
-        let body = message.body
+        // with one is escaped by doubling it — after normalization, so the test is
+        // about the line as it will be transmitted.
+        let normalized = message.body
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        let body = normalized
             .components(separatedBy: "\n")
             .map { $0.hasPrefix(".") ? "." + $0 : $0 }
             .joined(separator: "\r\n")
@@ -283,6 +314,13 @@ struct TransportError: Error {
 private struct BSDSocket {
     var descriptor: Int32 = -1
 
+    /// Connects with a deadline.
+    ///
+    /// `Darwin.connect` blocks for as long as the kernel's SYN retry schedule
+    /// takes — over a minute on a dead host — and `SO_SNDTIMEO` does not apply to
+    /// it. The socket is therefore put in non-blocking mode for the connect, and
+    /// the wait is done here with `poll`, so an unreachable address costs the
+    /// timeout rather than a minute.
     mutating func connect(host: String, port: UInt16, timeout: TimeInterval) -> Result<Void, TransportError> {
         var hints = addrinfo(
             ai_flags: 0, ai_family: AF_UNSPEC, ai_socktype: SOCK_STREAM,
@@ -303,17 +341,43 @@ private struct BSDSocket {
             let fd = socket(address.pointee.ai_family, address.pointee.ai_socktype,
                             address.pointee.ai_protocol)
             if fd >= 0 {
-                var seconds = Int32(timeout)
-                setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &seconds, 4)
-                setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &seconds, 4)
+                // `SO_RCVTIMEO` takes a `timeval`, not an `Int32`. Passing four
+                // bytes is accepted by the compiler and rejected by the kernel
+                // with `EINVAL`, which leaves the socket with no timeout at all —
+                // the opposite of what the line appears to say.
+                var tv = timeval(tv_sec: Int(timeout), tv_usec: 0)
+                if setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv,
+                              socklen_t(MemoryLayout<timeval>.size)) != 0 {
+                    Darwin.close(fd)
+                    return .failure(TransportError(detail: "cannot set receive timeout"))
+                }
+                if setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv,
+                              socklen_t(MemoryLayout<timeval>.size)) != 0 {
+                    Darwin.close(fd)
+                    return .failure(TransportError(detail: "cannot set send timeout"))
+                }
+                // Writing to a socket the peer has closed raises SIGPIPE, whose
+                // default action terminates the process — and this process is
+                // SpringBoard. `SO_NOSIGPIPE` turns it into a normal `EPIPE`.
+                var noSigPipe: Int32 = 1
+                setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe,
+                           socklen_t(MemoryLayout<Int32>.size))
                 // Nagle would hold small commands back waiting for company, and an
                 // SMTP conversation is nothing but small commands.
                 var one: Int32 = 1
                 setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, 4)
 
-                if Darwin.connect(fd, address.pointee.ai_addr,
-                                  address.pointee.ai_addrlen) == 0 {
+                setNonBlocking(fd, true)
+                let connected = Darwin.connect(fd, address.pointee.ai_addr,
+                                               address.pointee.ai_addrlen) == 0
+                if !connected, errno == EINPROGRESS, waitForConnect(fd, timeout: timeout) {
                     descriptor = fd
+                    setNonBlocking(fd, false)
+                    return .success(())
+                }
+                if connected {
+                    descriptor = fd
+                    setNonBlocking(fd, false)
                     return .success(())
                 }
                 Darwin.close(fd)
@@ -325,6 +389,26 @@ private struct BSDSocket {
         }
     }
 
+    private func setNonBlocking(_ fd: Int32, _ on: Bool) {
+        let flags = fcntl(fd, F_GETFL, 0)
+        _ = fcntl(fd, F_SETFL, on ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK))
+    }
+
+    /// Waits for a non-blocking connect to finish, and reports whether the socket
+    /// is actually connected — `poll` returning writable only means the attempt
+    /// completed, not that it succeeded.
+    private func waitForConnect(_ fd: Int32, timeout: TimeInterval) -> Bool {
+        var pfd = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+        let ready = poll(&pfd, 1, Int32(timeout * 1000))
+        guard ready > 0 else { return false }
+        var err: Int32 = 0
+        var length = socklen_t(MemoryLayout<Int32>.size)
+        guard getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &length) == 0, err == 0 else {
+            return false
+        }
+        return true
+    }
+
     func writeAll(_ text: String) -> Result<Void, TransportError> {
         var bytes = Array(text.utf8)
         while !bytes.isEmpty {
@@ -332,7 +416,12 @@ private struct BSDSocket {
                 guard let base = buffer.baseAddress else { return -1 }
                 return send(descriptor, base, buffer.count, 0)
             }
-            if written <= 0 { return .failure(TransportError(detail: "write failed")) }
+            if written <= 0 {
+                if written == 0 {
+                    return .failure(TransportError(detail: "the server closed the connection"))
+                }
+                return .failure(TransportError(detail: "write failed (errno \(errno))"))
+            }
             bytes.removeFirst(written)
         }
         return .success(())
@@ -348,7 +437,19 @@ private struct BSDSocket {
         var byte: UInt8 = 0
         while true {
             let count = recv(descriptor, &byte, 1, 0)
-            if count <= 0 { return .failure(TransportError(detail: "connection closed")) }
+            if count == 0 {
+                return .failure(TransportError(detail: "connection closed by the server"))
+            }
+            if count < 0 {
+                // `EAGAIN`/`EWOULDBLOCK` after `SO_RCVTIMEO` means the server went
+                // quiet, which is a different problem from hanging up and needs a
+                // different answer from the reader: one is "it is not replying",
+                // the other is "it refused".
+                if errno == EAGAIN || errno == EWOULDBLOCK {
+                    return .failure(TransportError(detail: "timed out waiting for the server"))
+                }
+                return .failure(TransportError(detail: "read failed (errno \(errno))"))
+            }
             if byte == 0x0A {
                 if bytes.last == 0x0D { bytes.removeLast() }
                 return .success(String(decoding: bytes, as: UTF8.self))
@@ -375,6 +476,14 @@ private final class SSLSession {
     /// The socket is handed to the TLS callbacks as a stable pointer, so it is
     /// stored here rather than passed by value into `SSLSetConnection`.
     private let fdBox: UnsafeMutablePointer<Int32>
+
+    deinit {
+        // `SSLSetConnection` was given this pointer and the TLS layer still holds
+        // it, so it may only be freed once the context is torn down — which
+        // happens after the last reference to the session goes away, i.e. here.
+        SSLSetConnection(context, nil)
+        fdBox.deallocate()
+    }
 
     private init(context: SSLContext, socket: BSDSocket) {
         self.context = context
@@ -422,6 +531,26 @@ private final class SSLSession {
             return .failure(TransportError(detail: "TLS handshake failed (\(status))"))
         }
         return .success(self)
+    }
+
+    private func setNonBlocking(_ fd: Int32, _ on: Bool) {
+        let flags = fcntl(fd, F_GETFL, 0)
+        _ = fcntl(fd, F_SETFL, on ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK))
+    }
+
+    /// Waits for a non-blocking connect to finish, and reports whether the socket
+    /// is actually connected — `poll` returning writable only means the attempt
+    /// completed, not that it succeeded.
+    private func waitForConnect(_ fd: Int32, timeout: TimeInterval) -> Bool {
+        var pfd = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+        let ready = poll(&pfd, 1, Int32(timeout * 1000))
+        guard ready > 0 else { return false }
+        var err: Int32 = 0
+        var length = socklen_t(MemoryLayout<Int32>.size)
+        guard getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &length) == 0, err == 0 else {
+            return false
+        }
+        return true
     }
 
     func writeAll(_ text: String) -> Result<Void, TransportError> {

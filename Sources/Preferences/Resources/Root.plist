@@ -10,13 +10,13 @@
 		</dict>
 		<dict>
 			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>default</key>
 			<true/>
 			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>icon</key>
 			<string>enabled</string>
 			<key>key</key>

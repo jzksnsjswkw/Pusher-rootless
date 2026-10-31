@@ -32,14 +32,15 @@ public enum GotifyService: PushService {
         ]
     }
 
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
         let server = config.raw.string(GotifyPrefKey.serverURL, default: "")
             .trimmingCharacters(in: .whitespaces)
         let token = config.raw.string(GotifyPrefKey.token, default: "")
             .trimmingCharacters(in: .whitespaces)
         // Both are needed, and a URL built without either would be a request to
         // nowhere. A trailing slash is common and would produce `//message`.
-        guard !server.isEmpty, !token.isEmpty else { return nil }
+        guard !server.isEmpty else { throw RequestError.missingField("Server") }
+        guard !token.isEmpty else { throw RequestError.missingField("Token") }
 
         var base = server.hasSuffix("/") ? String(server.dropLast()) : server
         if !base.lowercased().hasSuffix("/message") { base += "/message" }

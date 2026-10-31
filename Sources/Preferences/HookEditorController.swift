@@ -14,6 +14,9 @@ import UIKit
 @objc(NSPHookEditorController)
 public final class HookEditorController: PSViewController, UITextViewDelegate {
     private let instanceID: String
+
+    /// The notification the last Run used, kept so reopening starts from it.
+    private var runDraft: NotificationDraft?
     private let phase: BulletinHookRunner.Phase
 
     /// Built by ``UITextView/scriptEditor()``, which supplies the text storage
@@ -300,24 +303,52 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
 
     // MARK: - Running
 
-    /// Runs the hook against a sample notification and reports its decision.
+    /// Opens the notification the hook will be run against.
     ///
-    /// There is nothing to send, so what the report shows is exactly what a hook
-    /// is for: kept or dropped, forced or not, which fields it changed, and
-    /// anything it printed.
+    /// The sample used to be four fixed strings, which answers "does this hook
+    /// compile" and nothing else — a hook that branches on the app, the card or a
+    /// keyword in the body could not be tried at all. The page that composes a
+    /// notification is the same one the instance page uses, and what it holds is
+    /// kept here so reopening it continues from what the user last wrote.
     @objc private func runHook() {
         save()
+        view.endEditing(true)
 
-        var sample = BulletinContext()
-        sample.appID = "me.fin.bark"
-        sample.appName = "Bark"
-        sample.bulletinID = "test"
-        sample.title = "Test Title"
-        sample.subtitle = "Test Subtitle"
-        sample.message = "Hello from Pusher — 验证码 123456"
-        sample.date = Date()
-        sample.displayTitle = BulletinAdapter.displayTitle(appName: sample.appName, title: sample.title)
-        sample.displayMessage = "\(sample.subtitle ?? "")\n\(sample.message ?? "")"
+        // Kept across openings: the fields the user filled in are still what they
+        // want to run against next time, and retyping four fields to change one
+        // keyword is the kind of thing that makes a Run button go unused.
+        let composer = NotificationDraftController(serviceID: instanceID)
+        // A Run is a test of the hook, so it is a test notification. See
+        // `PushEngine.runHook`: a test runs the hook whether or not its switch is
+        // on, because "does my hook work" is the question a Run asks.
+        // The same starting notification every test page shows.
+        composer.initialDraft = runDraft ?? NotificationDraft()
+        composer.onRun = { [weak self] draft in
+            guard let self else { return }
+            self.runDraft = draft
+            // Dismissed first: the result is drawn under the editor, and a sheet
+            // covering it would hide the thing the Run was for.
+            self.dismiss(animated: true) {
+                self.performRun(with: draft)
+            }
+        }
+        let navigation = UINavigationController(rootViewController: composer)
+        navigation.modalPresentationStyle = .pageSheet
+        present(navigation, animated: true)
+    }
+
+    /// Runs the hook against a composed notification.
+    ///
+    /// `push()` sends for real: the delivery goes through the same `RequestSender`
+    /// a service uses, so a Run produces the same log lines, the same retries and
+    /// the same answer the pipeline would.
+    private func performRun(with draft: NotificationDraft) {
+        // A test notification: the app rules are skipped, and the hook runs even
+        // when its switch is off — see `PushEngine.runHook`.
+        // The same context a plain test notification builds, with one thing
+        // added: which hook this Run is about. That hook runs even with its switch
+        // off; the other keeps its own.
+        var sample = draft.makeContext(test: .hook(phase))
 
         let state = BulletinAdapter.currentDeviceState()
         let outcome = BulletinHookRunner.run(
@@ -325,7 +356,28 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
             phase: phase,
             context: sample,
             deviceState: state,
-            storage: HookStorage.values(forService: instanceID, phase: phase)
+            storage: HookStorage.values(forService: instanceID, phase: phase),
+            deliver: { request in
+                // The same `RequestSender` a service uses, so a `push()` from a
+                // hook gets the same retries, the same image shrinking and the
+                // same log lines a real push would.
+                let done = DispatchSemaphore(value: 0)
+                let box = HookResumeBox()
+                request.completion = { result in
+                    box.result = result
+                    done.signal()
+                }
+                RequestSender.shared.send(
+                    request,
+                    logString: "[Hook,Run]",
+                    service: "Hook",
+                    context: sample
+                )
+                _ = done.wait(timeout: .now() + 60)
+                return box.result ?? JavaScriptRunner.FetchResult(
+                    status: 0, error: "timed out"
+                )
+            }
         )
 
         let output = NSMutableAttributedString()
@@ -349,11 +401,73 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
         } else {
             output.appendColored("No keep() — this notification would be dropped.", .systemRed)
         }
+        // The requests a `push()` sent, in the order it sent them, then the
+        // answers. Same colors as the service editor's Run: purple for what went
+        // out, green or red for what came back.
+        for entry in outcome.trace {
+            switch entry {
+            case .console(let line):
+                output.appendColored(line, .label)
+            case .request(_, let raw):
+                output.appendColored(raw, .systemPurple)
+            case .response(let text):
+                let failed = text.hasPrefix("← failed:")
+                output.appendColored(text, failed ? .systemRed : UIColor.successResponse)
+            }
+        }
+
         let stateLine = "device: \(state.isLocked ? "locked" : "unlocked"), "
             + "\(state.network.rawValue), \(state.isOnline ? "online" : "offline")"
         output.appendColored(stateLine, .secondaryLabel)
         for line in outcome.consoleOutput {
             output.appendColored(line, .label)
+        }
+
+        // The edits this hook made are carried into the send, not just listed in
+        // the output: a hook whose rewritten title was thrown away here would make
+        // the Run describe an edit the push never received.
+        //
+        // Applied to the *draft*, because that is what goes over the IPC hop. The
+        // context is derived from the draft, so editing one and sending the other
+        // is how the changes went missing the first time.
+        var outgoing = draft
+        if outcome.isKept {
+            _ = outcome.changes.apply(to: &sample)
+            if let title = outcome.changes.title { outgoing.title = title }
+            if let subtitle = outcome.changes.subtitle { outgoing.subtitle = subtitle }
+            if let message = outcome.changes.message { outgoing.message = message }
+        }
+
+        // The notification then goes through the real pipeline for this instance:
+        // the same filters, the same request builder, the same transport a live
+        // notification takes. A Run that only reported what the hook decided would
+        // leave out the half of the chain that can reject the notification after
+        // the hook has already said yes.
+        //
+        // A test, so the app lists and the notification conditions do not get to
+        // discard it: the question is what this hook does, not whether a rule
+        // would have blocked the notification first.
+        // Shown and forwarded through the same call the instance page and the
+        // compose page use: one notification on screen, one push to the instance.
+        // A Run that only printed the outcome left the user guessing whether the
+        // hook's edits reached a real payload.
+        if outcome.isKept, let json = NotificationDraftController.payload(for: outgoing) {
+            let reply = NotificationDraftController.deliver(json, to: instanceID)
+            let displayed = (reply?["displayed"] as? NSNumber)?.boolValue == true
+            let built = (reply?["builtRequest"] as? NSNumber)?.boolValue
+                ?? (reply?["built"] as? NSNumber)?.boolValue
+            if displayed, built != false {
+                output.appendColored(
+                    "Forwarded to this instance — the result is in Log".localized,
+                    .secondaryLabel
+                )
+            } else {
+                output.appendColored(
+                    reply?["reason"] as? String
+                        ?? "SpringBoard has not been restarted since installation".localized,
+                    .systemRed
+                )
+            }
         }
 
         showOutput(output)
@@ -431,4 +545,10 @@ private extension NSMutableAttributedString {
                          .foregroundColor: color]
         ))
     }
+}
+
+
+/// Holds a `RequestSender` result across the semaphore wait.
+private final class HookResumeBox: @unchecked Sendable {
+    var result: JavaScriptRunner.FetchResult?
 }

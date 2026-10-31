@@ -183,8 +183,36 @@ public enum CustomServiceStore {
     /// Writes the definitions back in the given order, which is how a reorder is
     /// persisted: `save` keeps each entry's place, so the list itself has to be
     /// replaced to change the order.
+    ///
+    /// Reordering, by id, moves the *stored* dictionaries rather than re-encoding
+    /// the model. `encode` only carries the fields the struct models, so writing
+    /// those back would drop everything else the definition owns — declared config
+    /// fields, the custom icon, payload and run options. A drag is not an edit and
+    /// must not be able to lose data.
     public static func reorder(_ definitions: [CustomServiceDefinition]) {
-        setDefinitions(definitions.map(encode))
+        // Every model-based write below has to start from the stored dictionaries,
+        // never from `encode`, for the reason given above.
+        let stored = rawDefinitions()
+        let byID = Dictionary(stored.compactMap { raw -> (String, [String: Any])? in
+            guard let id = Prefs(raw).nonEmptyString(PrefKey.instanceID) else { return nil }
+            return (id, raw)
+        }, uniquingKeysWith: { first, _ in first })
+
+        // Anything the caller did not know about (a definition added by another
+        // process between the read and the write) keeps its place at the end
+        // rather than being deleted.
+        var placed = Set<String>()
+        var ordered: [[String: Any]] = []
+        for definition in definitions {
+            guard let raw = byID[definition.id] else { continue }
+            ordered.append(raw)
+            placed.insert(definition.id)
+        }
+        ordered += stored.filter {
+            guard let id = Prefs($0).nonEmptyString(PrefKey.instanceID) else { return true }
+            return !placed.contains(id)
+        }
+        setDefinitions(ordered)
     }
 
     /// Deletes a definition.

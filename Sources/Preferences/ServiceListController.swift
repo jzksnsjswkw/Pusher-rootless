@@ -106,7 +106,6 @@ public class ServiceListController: PlainViewController, ServiceTransferHost {
 
     public override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        showTutorialIfNeeded()
     }
 
     // MARK: - Data
@@ -302,20 +301,6 @@ public class ServiceListController: PlainViewController, ServiceTransferHost {
             loadedControllers[instance.id] = controller
         }
         push(controller)
-    }
-
-    // MARK: - First-run tutorial
-
-    /// Explains the Edit/drag interaction, which is not discoverable on its own.
-    private func showTutorialIfNeeded() {
-        let key = "ServiceListTutorialShown"
-        guard !PrefsStore.prefs().bool(key) else { return }
-        PrefsStore.setValue(true, forKey: key, notify: false)
-
-        let message = "Add the services you want with the + button, then use 'Edit' to "
-            .localized + "drag them into the order you want them tried in. A notification is "
-            .localized + "sent to every enabled service."
-        TutorialOverlay.present(message, from: self, in: view.window)
     }
 }
 

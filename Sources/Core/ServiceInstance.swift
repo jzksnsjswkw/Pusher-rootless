@@ -164,11 +164,12 @@ public enum ServiceInstanceStore {
         // Settings under one key, identity beside it. A service may call one of
         // its own settings `id` — Bark does — and there is then no chance of it
         // meaning the instance's.
-        var config = instance.config.raw
-        config.removeValue(forKey: PrefKey.instanceID)
-        config.removeValue(forKey: PrefKey.instanceType)
-        config.removeValue(forKey: PrefKey.instanceName)
-        config.removeValue(forKey: PrefKey.serviceEnabled)
+        // `config` is a nested dictionary, so nothing in it can collide with the
+        // instance's own keys at the top level — and a service is free to call a
+        // setting `id` (Bark does). Stripping those names here would delete the
+        // user's Bark push id on every reorder or rename, which is exactly the
+        // bug this nesting exists to prevent.
+        let config = instance.config.raw
 
         return [
             PrefKey.instanceID: instance.id,
@@ -241,6 +242,10 @@ public enum ServiceInstanceStore {
         stored.removeAll { Prefs($0).nonEmptyString(PrefKey.instanceID) == id }
         setInstances(stored)
         LogStore.removeLogs(forService: id)
+        // The per-service log switch lives at the top level of the preferences,
+        // not in the instance, so removing the instance would leave it behind and
+        // every deleted service would keep a dead key forever.
+        PrefsStore.setValue(nil, forKey: PrefKey.logEnabledKey(forService: id), notify: false)
     }
 
     /// Replaces the whole array, preserving the given order. Used by the list's

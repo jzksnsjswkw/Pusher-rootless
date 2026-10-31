@@ -101,7 +101,11 @@ public enum JavaScriptRunner {
 
     /// What one run produced.
     public struct Outcome {
-        /// The requests the script asked for, in the order it asked for them.
+        /// The requests the script pushed, in the order it pushed them.
+        ///
+        /// Sent already — `push()` delivers as it is called, so this is a record
+        /// rather than a to-do list. Counted, it answers "did the script send
+        /// anything"; listed, it lets the editor's transcript show what went out.
         public let requests: [PushRequest]
         /// Everything the script printed through `console`.
         public let consoleOutput: [String]
@@ -150,7 +154,9 @@ public enum JavaScriptRunner {
         storage: [String: String] = [:],
         options: Options = .default,
         prefs: [String: Any] = [:],
-        fetch: @escaping (URLRequest) -> FetchResult
+        device: [String: Any] = [:],
+        fetch: @escaping (URLRequest) -> FetchResult,
+        deliver: Deliver? = nil
     ) -> Outcome {
         // A shared context lives on one thread; a private context may go
         // anywhere. Either way the work happens off the main thread, which is
@@ -158,14 +164,16 @@ public enum JavaScriptRunner {
         guard options.usesOwnContext else {
             return host.run(
                 script: script, bullet: bullet, storage: storage,
-                options: options, prefs: prefs, fetch: fetch
+                options: options, prefs: prefs, device: device,
+                fetch: fetch, deliver: deliver
             )
         }
 
         guard options.usesOwnThread, options.timeout > 0 else {
             return evaluate(
                 script: script, bullet: bullet, storage: storage,
-                options: options, prefs: prefs, fetch: fetch
+                options: options, prefs: prefs, device: device,
+                fetch: fetch, deliver: deliver
             )
         }
 
@@ -176,7 +184,8 @@ public enum JavaScriptRunner {
         let thread = Thread {
             box.value = evaluate(
                 script: script, bullet: bullet, storage: storage,
-                options: options, prefs: prefs, fetch: fetch
+                options: options, prefs: prefs, device: device,
+                fetch: fetch, deliver: deliver
             )
             finished.signal()
         }
@@ -208,13 +217,67 @@ public enum JavaScriptRunner {
     /// Deliberately no `push` is installed: a hook that could send would be a
     /// service, and the distinction (services send, hooks decide) is the whole
     /// reason the two exist side by side.
+    /// Runs a hook with the same watchdog the service scripts get.
+    ///
+    /// A hook runs on the engine's fan-out queue, one instance after another, so a
+    /// `while (true) {}` in one instance's pre-filter does not just hang that
+    /// instance — it stops every later instance and the whole notification, on a
+    /// queue that is never drained. The timeout cannot interrupt JavaScriptCore
+    /// (there is no public way to), but running on a throwaway thread and
+    /// abandoning the wait bounds the damage: the queue moves on, and the log says
+    /// what happened.
     static func runHook(
         script: String,
         phase: String,
         bullet: [String: Any],
         device: [String: Any],
         storage: [String: String],
-        timeout: TimeInterval
+        timeout: TimeInterval,
+        deliver: Deliver? = nil
+    ) -> BulletinHookRunner.Outcome {
+        guard timeout > 0 else {
+            return runHook(
+                script: script, phase: phase, bullet: bullet, device: device,
+                storage: storage, timeout: timeout, deliver: deliver, directly: ()
+            )
+        }
+
+        // Nothing local may be written after the wait gives up — the abandoned
+        // thread still owns its copy of everything below this point.
+        let box = HookResultBox()
+        let finished = DispatchSemaphore(value: 0)
+        let thread = Thread {
+            box.value = runHook(
+                script: script, phase: phase, bullet: bullet, device: device,
+                storage: storage, timeout: timeout, deliver: deliver, directly: ()
+            )
+            finished.signal()
+        }
+        thread.stackSize = 1 << 20
+        thread.start()
+
+        guard finished.wait(timeout: .now() + timeout) == .success else {
+            return BulletinHookRunner.Outcome.failing(
+                "Hook timed out after \(timeout)s", storage: storage
+            )
+        }
+        return box.value
+            ?? BulletinHookRunner.Outcome.failing("Hook produced no result", storage: storage)
+    }
+
+    private final class HookResultBox: @unchecked Sendable {
+        var value: BulletinHookRunner.Outcome?
+    }
+
+    private static func runHook(
+        script: String,
+        phase: String,
+        bullet: [String: Any],
+        device: [String: Any],
+        storage: [String: String],
+        timeout: TimeInterval,
+        deliver: Deliver?,
+        directly: Void
     ) -> BulletinHookRunner.Outcome {
         // Hooks always get their own context: sharing one would let one hook's
         // `let` collide with another's, and a hook runs at most twice per
@@ -232,6 +295,9 @@ public enum JavaScriptRunner {
         var consoleLines: [String] = []
         var store = storage
         var failure: JavaScriptRunner.Failure?
+        // Requests the hook sent through `push()`, in script order, for the editor
+        // to display. Empty in the pipeline, which supplies no `deliver`.
+        var hookTrace: [TraceEntry] = []
 
         context.exceptionHandler = { _, exception in
             failure = failure ?? .script(describe(exception))
@@ -249,6 +315,7 @@ public enum JavaScriptRunner {
         }
         context.setObject(keep, forKeyedSubscript: "keep" as NSString)
 
+        JavaScriptRunner.installGlobals(into: context)
         installStorage(
             into: context,
             read: { store[$0] },
@@ -261,6 +328,47 @@ public enum JavaScriptRunner {
             timeout: timeout, maximumResponseBytes: Pusher.defaultMaxResponseBytes
         ), perform: { ScriptHTTP.perform($0) })
         installFetchObserver(into: context)
+
+        // `push()` only exists when the caller supplied a way to send one. The
+        // pipeline never does: a hook runs for every notification, and letting a
+        // hook forward would send the same alert twice — once by the service that
+        // matched it and once by the hook. The editor's Run supplies it so a
+        // script can be exercised against a real request.
+        if let deliver {
+            let sendPush: @convention(block) (JSValue?) -> String = { request in
+                guard let request, !request.isUndefined, !request.isNull else {
+                    return "{\"status\":0,\"error\":\"push() expects an object\"}"
+                }
+                guard let object = request.toObject() as? [String: Any],
+                      let built = makeRequest(from: object)
+                else {
+                    return "{\"status\":0,\"error\":\"push() needs a url, or a shortcut with a payload\"}"
+                }
+                let result = deliver(built)
+                // Recorded so the editor shows the same purple request and green
+                // or red response a service's Run does. The hook's own outcome
+                // has no trace of its own, so this is the list it is read from.
+                hookTrace.append(.request(method: built.method, raw: rawHTTP(built)))
+                hookTrace.append(.response({
+                    if let error = result.error { return "← failed: \(error)" }
+                    return "← \(result.status)  \(Self.byteCount(result.body.count))"
+                }()))
+                return envelope(result)
+            }
+            context.setObject(sendPush, forKeyedSubscript: "__pushNative" as NSString)
+            _ = context.evaluateScript("""
+            var push = function (request) {
+                var raw = __pushNative(request);
+                return __makeResponse(JSON.parse(raw));
+            };
+            // `__makeResponse` is installed by `installFetch`; the hook path gets
+            // the same one so a `response` reads the same in both places.
+            if (typeof __makeResponse !== "function") {
+                var __makeResponse = function (envelope) { return envelope; };
+            }
+            """)
+            _ = context.evaluateScript("delete globalThis.__pushNative;")
+        }
 
         // `bullet` is writable here — editing it is one of the two things a hook
         // is for — but the *property* is not, so a hook cannot replace the object
@@ -330,7 +438,8 @@ public enum JavaScriptRunner {
 
         return BulletinHookRunner.Outcome(
             isKept: kept, isForced: forced, changes: changes,
-            consoleOutput: consoleLines, storage: store, failure: failure
+            consoleOutput: consoleLines, storage: store, failure: failure,
+            trace: hookTrace
         )
     }
 
@@ -389,7 +498,9 @@ public enum JavaScriptRunner {
         storage: [String: String],
         options: Options,
         prefs: [String: Any],
-        fetch: @escaping (URLRequest) -> FetchResult
+        device: [String: Any],
+        fetch: @escaping (URLRequest) -> FetchResult,
+        deliver: Deliver? = nil
     ) -> Outcome {
         guard let context = JSContext() else {
             return Outcome(requests: [], consoleOutput: [], storage: storage,
@@ -397,9 +508,19 @@ public enum JavaScriptRunner {
         }
         return evaluate(
             script: script, in: context, bullet: bullet, storage: storage,
-            options: options, prefs: prefs, fetch: fetch
+            options: options, prefs: prefs, device: device,
+            fetch: fetch, deliver: deliver
         )
     }
+
+    /// Sends one request on behalf of `push()` and returns what came back.
+    ///
+    /// The delivery is supplied by the caller rather than performed here: the
+    /// runner knows how to build a request but not how a service sends one, and
+    /// the two things it must not do are duplicate the transport and bypass it.
+    /// Left unset — a hook, or the editor's dry run — `push()` answers with a
+    /// response that says it was not sent, which is honest rather than silent.
+    public typealias Deliver = (PushRequest) -> FetchResult
 
     /// Evaluates one script in a given context.
     ///
@@ -412,7 +533,9 @@ public enum JavaScriptRunner {
         storage: [String: String],
         options: Options,
         prefs: [String: Any],
-        fetch: @escaping (URLRequest) -> FetchResult
+        device: [String: Any],
+        fetch: @escaping (URLRequest) -> FetchResult,
+        deliver: Deliver? = nil
     ) -> Outcome {
         var requests: [PushRequest] = []
         var consoleOutput: [String] = []
@@ -431,27 +554,48 @@ public enum JavaScriptRunner {
             trace.append(.console($0))
         }
 
-        // `push(req)`: the only way a script sends anything.
-        let push: @convention(block) (JSValue?) -> Bool = { value in
+        // `push(req)`: the only way a script sends anything, and it sends *now*.
+        //
+        // It used to collect requests for the pipeline to send afterwards, which
+        // made the script unable to see what happened — so it could not decide
+        // whether the next push was worth making. Sending here and returning the
+        // response gives a script the same footing `fetch` has: await the result,
+        // read the status, carry on or stop.
+        //
+        // Blocking is safe for the same reason `fetch` is: the whole run happens on
+        // a background queue or a dedicated thread, never on the main one.
+        // Exposed as `__pushNative`, and `push()` itself is a thin JS wrapper that
+        // turns the envelope into the same Response object `fetch` resolves to.
+        let push: @convention(block) (JSValue?) -> String = { value in
             guard let object = value?.toObject() as? [String: Any] else {
                 consoleOutput.append("push() expects an object")
-                return false
+                return envelope(FetchResult(error: "push() expects an object"))
             }
             guard let request = makeRequest(from: object) else {
-                consoleOutput.append("push() needs a url")
-                return false
+                let message = "push() needs a url, or a shortcut with a payload"
+                consoleOutput.append(message)
+                return envelope(FetchResult(error: message))
             }
+            trace.append(.request(method: request.method, raw: rawHTTP(request)))
             requests.append(request)
-            trace.append(.request(
-                method: request.method,
-                raw: rawHTTP(request)
-            ))
-            return true
+
+            let result = deliver?(request) ?? FetchResult(
+                status: 0, error: "push() is not available here"
+            )
+            // Described in the same words a `fetch` response uses, so the editor's
+            // output reads as one transcript rather than two.
+            if let error = result.error {
+                trace.append(.response("← failed: \(error)"))
+            } else {
+                trace.append(.response("← \(result.status)  \(Self.byteCount(result.body.count))"))
+            }
+            return envelope(result)
         }
-        context.setObject(push, forKeyedSubscript: "push" as NSString)
+        context.setObject(push, forKeyedSubscript: "__pushNative" as NSString)
 
         // The store is captured by the four accessors below, all of which see
         // the same dictionary, and `store` is what the outcome carries back out.
+        JavaScriptRunner.installGlobals(into: context)
         installStorage(
             into: context,
             read: { store[$0] },
@@ -463,6 +607,16 @@ public enum JavaScriptRunner {
         installFetch(into: context, options: options, perform: fetch)
         installFetchRecorder(into: context) { trace.append($0) }
         installFetchObserver(into: context)
+
+        // `push()` is installed after `fetch`, because it is defined in terms of
+        // the response object `fetch` creates: one shape for both, so a script
+        // checks `res.ok` the same way whether it sent or fetched.
+        _ = context.evaluateScript("""
+        var push = function (request) {
+            var raw = __pushNative(request);
+            return __makeResponse(JSON.parse(raw));
+        };
+        """)
 
         // `pref`: the values the service's author declared, as filled in on the
         // instance running now. Frozen field by field for the same reason
@@ -481,6 +635,18 @@ public enum JavaScriptRunner {
                 + "delete globalThis.__pref;"
                 + "delete globalThis.__frozenPref;"
         )
+
+        // `device`: the same read-only object a hook sees, so a script can branch
+        // on the battery or the network the same way its hook does. Not writable
+        // for the same reason `pref` is not — nothing would save the change.
+        if !device.isEmpty {
+            context.setObject(device, forKeyedSubscript: "__device" as NSString)
+            _ = context.evaluateScript(
+                "Object.defineProperty(globalThis, 'device',"
+                    + "  { value: __device, writable: false, configurable: true });"
+                    + "delete globalThis.__device;"
+            )
+        }
 
         // The notification, marked non-writable so a script cannot replace it and
         // read stale fields back out of its own copy.
@@ -619,6 +785,253 @@ public enum JavaScriptRunner {
         context.setObject(console, forKeyedSubscript: "console" as NSString)
     }
 
+    /// The globals JavaScriptCore does not ship.
+    ///
+    /// `Math`, `Date`, `JSON`, `Intl`, `Map`, `Set`, `Promise`, `RegExp`, `Proxy`
+    /// and the ES2022 array and string methods are all native to this engine —
+    /// there is nothing to add and nothing to gain from wrapping them. What is
+    /// missing is the browser-adjacent half: the text encoders, the URL parser,
+    /// base64, and a structured clone. Those are the ones a script reaches for
+    /// without thinking, and without them the failure is a bare `X is not a
+    /// function` at run time.
+    ///
+    /// `setTimeout` is deliberately absent. The script runs on a thread that blocks
+    /// inside `fetch`, so a timer callback could only fire after the run it belongs
+    /// to has already ended — `await new Promise(r => setTimeout(r, 500))` would
+    /// hang until the timeout kills the run instead of pausing it. A missing
+    /// function is an error a script author can read; a timer that never fires is
+    /// not.
+    private static func installGlobals(into context: JSContext) {
+        // The four host-backed pieces, as blocks. Everything else is written in
+        // JavaScript below, where it can stay close to the shape it imitates.
+        let encode: @convention(block) (JSValue?) -> [NSNumber] = { text in
+            [UInt8]((text?.toString() ?? "").utf8).map { NSNumber(value: $0) }
+        }
+        let btoa: @convention(block) (JSValue?) -> String = { text in
+            Data((text?.toString() ?? "").utf8).base64EncodedString()
+        }
+        // No `.ignoreUnknownCharacters` and a strict round trip: `atob` has to
+        // reject what is not base64. The platform's lenient decoder would turn
+        // `"!!!"` into an empty string and lose the mistake.
+        let atob: @convention(block) (JSValue?) -> String? = { text in
+            let input = text?.toString() ?? ""
+            guard let data = Data(base64Encoded: input),
+                  data.base64EncodedString() == input
+            else { return nil }
+            return String(data: data, encoding: .utf8)
+                ?? String(decoding: data, as: UTF8.self)
+        }
+        let decode: @convention(block) (JSValue?) -> String = { text in
+            let latin1 = text?.toString() ?? ""
+            var bytes: [UInt8] = []
+            bytes.reserveCapacity(latin1.unicodeScalars.count)
+            for scalar in latin1.unicodeScalars where scalar.value <= 0xFF {
+                bytes.append(UInt8(scalar.value))
+            }
+            return String(decoding: bytes, as: UTF8.self)
+        }
+        context.setObject(decode, forKeyedSubscript: "__pusherDecode" as NSString)
+        context.setObject(encode, forKeyedSubscript: "__pusherEncode" as NSString)
+        context.setObject(btoa, forKeyedSubscript: "__pusherBtoa" as NSString)
+        context.setObject(atob, forKeyedSubscript: "__pusherAtob" as NSString)
+
+        _ = context.evaluateScript("""
+        var TextEncoder = function () {};
+        TextEncoder.prototype.encoding = "utf-8";
+        TextEncoder.prototype.encode = function (text) {
+            var bytes = __pusherEncode(String(text === undefined ? "" : text));
+            var out = new Uint8Array(bytes.length);
+            for (var i = 0; i < bytes.length; i++) { out[i] = bytes[i]; }
+            return out;
+        };
+        TextEncoder.prototype.encodeInto = function (text, target) {
+            var bytes = this.encode(text);
+            var n = Math.min(bytes.length, target.length);
+            for (var i = 0; i < n; i++) { target[i] = bytes[i]; }
+            return { read: String(text).length, written: n };
+        };
+
+        var TextDecoder = function (label) {
+            this.encoding = (label || "utf-8").toLowerCase();
+        };
+        TextDecoder.prototype.decode = function (bytes) {
+            var out = "";
+            for (var i = 0; i < bytes.length; i++) {
+                out += String.fromCharCode(bytes[i]);
+            }
+            // A Latin-1 string of the bytes, handed back to the host to decode as
+            // UTF-8. `decodeURIComponent(escape(...))` was the shortcut here and is
+            // both deprecated and wrong: it decodes `%` sequences as well, so a
+            // byte like 0x25 could not survive.
+            return __pusherDecode(out);
+        };
+
+        var btoa = function (text) {
+            var input = String(text);
+            for (var i = 0; i < input.length; i++) {
+                if (input.charCodeAt(i) > 255) {
+                    throw new Error("btoa: the string has characters outside Latin-1");
+                }
+            }
+            return __pusherBtoa(input);
+        };
+        var atob = function (text) {
+            var output = __pusherAtob(String(text));
+            // The host answers `undefined` for a string it cannot decode; `null`
+            // is what a Swift `String?` bridges to, so both are checked.
+            if (output === null || output === undefined) {
+                throw new Error("atob: the string is not valid base64");
+            }
+            return output;
+        };
+
+        var URLSearchParams = function (init) {
+            var pairs = [];
+            var add = function (key, value) {
+                pairs.push([String(key), String(value)]);
+            };
+            if (init === undefined || init === null) {
+                // empty
+            } else if (typeof init === "string") {
+                var query = init.charAt(0) === "?" ? init.slice(1) : init;
+                if (query.length > 0) {
+                    query.split("&").forEach(function (pair) {
+                        if (pair.length === 0) { return; }
+                        var index = pair.indexOf("=");
+                        var key = index < 0 ? pair : pair.slice(0, index);
+                        var value = index < 0 ? "" : pair.slice(index + 1);
+                        add(decodeURIComponent(key.replace(/[+]/g, " ")),
+                            decodeURIComponent(value.replace(/[+]/g, " ")));
+                    });
+                }
+            } else if (typeof init === "object") {
+                Object.keys(init).forEach(function (key) {
+                    var value = init[key];
+                    if (Array.isArray(value)) {
+                        value.forEach(function (item) { add(key, item); });
+                    } else {
+                        add(key, value);
+                    }
+                });
+            }
+            var api = {
+                append: function (k, v) { add(k, v); },
+                set: function (k, v) {
+                    pairs = pairs.filter(function (pair) { return pair[0] !== String(k); });
+                    add(k, v);
+                },
+                get: function (k) {
+                    var found = pairs.filter(function (p) { return p[0] === String(k); });
+                    return found.length ? found[0][1] : null;
+                },
+                getAll: function (k) {
+                    return pairs.filter(function (p) { return p[0] === String(k); })
+                                .map(function (p) { return p[1]; });
+                },
+                has: function (k) {
+                    return pairs.some(function (p) { return p[0] === String(k); });
+                },
+                delete: function (k) {
+                    pairs = pairs.filter(function (p) { return p[0] !== String(k); });
+                },
+                forEach: function (fn) {
+                    pairs.forEach(function (p) { fn(p[1], p[0], api); });
+                },
+                entries: function () { return pairs.map(function (p) { return [p[0], p[1]]; })[Symbol.iterator](); },
+                keys: function () { return pairs.map(function (p) { return p[0]; })[Symbol.iterator](); },
+                values: function () { return pairs.map(function (p) { return p[1]; })[Symbol.iterator](); },
+                toString: function () {
+                    return pairs.map(function (p) {
+                        return encodeURIComponent(p[0]) + "=" + encodeURIComponent(p[1]);
+                    }).join("&");
+                }
+            };
+            Object.defineProperty(api, "size", { get: function () { return pairs.length; } });
+            return api;
+        };
+
+        var URL = function (input, base) {
+            var raw = String(input);
+            var absolute;
+            if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
+                absolute = raw;
+            } else if (base === undefined) {
+                throw new TypeError("URL: '" + raw + "' is not an absolute URL");
+            } else {
+                var resolvedBase = new URL(String(base));
+                absolute = raw.charAt(0) === "/"
+                    ? resolvedBase.origin + raw
+                    : resolvedBase.origin + resolvedBase.pathname.replace(/[^/]*$/, "") + raw;
+            }
+            var match = /^([a-zA-Z][a-zA-Z0-9+.-]*):(?:[/][/]([^/?#]*))?([^?#]*)(?:[?]([^#]*))?(?:#(.*))?$/
+                .exec(absolute);
+            if (!match) { throw new TypeError("URL: could not parse '" + raw + "'"); }
+
+            var scheme = match[1].toLowerCase();
+            var authority = match[2] || "";
+            var path = match[3] || "";
+            var search = match[4] === undefined ? "" : match[4];
+            var hash = match[5] === undefined ? "" : match[5];
+
+            var userInfo = "";
+            var host = authority;
+            var at = authority.lastIndexOf("@");
+            if (at >= 0) {
+                userInfo = authority.slice(0, at);
+                host = authority.slice(at + 1);
+            }
+            var port = "";
+            var colon = host.lastIndexOf(":");
+            if (colon >= 0 && host.indexOf("]") < colon) {
+                port = host.slice(colon + 1);
+                host = host.slice(0, colon);
+            }
+
+            var api = {
+                protocol: scheme + ":",
+                username: userInfo.split(":")[0] || "",
+                password: userInfo.indexOf(":") >= 0 ? userInfo.split(":")[1] : "",
+                host: host + (port ? ":" + port : ""),
+                hostname: host,
+                port: port,
+                pathname: path || (authority ? "/" : ""),
+                search: search ? "?" + search : "",
+                hash: hash ? "#" + hash : "",
+                toString: function () {
+                    var query = this.search;
+                    return this.protocol + "//" + this.host + this.pathname + query + this.hash;
+                }
+            };
+            Object.defineProperty(api, "origin", {
+                get: function () { return this.protocol + "//" + this.host; }
+            });
+            Object.defineProperty(api, "searchParams", {
+                get: function () { return new URLSearchParams(this.search); }
+            });
+            Object.defineProperty(api, "href", {
+                get: function () { return this.toString(); }
+            });
+            return api;
+        };
+
+        var structuredClone = function (value) {
+            // JSON is enough here: the values a script clones are the ones it also
+            // sends, and those have to survive serialization anyway.
+            if (value === undefined) { return undefined; }
+            return JSON.parse(JSON.stringify(value));
+        };
+
+        var queueMicrotask = function (fn) {
+            Promise.resolve().then(fn);
+        };
+
+        delete globalThis.__pusherDecode;
+        delete globalThis.__pusherEncode;
+        delete globalThis.__pusherBtoa;
+        delete globalThis.__pusherAtob;
+        """)
+    }
+
     /// `localStorage`, backed by a dictionary for the duration of the run.
     ///
     /// The store is copied in and handed back with the outcome, so the caller
@@ -653,6 +1066,20 @@ public enum JavaScriptRunner {
         storage?.setObject(remove, forKeyedSubscript: "removeItem" as NSString)
         storage?.setObject(clear, forKeyedSubscript: "clear" as NSString)
         storage?.setObject(length, forKeyedSubscript: "__length" as NSString)
+
+        // `localStorage.length` is a read-only property in the specification, not a
+        // method, so it is a getter rather than a function under that name. A
+        // function would still be truthy and would break the
+        // `for (i = 0; i < localStorage.length; i++)` loop that is the only reason
+        // anyone reads it.
+        context.evaluateScript("""
+        (function (s) {
+            Object.defineProperty(s, 'length', {
+                get: function () { return s.__length(); },
+                configurable: false
+            });
+        })
+        """).call(withArguments: [storage as Any])
         // Several names the platform's storage goes by, so a script written
         // against either the browser or the mini-program convention works.
         for name in ["localStorage", "sessionStorage"] {
@@ -718,18 +1145,7 @@ public enum JavaScriptRunner {
                 note = "fetch: response truncated to \(options.maximumResponseBytes) bytes"
             }
 
-            var payload: [String: Any] = [
-                "status": result.status,
-                "headers": result.headers,
-                "body": String(data: body, encoding: .utf8) ?? "",
-                "url": result.finalURL ?? urlString,
-            ]
-            if !note.isEmpty { payload["note"] = note }
-            guard let data = try? JSONSerialization.data(withJSONObject: payload),
-                  let text = String(data: data, encoding: .utf8) else {
-                return envelope(error: "fetch: could not encode the response")
-            }
-            return text
+            return envelope(result, body: body, url: result.finalURL ?? urlString, note: note)
         }
         context.setObject(native, forKeyedSubscript: "__fetchNative" as NSString)
 
@@ -737,6 +1153,41 @@ public enum JavaScriptRunner {
         // `ok` / `status` / `headers` / `url`, and `text()` / `json()` that
         // themselves return promises.
         _ = context.evaluateScript("""
+        // The response object both `fetch` and `push` hand back. One shape, because
+        // a script that checks `res.ok` after a fetch should be able to check it
+        // after a push without learning a second set of fields.
+        var __makeResponse = function (data) {
+            var lower = {};
+            Object.keys(data.headers || {}).forEach(function (key) {
+                lower[String(key).toLowerCase()] = String(data.headers[key]);
+            });
+            return {
+                ok: data.status >= 200 && data.status < 300,
+                status: data.status,
+                statusText: '',
+                url: data.url || '',
+                error: data.error || null,
+                headers: {
+                    get: function (name) {
+                        var value = lower[String(name).toLowerCase()];
+                        return value === undefined ? null : value;
+                    },
+                    has: function (name) {
+                        return lower[String(name).toLowerCase()] !== undefined;
+                    },
+                    forEach: function (callback) {
+                        Object.keys(lower).forEach(function (key) {
+                            callback(lower[key], key);
+                        });
+                    },
+                    keys: function () { return Object.keys(lower); }
+                },
+                text: function () { return Promise.resolve(data.body || ''); },
+                json: function () { return Promise.resolve(JSON.parse(data.body || 'null')); }
+            };
+        };
+        globalThis.__makeResponse = __makeResponse;
+
         var fetch = function (input, init) {
             return new Promise(function (resolve, reject) {
                 var raw;
@@ -767,29 +1218,7 @@ public enum JavaScriptRunner {
                     lower[String(key).toLowerCase()] = String(data.headers[key]);
                 });
 
-                resolve({
-                    ok: data.status >= 200 && data.status < 300,
-                    status: data.status,
-                    statusText: '',
-                    url: data.url,
-                    headers: {
-                        get: function (name) {
-                            var value = lower[String(name).toLowerCase()];
-                            return value === undefined ? null : value;
-                        },
-                        has: function (name) {
-                            return lower[String(name).toLowerCase()] !== undefined;
-                        },
-                        forEach: function (callback) {
-                            Object.keys(lower).forEach(function (key) {
-                                callback(lower[key], key);
-                            });
-                        },
-                        keys: function () { return Object.keys(lower); }
-                    },
-                    text: function () { return Promise.resolve(data.body); },
-                    json: function () { return Promise.resolve(JSON.parse(data.body)); }
-                });
+                resolve(__makeResponse(data));
             });
         };
         """)
@@ -866,6 +1295,30 @@ public enum JavaScriptRunner {
         return "fetch failed: \(first)"
     }
 
+    /// The JSON envelope both native halves return; the JS side turns it into the
+    /// Response object a script sees.
+    private static func envelope(
+        _ result: FetchResult,
+        body: Data? = nil,
+        url: String? = nil,
+        note: String = ""
+    ) -> String {
+        if let error = result.error { return envelope(error: error) }
+        let effective = body ?? result.body
+        var payload: [String: Any] = [
+            "status": result.status,
+            "headers": result.headers,
+            "body": String(data: effective, encoding: .utf8) ?? "",
+            "url": url ?? result.finalURL ?? "",
+        ]
+        if !note.isEmpty { payload["note"] = note }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              let text = String(data: data, encoding: .utf8) else {
+            return envelope(error: "could not encode the response")
+        }
+        return text
+    }
+
     /// The JSON envelope the native `fetch` half returns.
     private static func envelope(error: String) -> String {
         let escaped = error
@@ -879,7 +1332,30 @@ public enum JavaScriptRunner {
     ///
     /// The shape is the one every built-in service produces, so a script
     /// describes exactly what a service would have built.
+    /// The request a script's `push()` describes.
+    ///
+    /// Two shapes, because there are two kinds of delivery: a URL to send to, and a
+    /// Shortcut to run. `shortcut` is checked first, and requires a `payload` — the
+    /// Shortcut's input is exactly that object, serialized as it stands. Nothing
+    /// else in the call is passed along, so what the Shortcut receives is what the
+    /// script wrote and nothing it did not.
     private static func makeRequest(from object: [String: Any]) -> PushRequest? {
+        if let name = object["shortcut"] as? String,
+           !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            guard let input = object["payload"] as? [String: Any] else { return nil }
+
+            guard let data = try? JSONSerialization.data(withJSONObject: input),
+                  let json = String(data: data, encoding: .utf8)
+            else { return nil }
+
+            let request = PushRequest(urlString: "", infoDict: [:])
+            request.state[ShortcutState.shortcutName] =
+                name.trimmingCharacters(in: .whitespacesAndNewlines)
+            request.state[ShortcutState.input] = json
+            request.logInfoDict = input
+            return request
+        }
+
         guard let url = object["url"] as? String, !url.isEmpty else { return nil }
 
         var headers: [String: String] = [:]
@@ -921,7 +1397,9 @@ private final class ScriptHost {
         storage: [String: String],
         options: JavaScriptRunner.Options,
         prefs: [String: Any],
-        fetch: @escaping (URLRequest) -> JavaScriptRunner.FetchResult
+        device: [String: Any],
+        fetch: @escaping (URLRequest) -> JavaScriptRunner.FetchResult,
+        deliver: JavaScriptRunner.Deliver? = nil
     ) -> JavaScriptRunner.Outcome {
         startThreadIfNeeded()
 
@@ -931,7 +1409,8 @@ private final class ScriptHost {
             guard let context else { return }
             box.outcome = JavaScriptRunner.evaluate(
                 script: script, in: context, bullet: bullet, storage: storage,
-                options: options, prefs: prefs, fetch: fetch
+                options: options, prefs: prefs, device: device,
+                fetch: fetch, deliver: deliver
             )
         }
         lock.unlock()

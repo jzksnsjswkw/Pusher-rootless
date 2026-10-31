@@ -4,7 +4,6 @@
 <dict>
 	<key>items</key>
 	<array>
-		<!-- Credentials -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -12,33 +11,31 @@
 			<string>Credentials</string>
 		</dict>
 		<dict>
+			<key>action</key>
+			<string>openIFTTTAccount</string>
 			<key>cell</key>
 			<string>PSButtonCell</string>
 			<key>label</key>
 			<string>Open IFTTT Maker Webhooks Account</string>
-			<key>action</key>
-			<string>openIFTTTAccount</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSEditTextCell</string>
+			<key>defaults</key>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>detail</key>
 			<string>PSDetailController</string>
-			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
 			<string>key</string>
-			<key>service</key>
-			<string>IFTTT</string>
 			<key>label</key>
 			<string>Key:</string>
 			<key>noAutoCorrect</key>
 			<true/>
+			<key>service</key>
+			<string>IFTTT</string>
 		</dict>
-
-		<!-- App List -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -46,14 +43,14 @@
 			<string>Apps</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSSegmentCell</string>
 			<key>default</key>
 			<true/>
 			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
@@ -72,6 +69,8 @@
 			</array>
 		</dict>
 		<dict>
+			<key>alphabeticIndexingEnabled</key>
+			<true/>
 			<key>cell</key>
 			<string>PSLinkCell</string>
 			<key>detail</key>
@@ -83,35 +82,29 @@
 			<key>service</key>
 			<string>IFTTT</string>
 			<key>useSearchBar</key>
-			<true />
-			<key>alphabeticIndexingEnabled</key>
-			<true />
+			<true/>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSLinkCell</string>
-			<key>label</key>
-			<string>App Customization</string>
-			<key>icon</key>
-			<string>app_list</string>
-			<key>detail</key>
-			<string>NSPCustomizeAppsController</string>
-			<key>service</key>
-			<string>IFTTT</string>
+			<key>defaultCurateDataKey</key>
+			<string>curateData</string>
 			<key>defaultEventNameKey</key>
 			<string>eventName</string>
 			<key>defaultIncludeIconKey</key>
 			<string>includeIcon</string>
-			<key>defaultCurateDataKey</key>
-			<string>curateData</string>
+			<key>detail</key>
+			<string>NSPCustomizeAppsController</string>
+			<key>icon</key>
+			<string>app_list</string>
+			<key>label</key>
+			<string>App Customization</string>
+			<key>service</key>
+			<string>IFTTT</string>
 		</dict>
-
-		<!-- Options -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Options</string>
 			<key>footerText</key>
 			<string>SETUP:
 1. Click 'Open IFTTT Maker Webhooks Account' above (https://ifttt.com/services/maker_webhooks/settings).
@@ -126,9 +119,9 @@ The "Value1" ingredient is set to the title (which includes app name), "Value2" 
 If Curate Request Data is disabled:
 The following properties will be passed to the webhook trigger under the "Value1" ingredient (property names in parentheses) [Must Turn on "Include Icon" switch above in order to get the icon property]:
 Device Name (deviceName), App Name (appName), App Bundle ID (appID), Title (title), Subtitle (subtitle), Message (message), Date (date), Base64 Encoded PNG Icon 58x58 (icon)</string>
+			<key>label</key>
+			<string>Options</string>
 		</dict>
-
-		<!-- Date Format -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -149,32 +142,32 @@ HH:mm:ss.SSS = 03:12:11.678
 </string>
 		</dict>
 		<dict>
+			<key>action</key>
+			<string>openDateFormatInstructions</string>
 			<key>cell</key>
 			<string>PSButtonCell</string>
 			<key>label</key>
 			<string>Open Date Format Instructions</string>
-			<key>action</key>
-			<string>openDateFormatInstructions</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSEditTextCell</string>
+			<key>default</key>
+			<string>MMM d, h:mm a</string>
+			<key>defaults</key>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>detail</key>
 			<string>PSDetailController</string>
-			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
 			<string>dateFormat</string>
-			<key>service</key>
-			<string>IFTTT</string>
 			<key>label</key>
 			<string>Date Format:</string>
 			<key>noAutoCorrect</key>
 			<true/>
-			<key>default</key>
-			<string>MMM d, h:mm a</string>
+			<key>service</key>
+			<string>IFTTT</string>
 		</dict>
 	</array>
 	<key>title</key>

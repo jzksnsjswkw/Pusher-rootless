@@ -21,7 +21,7 @@ public enum IFTTTService: PushService {
         urlBase + eventName + "/with/key/"
     }
 
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
         let data = baseInfoDict(context: context, config: config)
         let curated = config.raw.bool(PrefKey.curateData)
 

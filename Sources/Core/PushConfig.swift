@@ -357,6 +357,21 @@ public enum ConfigLoader {
             raw[PrefKey.url] = serviceURL
         }
 
+        // The hooks belong to the framework, so they go under the prefix like
+        // every other framework key. They were simply missing from this list,
+        // which meant `framework.bool("hookFilteredEnabled")` looked for a key
+        // nobody wrote: the switch read as off and the hook never ran, while the
+        // settings page — which writes through `PreferencesStorage` — showed the
+        // toggle on and the script saved.
+        raw[fw(PrefKey.hookReceivedEnabled)] =
+            stored.bool(PrefKey.hookReceivedEnabled, default: false)
+        raw[fw(PrefKey.hookReceivedScript)] =
+            stored.nonEmptyString(PrefKey.hookReceivedScript) ?? ""
+        raw[fw(PrefKey.hookFilteredEnabled)] =
+            stored.bool(PrefKey.hookFilteredEnabled, default: false)
+        raw[fw(PrefKey.hookFilteredScript)] =
+            stored.nonEmptyString(PrefKey.hookFilteredScript) ?? ""
+
         raw[fw(PrefKey.customApps)] = normalizedCustomApps(
             from: stored, descriptor: descriptor, isWebhook: instance.isCustom,
             serviceURL: serviceURL, eventName: eventName, dbName: dbName, serverURL: serverURL

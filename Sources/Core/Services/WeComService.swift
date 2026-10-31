@@ -19,7 +19,7 @@ public enum WeComService: PushService {
 
     // MARK: - Request building
 
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
         // Reached only if the async path is bypassed; without a token there is
         // no usable URL, so fail rather than sending an empty one.
         nil
@@ -28,7 +28,7 @@ public enum WeComService: PushService {
     public static func request(
         context: BulletinContext,
         config: ServiceConfig,
-        completion: @escaping (PushRequest?) -> Void
+        completion: @escaping (Result<PushRequest, Error>) -> Void
     ) {
         let touser = config.raw.string(PrefKey.touser, default: "")
         let infoDict: [String: Any] = [
@@ -41,17 +41,21 @@ public enum WeComService: PushService {
 
         let corpid = config.raw.string(PrefKey.corpid, default: "")
         let corpsecret = config.raw.string(PrefKey.corpsecret, default: "")
-        guard !corpid.isEmpty, !corpsecret.isEmpty else {
-            // Missing credentials: abort rather than sending a request with an
-            // empty URL. The caller treats nil as "failed to build request".
-            completion(nil)
+        guard !corpid.isEmpty else {
+            completion(.failure(RequestError.missingField("Corp ID")))
+            return
+        }
+        guard !corpsecret.isEmpty else {
+            completion(.failure(RequestError.missingField("Secret")))
             return
         }
 
         let cacheKey = WechatTokenCache.key(corpid: corpid, corpsecret: corpsecret)
         if let token = WechatTokenCache.cachedToken(forKey: cacheKey) {
-            completion(pushRequest(token: token, infoDict: infoDict,
-                                   cacheKey: cacheKey, corpid: corpid, corpsecret: corpsecret))
+            completion(.success(pushRequest(
+                token: token, infoDict: infoDict,
+                cacheKey: cacheKey, corpid: corpid, corpsecret: corpsecret
+            )))
             return
         }
 
@@ -60,12 +64,16 @@ public enum WeComService: PushService {
                 // Failed to obtain an access token (network error or invalid
                 // credentials). Abort rather than firing a request with an empty
                 // token that is guaranteed to fail server-side.
-                completion(nil)
+                completion(.failure(RequestError.credentialUnavailable(
+                    "Could not get an access token; check the Corp ID and Secret"
+                )))
                 return
             }
             // The fetch already cached the token before invoking this closure.
-            completion(pushRequest(token: token, infoDict: infoDict,
-                                   cacheKey: cacheKey, corpid: corpid, corpsecret: corpsecret))
+            completion(.success(pushRequest(
+                token: token, infoDict: infoDict,
+                cacheKey: cacheKey, corpid: corpid, corpsecret: corpsecret
+            )))
         }
     }
 
@@ -110,12 +118,12 @@ public enum WeComService: PushService {
     ) -> ResendHandler {
         { request, _, data, error, completion in
             guard error == nil, let data else {
-                completion(nil, false)
+                completion(.finish)
                 return
             }
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 request.failureReason = "WeChat returned an invalid/non-JSON response"
-                completion(nil, true)
+                completion(.fail)
                 return
             }
 
@@ -124,7 +132,7 @@ public enum WeComService: PushService {
             // response as success), so its absence is a failure.
             guard let errcode = (json["errcode"] as? NSNumber)?.intValue else {
                 request.failureReason = "WeChat returned a response without a valid errcode"
-                completion(nil, true)
+                completion(.fail)
                 return
             }
             let errmsg = json["errmsg"] as? String ?? ""
@@ -133,9 +141,9 @@ public enum WeComService: PushService {
             guard tokenExpired else {
                 if errcode != 0 {
                     request.failureReason = "WeChat send failed (errcode=\(errcode), errmsg=\(errmsg))"
-                    completion(nil, true)
+                    completion(.fail)
                 } else {
-                    completion(nil, false)
+                    completion(.finish)
                 }
                 return
             }
@@ -153,14 +161,14 @@ public enum WeComService: PushService {
                     // failure is usually a transient network hiccup and the
                     // sender still has retry budget, so resend the original
                     // request and let the next attempt re-drive the refresh.
-                    completion(request, false)
+                    completion(.retry(request))
                     return
                 }
                 let newRequest = pushRequest(
                     token: newToken, infoDict: request.infoDict, cacheKey: cacheKey,
                     corpid: corpid, corpsecret: corpsecret
                 )
-                completion(newRequest, false)
+                completion(.retry(newRequest))
             }
         }
     }

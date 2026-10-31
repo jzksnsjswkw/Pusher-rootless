@@ -197,7 +197,7 @@ public final class CustomizeAppsController: PlainViewController, UITableViewData
 
     /// The app's icon, through the private UIKit accessor.
     private func appIcon(_ appID: String) -> UIImage? {
-        ApplicationIcon.image(forBundleID: appID)
+        BulletinAdapter.applicationIcon(forBundleID: appID)
     }
 }
 
@@ -394,24 +394,6 @@ public final class CustomAppController: ListController {
 }
 
 // MARK: - App icons
-
-/// Resolves an app's icon through the private UIKit accessor that Settings
-/// itself uses.
-enum ApplicationIcon {
-    private typealias IconFunction = @convention(c) (
-        AnyObject, Selector, NSString, Int32, CGFloat
-    ) -> AnyObject?
-
-    /// The installed app's icon, or `nil` when the app is unknown.
-    static func image(forBundleID appID: String) -> UIImage? {
-        let selector = NSSelectorFromString("_applicationIconImageForBundleIdentifier:format:scale:")
-        guard let cls = Runtime.cls("UIImage"),
-              let method = class_getClassMethod(cls, selector)
-        else { return nil }
-        let call = unsafeBitCast(method_getImplementation(method), to: IconFunction.self)
-        return call(cls, selector, appID as NSString, 0, UIScreen.main.scale) as? UIImage
-    }
-}
 
 // MARK: - AltList pickers
 

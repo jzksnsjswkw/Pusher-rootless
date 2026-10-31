@@ -63,9 +63,9 @@ enum BarkCipher {
         var errorDescription: String? {
             switch self {
             case .keyLength(let expected):
-                return "The key must be \(expected) characters for this algorithm."
+                return "The key must be \(expected) bytes for this algorithm."
             case .ivLength(let expected):
-                return "The IV must be \(expected) characters for this mode."
+                return "The IV must be \(expected) bytes for this mode."
             case .encryption(let status):
                 return "Encryption failed (CommonCrypto status \(status))."
             }
@@ -88,9 +88,16 @@ enum BarkCipher {
         /// encrypting every push after the user had switched it off.
         var isUsable: Bool { isEnabled && !key.isEmpty }
 
+        /// How long the key is, in the unit the cipher uses.
+        ///
+        /// AES takes bytes. `String.count` counts characters, so a key of sixteen
+        /// Chinese characters passes a character check and then produces 48 bytes
+        /// that CCCrypt rejects. Both this and the UI measure the same thing now.
+        var keyByteLength: Int { key.utf8.count }
+
         /// What is wrong with the settings, or `nil` when they are usable.
         func problem() -> Failure? {
-            key.count == algorithm.keyLength ? nil : .keyLength(algorithm.keyLength)
+            keyByteLength == algorithm.keyLength ? nil : .keyLength(algorithm.keyLength)
         }
     }
 

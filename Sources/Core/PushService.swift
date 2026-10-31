@@ -32,18 +32,23 @@ public protocol PushService {
     /// The default synchronous path is enough for every service except those
     /// that must first obtain a credential (Wechat's access token); those
     /// override ``request(context:config:completion:)`` instead.
-    static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest?
+    ///
+    /// Throws ``RequestError`` when a field is empty or unusable, rather than
+    /// returning `nil`. The reason matters to the caller twice over: a real
+    /// notification writes it to the log instead of going quiet, and a test push
+    /// shows it in place of "sent". `nil` still means "nothing to build here" for a
+    /// service that has nothing useful to say.
+    static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest?
 
     /// Builds the request, possibly asynchronously.
     ///
-    /// The completion receives `nil` when the request cannot be built (for
-    /// instance a credential fetch failed); the caller then logs the failure
-    /// and skips the send rather than firing a request that is guaranteed to
-    /// fail server-side.
+    /// The completion carries the ``RequestError`` when the request cannot be
+    /// built, for the same reason: the caller logs it and skips the send, and a
+    /// test push can report what to fix instead of claiming success.
     static func request(
         context: BulletinContext,
         config: ServiceConfig,
-        completion: @escaping (PushRequest?) -> Void
+        completion: @escaping (Result<PushRequest, Error>) -> Void
     )
 
     // MARK: Options with defaults
@@ -108,9 +113,17 @@ public extension PushService {
     static func request(
         context: BulletinContext,
         config: ServiceConfig,
-        completion: @escaping (PushRequest?) -> Void
+        completion: @escaping (Result<PushRequest, Error>) -> Void
     ) {
-        completion(request(context: context, config: config))
+        do {
+            if let request = try request(context: context, config: config) {
+                completion(.success(request))
+            } else {
+                completion(.failure(RequestError.missingField("request")))
+            }
+        } catch {
+            completion(.failure(error))
+        }
     }
 
     /// The shared data dict used by IFTTT / Pusher Receiver / custom services:
@@ -126,6 +139,14 @@ public extension PushService {
             "message": context.message ?? "",
             "date": dateString(context.date, config: config),
         ]
+
+        // The SIM only exists for SMS; every other app leaves the key out rather
+        // than sending an empty object a receiver would have to test.
+        if let sim = context.simSubscription {
+            data["sim"] = ["slot": sim.slot,
+                           "phoneNumber": sim.phoneNumber,
+                           "label": sim.label]
+        }
 
         if shouldIncludeIcon(config: config) {
             // A service that the user gave a picture to sends that picture, so a

@@ -29,7 +29,7 @@ public enum WxPusherService: PushService {
         ]
     }
 
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
         // A body is required, and a notification may be a title alone: the two
         // fields swap roles so neither is empty and nothing is printed twice.
         let hasBody = !context.displayMessage.isEmpty

@@ -27,12 +27,43 @@ public struct NotificationSettings: Equatable {
     public var showsMessagePreview = false
     /// `sectionInfo.alertType == BBSectionInfoAlertTypeBanner`.
     public var isBanner = false
+
+    /// The settings as property-list values, for the trip between processes.
+    ///
+    /// Preferences has no `BBServer` and cannot read these itself; a Run there has
+    /// to be told what the app's settings are, or the notification conditions it
+    /// is meant to exercise cannot be evaluated.
+    public var propertyList: [String: Any] {
+        [
+            "allowsNotifications": allowsNotifications,
+            "showsInLockScreen": showsInLockScreen,
+            "showsInNotificationCenter": showsInNotificationCenter,
+            "showsMessagePreview": showsMessagePreview,
+            "isBanner": isBanner,
+            "showsBadges": showsBadges,
+            "showsSounds": showsSounds,
+        ]
+    }
+
+    /// Rebuilds from ``propertyList``.
+    public init?(propertyList: [String: Any]) {
+        guard let allowsNotifications = propertyList["allowsNotifications"] as? Bool
+        else { return nil }
+        self.allowsNotifications = allowsNotifications
+        showsInLockScreen = propertyList["showsInLockScreen"] as? Bool ?? false
+        showsInNotificationCenter = propertyList["showsInNotificationCenter"] as? Bool ?? false
+        showsMessagePreview = propertyList["showsMessagePreview"] as? Bool ?? false
+        isBanner = propertyList["isBanner"] as? Bool ?? false
+        showsBadges = propertyList["showsBadges"] as? Bool ?? false
+        showsSounds = propertyList["showsSounds"] as? Bool ?? false
+    }
+
+    public init() {}
+
     /// `sectionInfo.pushSettings & Badges`.
     public var showsBadges = false
     /// `sectionInfo.pushSettings & Sounds`.
     public var showsSounds = false
-
-    public init() {}
 
     /// Whether one SNS condition is currently satisfied for this app.
     public func isSatisfied(_ condition: SNSCondition) -> Bool {
@@ -72,6 +103,22 @@ public struct DeviceState {
     /// Whether the device has any usable route at all — Wi-Fi or cellular.
     public var isOnline: Bool { network != .none }
 
+    /// Battery charge, `0`–`1`, or `nil` when the level is unknown.
+    ///
+    /// `UIDevice.batteryLevel` is `-1` until battery monitoring has been switched
+    /// on, and reports `-1` again on a device that does not have one — so the
+    /// unreadable case is dropped rather than reported as a flat battery.
+    public var batteryLevel: Double?
+
+    /// Whether the device is plugged in and charging.
+    public var isCharging = false
+
+    /// The charger state in words: `unplugged`, `charging` or `full`.
+    public var batteryState: String = "unplugged"
+
+    /// The system version, e.g. `16.5`.
+    public var osVersion: String = ""
+
     /// What the device's network is, as a script sees it.
     public enum Network: String {
         case none = "none"
@@ -85,13 +132,24 @@ public struct DeviceState {
     /// crosses into JavaScript by value and a script cannot change what the
     /// filters see.
     public var scriptValue: [String: Any] {
-        [
+        var value: [String: Any] = [
             "locked": isLocked,
             "wifi": network == .wifi,
             "cellular": network == .cellular,
             "online": isOnline,
             "network": network.rawValue,
+            "charging": isCharging,
+            "batteryState": batteryState,
+            "osVersion": osVersion,
+            // The name is read here rather than stored: it is the same call that
+            // fills `bullet.deviceName`, and holding a copy would let the two
+            // disagree after the user renames the phone.
+            "name": UIDevice.current.name,
         ]
+        // Absent rather than zero when unreadable, so `device.battery` is the
+        // honest test.
+        if let batteryLevel { value["battery"] = batteryLevel }
+        return value
     }
 }
 
@@ -108,9 +166,24 @@ public struct BulletinContext {
     /// The app's display name.
     public var appName: String = ""
     public var bulletinID: String = ""
+    /// `bulletin.publisherBulletinID` — the identifier the publishing app chose.
+    ///
+    /// For Messages this is the `message.guid` row key, which is what links a
+    /// notification back to the SMS database record it came from.
+    public var publisherBulletinID: String = ""
     /// Never `nil`; defaults to the current date when the bulletin has none.
     public var date: Date = Date()
-    public var isTest = false
+    /// Where this notification came from, when it was not a live one.
+    ///
+    /// One value rather than a `Bool` plus a side field: "is this a test" and
+    /// "which hook is being tested" are the same question asked at different
+    /// resolutions, and splitting them is how the two ends drifted — the publisher
+    /// wrote a flag, the adapter read a different one, and a composed notification
+    /// reached the filters as if it were live.
+    public var test: TestOrigin?
+
+    /// Whether this is a test rather than a live notification.
+    public var isTest: Bool { test != nil }
 
     // MARK: Raw content
 
@@ -127,6 +200,13 @@ public struct BulletinContext {
     public var displayTitle: String = ""
     /// Subtitle + message, joined as the bulletin would show them.
     public var displayMessage: String = ""
+
+    /// The SIM the message arrived on, when the notification is an SMS.
+    ///
+    /// Resolved once, before the fan-out: the lookup crosses into `imagent` and
+    /// waits for an answer, so doing it per instance would multiply that wait by
+    /// the number of services and put the same line in every service's log.
+    public var simSubscription: SIMSubscription?
 
     /// The bulletin's primary attachment file, `nil` when it has none.
     public var attachmentURL: URL?
@@ -174,5 +254,41 @@ public enum PushImage {
         return UIGraphicsImageRenderer(size: size, format: format).image { _ in
             image.draw(in: CGRect(origin: .zero, size: size))
         }
+    }
+}
+
+/// Where a synthetic notification came from.
+///
+/// Every test in this project starts one, and they differ only in which hook, if
+/// any, is being exercised. One value for all of them: the question the pipeline
+/// asks — "should the rules apply to this" — has the same answer for every case,
+/// and a test that forgot to say so is exactly the bug this replaces.
+public enum TestOrigin: Equatable {
+    /// A notification composed to be looked at, or the fixed test push. The rules
+    /// are skipped; no hook is force-run.
+    case composed
+
+    /// A run started from one hook's editor.
+    ///
+    /// That phase's hook runs whether or not its switch is on — "does my hook
+    /// work" should not require remembering to enable it. The other phase keeps
+    /// its own switch: a received hook the user turned off must not act on a
+    /// notification it was never meant to see.
+    case hook(BulletinHookRunner.Phase)
+
+    /// The phase this test force-runs, if any.
+    public var hookPhase: BulletinHookRunner.Phase? {
+        if case .hook(let phase) = self { return phase }
+        return nil
+    }
+
+    /// Whether `phase` has already run for this context.
+    ///
+    /// A Run executes the hook in the editor, to show what it decided, and then
+    /// hands the result to the pipeline. The pipeline would run the same hook
+    /// again on the same notification — twice the `fetch`, twice the `push()`,
+    /// twice the log lines — so the phase the editor already ran is skipped here.
+    public func hasRun(_ phase: BulletinHookRunner.Phase) -> Bool {
+        hookPhase == phase
     }
 }

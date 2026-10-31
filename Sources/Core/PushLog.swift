@@ -22,7 +22,8 @@ public enum PushLog {
         context: BulletinContext,
         label: String? = nil,
         object: Any? = nil,
-        dontTruncate: Bool = false
+        dontTruncate: Bool = false,
+        tag: String? = nil
     ) {
         // Reachable concurrently from the main thread and from URLSession's
         // background completion queues (e.g. Wechat's token request); the
@@ -30,7 +31,8 @@ public enum PushLog {
         // be lost.
         lock.lock()
         defer { lock.unlock() }
-        addLocked(service: service, context: context, label: label, object: object, dontTruncate: dontTruncate)
+        addLocked(service: service, context: context, label: label, object: object,
+                  dontTruncate: dontTruncate, tag: tag)
     }
 
     private static let lock = NSLock()
@@ -40,7 +42,8 @@ public enum PushLog {
         context: BulletinContext,
         label: String?,
         object: Any?,
-        dontTruncate: Bool
+        dontTruncate: Bool,
+        tag: String?
     ) {
         guard isEnabled(forService: service) else { return }
 
@@ -67,7 +70,8 @@ public enum PushLog {
         if lines.isEmpty {
             lines.append("Processing \(context.appID)")
         }
-        lines.append(line(label: label, object: object, dontTruncate: dontTruncate))
+        lines.append(line(label: label, object: object,
+                          dontTruncate: dontTruncate, tag: tag))
         section["logs"] = lines
 
         if let index {
@@ -85,18 +89,26 @@ public enum PushLog {
     }
 
     /// Combines the label and object the way the log viewer expects.
-    private static func line(label: String?, object: Any?, dontTruncate: Bool) -> String {
+    private static func line(label: String?, object: Any?, dontTruncate: Bool,
+                             tag: String?) -> String {
         // If only one of the two was supplied, log just that one.
+        let body: String
         switch (label, object) {
         case let (label?, nil):
-            return label
+            body = label
         case let (nil, object?):
-            return LogString.describe(object, dontTruncate: dontTruncate)
+            body = LogString.describe(object, dontTruncate: dontTruncate)
         case let (label?, object?):
-            return "\(label): \(LogString.describe(object, dontTruncate: dontTruncate))"
+            body = "\(label): \(LogString.describe(object, dontTruncate: dontTruncate))"
         case (nil, nil):
-            return ""
+            body = ""
         }
+        // A script that calls `push()` several times produces several requests for
+        // one notification, and they all share a log section. Without a marker the
+        // lines interleave and a reader cannot tell which response belongs to
+        // which request — the last one looked like the only one that had answered.
+        guard let tag else { return body }
+        return "[\(tag)] \(body)"
     }
 
     /// Whether logging is switched on for one service. The global log (empty

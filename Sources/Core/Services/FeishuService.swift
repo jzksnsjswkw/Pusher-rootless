@@ -16,7 +16,7 @@ public enum FeishuService: PushService {
         [FeishuPrefKey.secret: ""]
     }
 
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
         // The four parts in the order the original assembled them, and with its
         // punctuation: the app name takes a colon before the title — "微信: 西瓜猪"
         // — and the lines after it are separated by a bare carriage return.
@@ -75,7 +75,14 @@ public enum FeishuService: PushService {
                 key: "\(timestamp)\n\(secret)", message: ""
             )
         }
-        let urlString = urlBase + config.raw.string(PrefKey.key, default: "")
+        // The hook key is the last path segment, so an empty one produces a
+        // request to the bare host — a 404 the user reads as "Feishu is down".
+        let hookKey = config.raw.string(PrefKey.key, default: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !hookKey.isEmpty else {
+            throw RequestError.missingField("Key")
+        }
+        let urlString = urlBase + hookKey
         return withLogBody(
             PushRequest(urlString: urlString, infoDict: infoDict),
             infoDict

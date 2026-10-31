@@ -56,26 +56,30 @@ enum ShortcutGuide {
         )
     }
 
-    /// Fetches the example Shortcut and offers it to the Shortcuts app.
+    /// Opens the example Shortcut straight in the Shortcuts app's import screen.
     ///
-    /// The file in the bundle is unsigned, because iOS cannot sign one and a
-    /// signature expires in about a year. It is signed when asked for, which is
-    /// also why this needs the network and why the row says so.
+    /// The URL is `workflow://shortcuts/<recordID>` — the form the iCloud web page's
+    /// own "Add Shortcut" button uses, and the only import entry that works here.
+    ///
+    /// `shortcuts://import-shortcut?url=…` looks like the right scheme and is the
+    /// documented general one, but it runs the file through
+    /// `WFRemoteQuarantinePolicyEvaluator` first: a signing policy script evaluated
+    /// in JavaScript, which asserts on a shortcut signed by a third party and takes
+    /// the whole app down with `SIGTRAP`. That happens for a local file, a loopback
+    /// URL and an iCloud download URL alike, and for every parameter variant
+    /// (`silent`, `name`, the older `workflow://import-workflow`) — it is the
+    /// signature the evaluator objects to, not the URL.
+    ///
+    /// The iCloud record route skips the evaluator because it is treated as a
+    /// shortcut shared from iCloud rather than a file handed in from outside.
     private static func fetchExample(_ host: GuideSheet.ActionHost) {
         host.setActionBusy(true, detail: "Signing…".localized)
         ShortcutSigner.signedExample { result in
+            host.setActionBusy(false, detail: nil)
             switch result {
-            case .success(let url):
-                host.setActionBusy(false, detail: nil)
-                host.presentActionAlert(
-                    title: "Shortcut Ready".localized,
-                    message: ("Open it to add it to your Shortcuts. The Shortcuts "
-                        + "app will ask before importing, because it did not come "
-                        + "from Apple's gallery.").localized,
-                    share: url
-                )
+            case .success(let fileURL):
+                openImportScreen(fallback: fileURL, host: host)
             case .failure(let error):
-                host.setActionBusy(false, detail: nil)
                 host.presentActionAlert(
                     title: "Could Not Sign".localized,
                     message: error.localizedDescription,
@@ -85,20 +89,45 @@ enum ShortcutGuide {
         }
     }
 
+    /// Opens the iCloud record, falling back to the share sheet if no app takes it.
+    private static func openImportScreen(fallback fileURL: URL,
+                                         host: GuideSheet.ActionHost) {
+        guard let url = URL(
+            string: "workflow://shortcuts/\(ShortcutSigner.sharedRecordID)"
+        ) else { return }
+
+        UIApplication.shared.open(url, options: [:]) { opened in
+            guard !opened else { return }
+            // Nothing registered the scheme: the Shortcuts app is not installed.
+            host.presentActionAlert(
+                title: "Shortcut Ready".localized,
+                message: ("Open it to add it to your Shortcuts. The Shortcuts app "
+                    + "will ask before importing, because it did not come from "
+                    + "Apple's gallery.").localized,
+                share: fileURL
+            )
+        }
+    }
+
     /// The field list, in the shape the script guide uses: the keys are
     /// identifiers and stay English, the trailing comments are read by a person
     /// and are localized in place.
     private static var fields: String {
         """
         title       // \("标题".localized)
-        subtitle    // \("副标题，常为空".localized)
-        message     // \("正文".localized)
-        appName     // \("来源应用名".localized)
-        appID       // \("来源应用标识".localized)
-        date        // \("到达时间，格式随服务".localized)
-        deviceName  // \("本机名称".localized)
-        icon        // \("需开启「包含图标」".localized)
-        image       // \("需开启图片且通知带附件".localized)
+        subtitle    // \("副标题".localized)
+        message     // \("通知正文".localized)
+        appName     // \("应用名".localized)
+        appID       // \("应用Bundle ID".localized)
+        date        // \("通知到达时间".localized)
+        deviceName  // \("设备名称".localized)
+        icon        // \("发送通知的App图标".localized)
+        image       // \("通知中的图片附件".localized)
+        sim?: {             // \("only in SMS notifications".localized)
+          slot: number        // \("the slot number, 1 or 2".localized)
+          phoneNumber: string // \("the receiving card's number".localized)
+          label: string       // \("the nickname set in Global Settings".localized)
+        }
         """
     }
 }

@@ -28,6 +28,16 @@ public final class RequestSender {
     ) {
         setRetriesLeft(Pusher.tries - 1, for: retryKey(context, service))
 
+        // Every send passes through here — a service's single request, a script's
+        // fifth `push()`, the editor's test run — so this is where a forwarded
+        // notification enters the loop window. Counting at the call site instead
+        // meant anything that bypassed that call site went uncounted, which is
+        // exactly what a script's `push()` used to do.
+        //
+        // The guard dedupes by bulletin id, so a notification fanned out to three
+        // instances is still one entry, and it ignores test pushes itself.
+        LoopGuard.shared.recordForwarded(context)
+
         // An exception out of this block would leave the send queue and reach
         // SpringBoard, which takes the whole process down — a service that
         // cannot encode its payload must fail like any other send failure, not
@@ -96,13 +106,15 @@ public final class RequestSender {
             "to": message.recipients,
             "subject": message.subject,
             "body": message.body,
-        ])
+        ], tag: request.sequenceTag)
         SMTPClient.send(message) { result in
             switch result {
             case .success:
-                PushLog.add(service: service, context: context, label: "Sent")
+                PushLog.add(service: service, context: context, label: "Sent", tag: request.sequenceTag)
+                self.finish(request, status: 200)
             case .failure(let failure):
-                PushLog.add(service: service, context: context, label: failure.label)
+                PushLog.add(service: service, context: context, label: failure.label, tag: request.sequenceTag)
+                self.finish(request, status: 0, error: failure.label)
             }
         }
     }
@@ -124,17 +136,19 @@ public final class RequestSender {
         service: String,
         context: BulletinContext
     ) {
-        PushLog.add(service: service, context: context, label: "Shortcut", object: name)
+        PushLog.add(service: service, context: context, label: "Shortcut", object: name, tag: request.sequenceTag)
         PusherLog.debug("\(logString) Running shortcut \"\(name)\"")
 
         let error = ShortcutRunner.run(name: name, input: input)
         if let error {
             PusherLog.info("[S:\(service)] Shortcut \"\(name)\" failed: \(error)")
             PushLog.add(service: service, context: context,
-                        label: "Shortcut failed", object: error)
+                        label: "Shortcut failed", object: error, tag: request.sequenceTag)
+            finish(request, status: 0, error: error)
         } else {
             PusherLog.debug("\(logString) Shortcut \"\(name)\" started")
-            PushLog.add(service: service, context: context, label: "Shortcut started")
+            PushLog.add(service: service, context: context, label: "Shortcut started", tag: request.sequenceTag)
+            finish(request, status: 200)
         }
     }
 
@@ -186,6 +200,13 @@ public final class RequestSender {
 
         var urlString = request.urlString
         if isBodyless {
+            // A GET has nowhere to put a body, so the payload becomes the query
+            // string. No length is imposed here: what a server accepts is the
+            // server's business, and a real URL limit is far above anything a
+            // notification carries. When one does refuse, the response says so and
+            // the ordinary 413 path shrinks the image and tries again — the same
+            // answer every other oversized payload gets.
+            //
             // NSURLComponents percent-encodes both names and values, preserves
             // any existing query string, and handles '?', '&' and '#' — all of
             // which manual concatenation gets wrong.
@@ -202,14 +223,25 @@ public final class RequestSender {
         }
 
         urlString = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
-        PushLog.add(service: service, context: context, label: "URL", object: urlString)
+        // The log is written to a plist the user can read, copy and paste into a
+        // bug report. A token in a URL query is the usual way a service
+        // authenticates — Gotify, ServerChan, WeCom all put the credential there —
+        // so the URL is logged with its values masked, while the request itself
+        // keeps the real one.
+        // Logged verbatim. Masking the credential here would also hide the one
+        // thing that explains a 401 — which key was actually sent — and the log is
+        // a local file the user already controls. The path/query masking helpers
+        // are kept for a future opt-in, but the default is to write what was sent.
+        PushLog.add(service: service, context: context, label: "URL",
+                    object: urlString, tag: request.sequenceTag)
 
         guard let url = URL(string: urlString) else {
             PusherLog.debug("Invalid URL: \(urlString)")
-            PushLog.add(service: service, context: context, label: "Invalid URL")
+            PushLog.add(service: service, context: context, label: "Invalid URL", tag: request.sequenceTag)
             // Clear the retry key so a bad URL doesn't leak an entry in the
             // long-running SpringBoard process.
             setRetriesLeft(nil, for: retryKey(context, service))
+            finish(request, status: 0, error: "invalid URL")
             return
         }
 
@@ -240,23 +272,23 @@ public final class RequestSender {
             // Logged as a name, never the value: the whole point of moving it off
             // the URL is that it stops being written down.
             PushLog.add(service: service, context: context, label: "Header",
-                        object: "Authorization: Basic ***")
+                        object: "Authorization: Basic ***", tag: request.sequenceTag)
         }
-        PushLog.add(service: service, context: context, label: "Method", object: httpMethod)
+        PushLog.add(service: service, context: context, label: "Method", object: httpMethod, tag: request.sequenceTag)
         urlRequest.httpMethod = httpMethod
 
         for name in request.headers.keys.sorted() {
             let value = request.headers[name] ?? ""
             urlRequest.setValue(value, forHTTPHeaderField: name)
             PushLog.add(service: service, context: context, label: "Header",
-                        object: "\(name): \(value)")
+                        object: "\(name): \(value)", tag: request.sequenceTag)
         }
 
         if !isBodyless {
             // Services provide a sanitized body via logInfoDict; the sender
             // only logs what it was given and never rewrites the real body.
             PushLog.add(service: service, context: context, label: "Request Body Dictionary",
-                        object: request.logInfoDict ?? body)
+                        object: request.logInfoDict ?? body, tag: request.sequenceTag)
             urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
 
             let payload: Data?
@@ -274,8 +306,9 @@ public final class RequestSender {
                     PusherLog.debug("\(logString) JSON serialization failed: \(error)")
                     PushLog.add(service: service, context: context,
                                 label: "JSON Serialization Error",
-                                object: error.localizedDescription, dontTruncate: true)
+                                object: error.localizedDescription, dontTruncate: true, tag: request.sequenceTag)
                     setRetriesLeft(nil, for: retryKey(context, service))
+                    finish(request, status: 0, error: "could not encode the body")
                     return
                 }
             }
@@ -290,52 +323,91 @@ public final class RequestSender {
             PusherLog.debug("\(logString) Got response back")
             let key = self.retryKey(context, service)
 
-            guard let resendHandler = request.resendHandler else {
+            // A service's own handler only runs when the transport said the request
+            // succeeded. It is there to read a body — `errcode`, an "accepted"
+            // flag — not to decide whether a 500 happened; leaving HTTP to the
+            // sender keeps one place responsible for "is this a delivery", and
+            // means a service's vocabulary cannot accidentally swallow a real
+            // transport failure.
+            let status = (response as? HTTPURLResponse)?.statusCode
+            let transportOK = error == nil && (status.map { (200..<300).contains($0) } ?? true)
+            guard let resendHandler = request.resendHandler, transportOK else {
                 self.handleResponse(request, data: data, response: response, error: error,
                                     logString: logString, service: service, context: context)
                 return
             }
 
-            resendHandler(request, response, data, error) { newRequest, shouldFail in
-                if let newRequest, !shouldFail {
+            resendHandler(request, response, data, error) { decision in
+                switch decision {
+                case .retry(let newRequest):
                     let remaining = self.claimRetry(for: key)
                     guard remaining >= 0 else {
                         let reason = newRequest.failureReason ?? request.failureReason
                             ?? "Resend attempts exhausted"
                         PushLog.add(service: service, context: context,
                                     label: "Network Response: Failed after all resend attempts",
-                                    object: reason)
+                                    object: reason, tag: request.sequenceTag)
                         PusherLog.debug("\(logString) Failed after all resend attempts: \(reason)")
                         self.setRetriesLeft(nil, for: key)
+                        self.finish(request, status: 0, error: reason)
                         return
                     }
                     newRequest.resendHandler = newRequest.resendHandler ?? resendHandler
                     newRequest.resendCount = request.resendCount + 1
                     PusherLog.debug("\(logString) Resending via service callback (attempt \(newRequest.resendCount + 1))")
                     PushLog.add(service: service, context: context,
-                                label: "----- Resending via service callback (attempt \(newRequest.resendCount + 1)) -----")
+                                label: "----- Resending via service callback (attempt \(newRequest.resendCount + 1)) -----", tag: request.sequenceTag)
                     self.sendAttempt(newRequest, logString: logString, service: service, context: context)
-                    return
-                }
 
-                if shouldFail {
-                    let reason = (newRequest?.failureReason ?? request.failureReason)
-                        ?? "Resend handler marked request as failed"
+                case .fail:
+                    let reason = request.failureReason ?? "Resend handler marked request as failed"
                     PushLog.add(service: service, context: context,
                                 label: "Network Response: Failed by resend handler",
-                                object: reason)
+                                object: reason, tag: request.sequenceTag)
                     PusherLog.debug("\(logString) Failed by resend handler: \(reason)")
                     self.setRetriesLeft(nil, for: key)
-                    return
-                }
+                    self.finish(request, status: 0, error: reason)
 
-                self.handleResponse(request, data: data, response: response, error: error,
-                                    logString: logString, service: service, context: context)
+                case .finish:
+                    self.handleResponse(request, data: data, response: response, error: error,
+                                        logString: logString, service: service, context: context)
+                }
             }
         }.resume()
     }
 
     // MARK: - Response handling
+
+    /// Reports the final outcome to whoever asked for one.
+    ///
+    /// Called at every point where the sender stops working on a request, so a
+    /// script awaiting `push()` is never left hanging — including the paths that
+    /// give up on purpose.
+    private func finish(
+        _ request: PushRequest,
+        status: Int,
+        response: URLResponse? = nil,
+        data: Data? = nil,
+        error: String? = nil
+    ) {
+        guard let completion = request.completion else { return }
+        var headers: [String: String] = [:]
+        if let http = response as? HTTPURLResponse {
+            for (field, value) in http.allHeaderFields {
+                headers[String(describing: field).lowercased()] = String(describing: value)
+            }
+        }
+        completion(JavaScriptRunner.FetchResult(
+            status: status,
+            headers: headers,
+            body: data ?? Data(),
+            finalURL: (response as? HTTPURLResponse)?.url?.absoluteString,
+            error: error
+        ))
+        // Cleared so a retry that somehow reaches here twice cannot deliver two
+        // answers for one push.
+        request.completion = nil
+    }
 
     private func handleResponse(
         _ request: PushRequest,
@@ -349,72 +421,100 @@ public final class RequestSender {
         let key = retryKey(context, service)
 
         guard let error else {
-            // A body-less success (204, or an empty 200) is still a success, so
-            // it is not treated as a failure here.
             let dataString = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-            let image = request.infoDict["image"] as? UIImage
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
 
-            if let image, dataString.lowercased().contains(requestEntityTooLarge) {
-                if retryWithSmallerImage(request, image: image, dataString: dataString,
-                                         logString: logString, service: service,
-                                         context: context, key: key) {
-                    return
-                }
-                // Retries exhausted and the payload is still too large even
-                // after dropping the image: log the honest failure.
+            // 200 is success. Everything else is a failure worth repeating — the
+            // only reading of the response this layer makes.
+            //
+            // No other status is special-cased and the body is never parsed for an
+            // error code: a service that reports "token expired" as HTTP 200 with
+            // `{"errcode": 40014}` is ordinary, and its own `resendHandler` is
+            // where that is understood. Guessing here would mean knowing every
+            // service's vocabulary and getting it wrong for the next one.
+            if status == 200 {
                 PushLog.add(service: service, context: context,
-                            label: "Network Response: Image too large on final attempt",
-                            object: dataString)
-                PusherLog.debug("\(logString) Failed: image too large after final attempt: \(dataString)")
+                            label: "Network Response: Success", object: dataString, tag: request.sequenceTag)
+                PusherLog.debug("\(logString) Success: \(dataString)")
                 setRetriesLeft(nil, for: key)
+                finish(request, status: status, response: response, data: data)
                 return
             }
 
             PushLog.add(service: service, context: context,
-                        label: "Network Response: Success", object: dataString)
-            PusherLog.debug("\(logString) Success: \(dataString)")
-            setRetriesLeft(nil, for: key)
+                        label: "Network Response: HTTP \(status)",
+                        object: dataString, dontTruncate: true, tag: request.sequenceTag)
+            PusherLog.debug("\(logString) HTTP \(status): \(dataString)")
+            retryAfterFailure(request, status: status, response: response, data: data,
+                              logString: logString, service: service, context: context, key: key)
             return
         }
-
         PushLog.add(service: service, context: context,
                     label: "Network Response: Error",
-                    object: error.localizedDescription, dontTruncate: true)
+                    object: error.localizedDescription, dontTruncate: true, tag: request.sequenceTag)
         PusherLog.debug("\(logString) Error: \(error)")
 
-        guard hasRetriesLeft(for: key) else { return }
-        let remaining = claimRetry(for: key)
-        guard remaining >= 0 else {
-            // Retries exhausted with no successful response: log an honest
-            // final failure instead of silently clearing the retry state.
-            PushLog.add(service: service, context: context,
-                        label: "Network Response: Failed after all retries",
-                        object: error.localizedDescription, dontTruncate: true)
-            PusherLog.debug("\(logString) Failed after all retries: \(error)")
-            setRetriesLeft(nil, for: key)
+        retryAfterFailure(request, status: 0, response: response, data: data,
+                          logString: logString, service: service, context: context, key: key,
+                          failureText: error.localizedDescription)
+    }
+
+    /// One retry decision, for every kind of failure.
+    ///
+    /// Every failure is treated the same — transport error, 500, 401, 413 — because
+    /// the sender cannot tell a permanent one from a passing one, and a service
+    /// that can says so through its `resendHandler`. That distinction is the whole
+    /// reason the handler exists, so it does not belong here as well.
+    ///
+    /// The image is shrunk on each attempt. It is a guess — the failure may have
+    /// nothing to do with size — but it is the only lever available, and once the
+    /// factor reaches 1.0 or the budget runs out the image is dropped rather than
+    /// sent again unchanged.
+    private func retryAfterFailure(
+        _ request: PushRequest,
+        status: Int,
+        response: URLResponse?,
+        data: Data?,
+        logString: String,
+        service: String,
+        context: BulletinContext,
+        key: String,
+        failureText: String? = nil
+    ) {
+        if let image = request.infoDict["image"] as? UIImage,
+           retryWithShrunkImage(request, image: image,
+                                 dataString: failureText ?? "HTTP \(status)",
+                                 logString: logString, service: service,
+                                 context: context, key: key) {
             return
         }
 
-        // A transport-level error says nothing about the payload size, so the
-        // image is kept intact here (unlike the "too large" path above).
+        let remaining = claimRetry(for: key)
+        guard remaining >= 0 else {
+            // Out of attempts: report the failure rather than clearing the state
+            // and going quiet.
+            setRetriesLeft(nil, for: key)
+            finish(request, status: status, response: response, data: data,
+                   error: failureText)
+            return
+        }
+
         let attempt = Pusher.tries - remaining
         PusherLog.debug("\(logString) ----- Retrying. Try \(attempt) of \(Pusher.tries) -----")
         PushLog.add(service: service, context: context,
-                    label: "----- Retrying. Try \(attempt) of \(Pusher.tries) -----")
-
-        // Delay so the server doesn't get mad at us.
-        let retry = request.copy(infoDict: request.infoDict)
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1) { [weak self] in
-            self?.sendAttempt(retry, logString: logString, service: service, context: context)
+                    label: "----- Retrying. Try \(attempt) of \(Pusher.tries) -----",
+                    tag: request.sequenceTag)
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + Pusher.delayBetweenRetries) { [weak self] in
+            self?.sendAttempt(request, logString: logString, service: service, context: context)
         }
     }
 
-    /// Handles a response that says the payload was too large.
+    /// Builds the next attempt with a smaller image, or with none.
     ///
-    /// Returns `true` when a retry was scheduled. The image is shrunk by the
-    /// configured factor, or dropped once the factor can no longer help (it is
-    /// at or below 1.0) or the budget is exhausted.
-    private func retryWithSmallerImage(
+    /// The caller has already decided to retry; this decides what to send. The
+    /// image is shrunk by the configured factor, and dropped once the factor can
+    /// no longer help or no attempts remain.
+    private func retryWithShrunkImage(
         _ request: PushRequest,
         image: UIImage,
         dataString: String,
@@ -423,8 +523,10 @@ public final class RequestSender {
         context: BulletinContext,
         key: String
     ) -> Bool {
+        // The retry decision was already taken by `retryAfterFailure`, which owns
+        // the budget; this only builds the next request.
         let remaining = claimRetry(for: key)
-        guard remaining >= 0 else { return false }
+        _ = remaining
 
         // `imageShrinkFactor` comes from user prefs, so a non-numeric value
         // falls back to the default rather than parsing as 0.
@@ -433,25 +535,23 @@ public final class RequestSender {
             : Pusher.defaultShrinkFactor
 
         var newBody = request.infoDict
-        let status: String
-        if remaining == 0 || shrinkFactor <= 1.0 {
-            // A factor that cannot shrink is as good as no shrink: drop the
-            // image rather than re-sending the same oversized payload until the
-            // budget runs out.
-            status = "removed"
+        if shrinkFactor <= 1.0 || remaining <= 0 {
+            // A factor at or below 1.0 cannot shrink anything, and no attempts are
+            // left to shrink in. Drop the image instead of sending it again
+            // unchanged — a notification without its picture still arrives.
             newBody["image"] = true
+            PushLog.add(service: service, context: context,
+                        label: "Image removed for the retry", object: dataString,
+                        tag: request.sequenceTag)
         } else {
-            status = "shrunk"
-            newBody["image"] = PushImage.shrunk(image, by: shrinkFactor)
+            let shrunk = PushImage.shrunk(image, by: shrinkFactor)
+            newBody["image"] = shrunk
+            PushLog.add(service: service, context: context,
+                        label: "Image shrunk for the retry",
+                        object: "\(Int(shrunk.size.width))×\(Int(shrunk.size.height))",
+                        tag: request.sequenceTag)
         }
 
-        let sizeString = (newBody["image"] as? UIImage).map { " (size: \($0.size))" } ?? ""
-        let attempt = Pusher.tries - remaining
-        PusherLog.debug("\(logString) Retrying. Try \(attempt) of \(Pusher.tries) with image \(status)\(sizeString). Success but response was \(dataString).")
-        PushLog.add(service: service, context: context,
-                    label: "----- Retrying. Try \(attempt) of \(Pusher.tries) with image \(status)\(sizeString). Network Response: Success, but response was \(dataString). -----")
-
-        // Delay so the server doesn't get mad at us.
         let retry = request.copy(infoDict: newBody)
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + Pusher.delayBetweenRetries) { [weak self] in
             self?.sendAttempt(retry, logString: logString, service: service, context: context)
@@ -467,6 +567,14 @@ public final class RequestSender {
 
     /// `application/x-www-form-urlencoded` encoding, RFC 3986 unreserved
     /// characters only and spaces as `+`.
+    /// Percent-encoding for a URL query value, where `+` means "plus" and a
+    /// space must be `%20`.
+    static func queryEncoded(_ value: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "+&=")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
     static func formEncoded(_ dictionary: [String: Any]) -> String {
         var allowed = CharacterSet()
         allowed.insert(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")

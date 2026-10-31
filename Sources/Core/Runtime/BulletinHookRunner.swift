@@ -51,6 +51,19 @@ public enum BulletinHookRunner {
         case received
         /// Runs after every filter has passed.
         case filtered
+
+        /// How the phase is named in the log.
+        ///
+        /// The settings page calls these "On Receiving" and "After Filtering", and
+        /// the log used the raw case names, so a reader had to translate between
+        /// two vocabularies to find out which of the two hooks had spoken. This is
+        /// the same wording the page uses.
+        public var title: String {
+            switch self {
+            case .received: return "On Receiving"
+            case .filtered: return "After Filtering"
+            }
+        }
     }
 
     /// What a hook decided.
@@ -69,6 +82,12 @@ public enum BulletinHookRunner {
         /// Why the hook could not finish. A failure keeps the notification
         /// moving: a broken hook must not silently drop pushes.
         public let failure: JavaScriptRunner.Failure?
+        /// Requests a `push()` in the hook sent, in script order.
+        ///
+        /// Empty in the pipeline, which supplies no way to send one. The editor's
+        /// Run supplies it and shows these, so a hook that forwards can be seen
+        /// doing it rather than only described as having done it.
+        public let trace: [JavaScriptRunner.TraceEntry]
 
         /// Whether the hook changed anything a reader would notice.
         public var hasChanges: Bool { changes.isEmpty == false }
@@ -135,7 +154,12 @@ public enum BulletinHookRunner {
         phase: Phase,
         context: BulletinContext,
         deviceState: DeviceState,
-        storage: [String: String] = [:]
+        storage: [String: String] = [:],
+        /// Sends a `push()` the hook asked for. The pipeline leaves this unset —
+        /// a hook that runs on every notification must not be able to send from
+        /// one — and only the editor's Run supplies it, so a script written
+        /// against a real request can be exercised there.
+        deliver: JavaScriptRunner.Deliver? = nil
     ) -> Outcome {
         // A hook runs on the calling queue. The caller (the pipeline) is already
         // off the main thread where the network is concerned; a hook's `fetch`
@@ -147,13 +171,23 @@ public enum BulletinHookRunner {
             bullet: bulletFields(from: context),
             device: deviceState.scriptValue,
             storage: storage,
-            timeout: Pusher.defaultScriptTimeout
+            timeout: Pusher.defaultScriptTimeout,
+            deliver: deliver
         )
     }
 
-    /// The bullet as a hook sees it: the fields a hook may write back.
-    static func bulletFields(from context: BulletinContext) -> [String: Any] {
-        [
+    /// The bullet a script sees: the fields it may write back.
+    ///
+    /// The one definition of this shape. A hook, a service script and every test
+    /// page all read it from here, because three hand-built dictionaries is how
+    /// they drift — the editor's copy was missing `icon`, so a script that
+    /// branched on it took the other path in a test than in production.
+    ///
+    /// `sim` is read-only in practice — `BulletChanges` has no field for it, so a
+    /// hook that assigns one changes nothing. It is here so a script can branch on
+    /// which card received an SMS.
+    public static func bulletFields(from context: BulletinContext) -> [String: Any] {
+        var fields: [String: Any] = [
             "appID": context.appID,
             "appName": context.appName,
             "title": context.title ?? "",
@@ -161,6 +195,17 @@ public enum BulletinHookRunner {
             "message": context.message ?? "",
             "date": ISO8601DateFormatter().string(from: context.date),
         ]
+        // The sender's icon, when the notification carries one. Absent rather
+        // than null, so `if (bullet.icon)` is the question a script actually asks.
+        if let icon = context.iconImage, let base64 = PushImage.base64(icon) {
+            fields["icon"] = base64
+        }
+        if let sim = context.simSubscription {
+            fields["sim"] = ["slot": sim.slot,
+                             "phoneNumber": sim.phoneNumber,
+                             "label": sim.label]
+        }
+        return fields
     }
 }
 
@@ -173,7 +218,7 @@ extension BulletinHookRunner.Outcome {
         BulletinHookRunner.Outcome(
             isKept: true, isForced: false, changes: BulletinHookRunner.BulletChanges(),
             consoleOutput: [], storage: storage,
-            failure: .script(message)
+            failure: .script(message), trace: []
         )
     }
 }

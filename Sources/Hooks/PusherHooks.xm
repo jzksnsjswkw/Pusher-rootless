@@ -17,6 +17,7 @@
 #import <BulletinBoard/BBServer.h>
 
 #import "Pusher-Swift.h"
+#import "PusherBanner.h"
 #import "Pusher-Bridging-Header.h"
 
 // MARK: - Config reload
@@ -128,6 +129,14 @@ static BOOL PusherIsBundle(NSString *bundleID) {
 
 %ctor {
   if (PusherIsBundle(@"com.apple.springboard")) {
+    // Before any hook can read a preference: the package was renamed, and the
+    // user's configuration is still filed under the old domain. Doing this here
+    // rather than on first use means the very first notification after an upgrade
+    // already sees the migrated settings.
+    //
+    // `PrefsStore` is a Swift enum — a namespace, not a class — so it has no ObjC
+    // name to message. A free function is the bridge.
+    NSPMigrateLegacyPreferences();
     if ([[UIDevice currentDevice].systemVersion compare:@"12.0" options:NSNumericSearch] == NSOrderedAscending) {
       %init(iOS10And11);
     } else if ([[UIDevice currentDevice].systemVersion compare:@"13.0" options:NSNumericSearch] == NSOrderedAscending) {

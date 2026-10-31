@@ -33,12 +33,14 @@ public enum DingtalkService: PushService {
         ]
     }
 
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
         let token = config.raw.string(DingtalkPrefKey.token, default: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         // The token is the whole credential; a request without one has no
         // recipient at all.
-        guard !token.isEmpty else { return nil }
+        guard !token.isEmpty else {
+            throw RequestError.missingField("Key")
+        }
 
         var components = URLComponents(string: endpoint)
         var query = [URLQueryItem(name: "access_token", value: token)]
@@ -117,9 +119,14 @@ public enum DingtalkService: PushService {
 
     /// The robot's signature: the secret is the key, `"<ms>\n<secret>"` the
     /// message. The query string wants the base64 percent-escaped.
+    /// The base64 signature, *not* URL-encoded.
+    ///
+    /// `URLQueryItem` encodes its own value, so pre-encoding here would percent-
+    /// encode the percent sign and the server would decode `%3D` where the
+    /// signature had `=`. A base64 signature contains `+`, `/` and `=`; all three
+    /// are what `URLQueryItem` exists to escape.
     private static func sign(timestamp: Int, secret: String) -> String {
         HmacSHA256.sign(key: secret, message: "\(timestamp)\n\(secret)")
-            .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
     }
 }
 

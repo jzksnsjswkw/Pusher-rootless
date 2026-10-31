@@ -37,14 +37,14 @@ public enum JavaScriptService: PushService {
 
     /// Reached only if the asynchronous path is bypassed; a script has to run to
     /// produce anything, so there is nothing to return here.
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
         nil
     }
 
     public static func request(
         context: BulletinContext,
         config: ServiceConfig,
-        completion: @escaping (PushRequest?) -> Void
+        completion: @escaping (Result<PushRequest, Error>) -> Void
     ) {
         // The script belongs to the definition, so it is read at send time: an
         // edit then applies to every service already using it.
@@ -53,10 +53,15 @@ public enum JavaScriptService: PushService {
         guard !script.isEmpty else {
             PushLog.add(service: config.name, context: context,
                         label: "Script is empty or its service was deleted")
-            completion(nil)
+            completion(.failure(RequestError.missingField("Script")))
             return
         }
 
+        // `push()` sends for real as the script runs, so the script gets a
+        // response back: the status is what tells it whether to carry on, and it
+        // is the same object `fetch` resolves to. The send happens on this run's
+        // own thread, which is a background one — never SpringBoard's main thread.
+        let service = config.name
         let outcome = JavaScriptRunner.run(
             script: script,
             bullet: payload(context: context, config: config),
@@ -66,7 +71,42 @@ public enum JavaScriptService: PushService {
             // in. An empty object when the service declares nothing, so a script
             // can read `pref.anything` safely either way.
             prefs: ConfigFields.values(forInstance: config.name, type: config.type),
-            fetch: ScriptHTTP.perform
+            // The same object a hook sees, captured on the main thread before this
+            // background run starts: `push()` can block for seconds, and a battery
+            // level read after that would describe the device at the wrong moment.
+            device: BulletinAdapter.deviceStateForHooks().scriptValue,
+            fetch: ScriptHTTP.perform,
+            deliver: { request in
+                // The request goes through the ordinary send, so it gets the
+                // ordinary treatment: the same log lines, the same retry budget,
+                // the same image shrinking on a 413. What changes is only that
+                // someone asks for the answer.
+                //
+                // One attempt is one `push()`. The sender reports its *final*
+                // outcome — after any retries — which is what the script needs to
+                // decide whether to push again.
+                let done = DispatchSemaphore(value: 0)
+                let box = OutcomeBox()
+                // `send` grants a fresh retry budget itself, which is what makes a
+                // second `push()` independent of the first one's retries.
+                request.completion = { result in
+                    box.result = result
+                    done.signal()
+                }
+                RequestSender.shared.send(
+                    request,
+                    logString: "[S:\(service),A:\(context.appName)]",
+                    service: service,
+                    context: context
+                )
+                // The wait is bounded by the retry budget: five attempts with the
+                // sender's delay between them, plus each attempt's own timeout.
+                let budget = Double(Pusher.tries) * (Self.attemptTimeout + Pusher.delayBetweenRetries)
+                _ = done.wait(timeout: .now() + budget)
+                return box.result ?? JavaScriptRunner.FetchResult(
+                    status: 0, error: "push() timed out before the request finished"
+                )
+            }
         )
 
         // The pipeline keeps console output out of the log: a script may print
@@ -77,48 +117,49 @@ public enum JavaScriptService: PushService {
         if let failure = outcome.failure {
             PushLog.add(service: config.name, context: context,
                         label: "Script failed", object: failure.message, dontTruncate: true)
-            completion(nil)
+            completion(.failure(RequestError.invalidField("Script", reason: failure.message)))
             return
         }
 
-        guard !outcome.requests.isEmpty else {
-            // Not an error: a script that sends nothing is how it declines.
+        // Every `push()` has already gone through the transport by the time the
+        // script finishes — its logging, its retries and its loop-window entry
+        // included. Nothing is left to deliver.
+        //
+        // This reports "handled" rather than "declined": the script did its job,
+        // and the only thing the engine must not do is send the same requests
+        // again. `.failure` would read as "this instance had nothing to send",
+        // which is the opposite of what happened.
+        if outcome.requests.isEmpty {
             PushLog.add(service: config.name, context: context, label: "Script sent nothing")
-            completion(nil)
+            completion(.failure(ScriptDeclined()))
             return
         }
-
-        // A script may ask for more than one request; the sender sends one, so
-        // the extras are handed to it in order through the resend chain, which
-        // already carries a retry budget and per-attempt logging.
-        completion(chaining(outcome.requests, startingAt: 0, service: config.name, context: context))
+        completion(.failure(RequestHandled()))
     }
 
-    // MARK: - Chaining several requests
-
-    /// Wraps `requests[start]` so that a successful send continues with the next.
+    /// The script sent its own requests; the pipeline must not send them again.
     ///
-    /// The sender is built to send a single request with retries, so the second
-    /// and later requests ride the existing resend mechanism: the handler is
-    /// called after a response arrives and returns the next request instead of a
-    /// retry. Nothing new is needed in the transport, and each step is logged by
-    /// the sender as it goes.
-    static func chaining(
-        _ requests: [PushRequest],
-        startingAt index: Int,
-        service: String,
-        context: BulletinContext
-    ) -> PushRequest {
-        let request = requests[index]
-        guard index + 1 < requests.count else { return request }
+    /// A failure by type because the return position is "no request for you", but
+    /// it is not an error: the caller checks for this and stays quiet.
+    struct RequestHandled: LocalizedError {
+        var errorDescription: String? { "Sent by the script" }
+    }
 
-        request.resendHandler = { _, _, _, _, completion in
-            let next = chaining(requests, startingAt: index + 1, service: service, context: context)
-            // `shouldFail: false` with a request means "send this instead",
-            // which is how the next request in the script's sequence goes out.
-            completion(next, false)
-        }
-        return request
+    /// How long one HTTP attempt may take before `push()` gives up waiting.
+    ///
+    /// Longer than the sender's own request timeout so its failure is the one
+    /// reported, rather than a generic "timed out" from here.
+    private static let attemptTimeout: TimeInterval = 15
+
+    /// Carries the sender's answer back across the wait.
+    private final class OutcomeBox: @unchecked Sendable {
+        var result: JavaScriptRunner.FetchResult?
+    }
+
+    /// A script that chose not to push. Not a failure, and reported separately so
+    /// the log does not call it one.
+    struct ScriptDeclined: LocalizedError {
+        var errorDescription: String? { "Script sent nothing" }
     }
 
     // MARK: - The `bullet` object

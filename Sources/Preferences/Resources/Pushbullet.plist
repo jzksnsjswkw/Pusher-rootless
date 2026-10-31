@@ -4,7 +4,6 @@
 <dict>
 	<key>items</key>
 	<array>
-		<!-- Credentials -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -12,33 +11,31 @@
 			<string>Credentials</string>
 		</dict>
 		<dict>
+			<key>action</key>
+			<string>openPushbulletAccount</string>
 			<key>cell</key>
 			<string>PSButtonCell</string>
 			<key>label</key>
 			<string>Open Pushbullet Account</string>
-			<key>action</key>
-			<string>openPushbulletAccount</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSEditTextCell</string>
+			<key>defaults</key>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>detail</key>
 			<string>PSDetailController</string>
-			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
 			<key>key</key>
 			<string>token</string>
-			<key>service</key>
-			<string>Pushbullet</string>
 			<key>label</key>
 			<string>Access Token:</string>
 			<key>noAutoCorrect</key>
 			<true/>
+			<key>service</key>
+			<string>Pushbullet</string>
 		</dict>
-
-		<!-- App List -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -46,14 +43,14 @@
 			<string>Apps</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.jzksnsjswkw.pusher/prefs</string>
 			<key>cell</key>
 			<string>PSSegmentCell</string>
 			<key>default</key>
 			<true/>
 			<key>defaults</key>
-			<string>com.noahsaso.pusher</string>
-			<key>PostNotification</key>
-			<string>com.noahsaso.pusher/prefs</string>
+			<string>com.jzksnsjswkw.pusher</string>
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>key</key>
@@ -72,6 +69,8 @@
 			</array>
 		</dict>
 		<dict>
+			<key>alphabeticIndexingEnabled</key>
+			<true/>
 			<key>cell</key>
 			<string>PSLinkCell</string>
 			<key>detail</key>
@@ -83,37 +82,33 @@
 			<key>service</key>
 			<string>Pushbullet</string>
 			<key>useSearchBar</key>
-			<true />
-			<key>alphabeticIndexingEnabled</key>
-			<true />
+			<true/>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSLinkCell</string>
-			<key>label</key>
-			<string>App Customization</string>
-			<key>icon</key>
-			<string>app_list</string>
-			<key>detail</key>
-			<string>NSPCustomizeAppsController</string>
-			<key>service</key>
-			<string>Pushbullet</string>
 			<key>defaultDevicesKey</key>
 			<string>devices</string>
+			<key>detail</key>
+			<string>NSPCustomizeAppsController</string>
+			<key>icon</key>
+			<string>app_list</string>
+			<key>label</key>
+			<string>App Customization</string>
+			<key>service</key>
+			<string>Pushbullet</string>
 		</dict>
-
-		<!-- Options -->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Options</string>
 			<key>footerText</key>
 			<string>SETUP:
 1. Click 'Open Pushbullet Account' above (https://www.pushbullet.com/#settings/account).
 2. Scroll down and click 'Create Access Token' on your account page.
 3. Copy the displayed access token into the associated field above.
 4. Click 'Receiving Devices' to validate your credentials and load the receiving device list.</string>
+			<key>label</key>
+			<string>Options</string>
 		</dict>
 	</array>
 	<key>title</key>

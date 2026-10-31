@@ -38,6 +38,19 @@ enum ShortcutSigner {
     /// The signed copy that ships in the bundle.
     private static let signedName = "PusherExampleSigned"
 
+    /// The iCloud record the example Shortcut is published at.
+    ///
+    /// This is a second, independent route to the same Shortcut: opening
+    /// `workflow://shortcuts/<id>` makes the Shortcuts app fetch Apple's own copy,
+    /// so its signature is Apple's and never expires on us. That is the only import
+    /// path that works from inside a tweak — see ``GuideSheet`` for why the
+    /// `import-shortcut` scheme cannot be used.
+    ///
+    /// Kept beside the signing code because the two are alternatives for the same
+    /// file: when the local signature lapses, `signedExample` renews it for the
+    /// share sheet, and the record covers the one-tap import in the meantime.
+    static let sharedRecordID = "e7c9b73d1fe74bd99c3f7f16e19a5fa0"
+
     enum SigningError: LocalizedError {
         case missingResource
         case network(String)

@@ -39,8 +39,8 @@ public enum EmailService: PushService {
     /// Not an HTTP request: like a shortcut, this one is delivered by its own
     /// branch in the sender. The message travels in `state`, which is the field
     /// meant for information a service hands to its delivery path.
-    public static func request(context: BulletinContext, config: ServiceConfig) -> PushRequest? {
-        guard let message = message(context: context, config: config) else { return nil }
+    public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
+        guard let message = try message(context: context, config: config) else { return nil }
         let request = PushRequest(urlString: "", infoDict: [:])
         request.state[EmailState.message] = message
         return request
@@ -50,11 +50,21 @@ public enum EmailService: PushService {
     ///
     /// Nil when a required field is missing, so the pipeline reports "nothing to
     /// send" the same way it does for a webhook with no URL.
-    static func message(context: BulletinContext, config: ServiceConfig) -> SMTPClient.Message? {
-        let from = config.raw.string(EmailPrefKey.from, default: "")
+    static func message(context: BulletinContext, config: ServiceConfig) throws -> SMTPClient.Message? {
+        // The From field takes whatever a mail client shows in its sender line,
+        // which is `Name <address>` as often as a bare address — copying it from
+        // another app is the normal way to fill this in. Only the address inside
+        // the angle brackets is usable: it is the SMTP envelope sender and the
+        // `MAIL FROM` argument, and the domain lookup that picks the server reads
+        // it too. A display name is already its own field on this page, so a name
+        // typed here is taken as the sender name when that field is empty.
+        let typedFrom = config.raw.string(EmailPrefKey.from, default: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        let parsed = EmailAddress(typedFrom)
+        let from = parsed.address
         let password = config.raw.string(EmailPrefKey.password, default: "")
-        guard !from.isEmpty, !password.isEmpty else { return nil }
+        guard !from.isEmpty else { throw RequestError.missingField("From") }
+        guard !password.isEmpty else { throw RequestError.missingField("SMTP Password") }
 
         // One key per address row is where the page stores what was typed, so the
         // list is assembled from those. An instance from before the rows existed
@@ -83,10 +93,18 @@ public enum EmailService: PushService {
         let endpoint = server(
             for: from, host: typedHost, port: typedPort, security: typedSecurity
         )
-        guard !endpoint.host.isEmpty, !to.isEmpty else { return nil }
+        guard !endpoint.host.isEmpty else {
+            // An unknown domain and no typed host leaves nothing to connect to,
+            // and the message should say which of the two is wrong.
+            throw RequestError.invalidField(
+                "From", reason: "no SMTP server is known for this domain; set Host"
+            )
+        }
+        guard !to.isEmpty else { throw RequestError.missingField("Recipient") }
 
-        let senderName = config.raw.string(EmailPrefKey.senderName, default: "")
+        let typedName = config.raw.string(EmailPrefKey.senderName, default: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        let senderName = typedName.isEmpty ? parsed.displayName : typedName
 
         // The subject defaults to the composed title — "微信: 西瓜猪" — so the
         // mailbox list shows the same line the phone's notification did.
@@ -121,7 +139,40 @@ public enum EmailService: PushService {
         )
     }
 
-    /// The server for a sender address, or the one the user typed.
+    /// What a person types into a From field, split into its two parts.
+///
+/// The forms a mail client shows, and therefore the forms people paste in:
+///
+///     someone@example.com
+///     "通知转发" <someone@example.com>
+///     Pusher <someone@example.com>
+///
+/// Anything before the angle brackets is the display name; the address is inside
+/// them. A bare address has no display name, and stray quotes around either part
+/// are dropped — they are punctuation of the format, not part of the value.
+struct EmailAddress {
+    let address: String
+    let displayName: String
+
+    init(_ raw: String) {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let open = trimmed.lastIndex(of: "<"), let close = trimmed.lastIndex(of: ">"),
+           open < close {
+            // Convert to `String.Index` on the same string before slicing: the
+            // brackets came from `trimmed`, and the range has to as well.
+            let inner = trimmed[trimmed.index(after: open)..<close]
+            let outer = trimmed[trimmed.startIndex..<open]
+            address = inner.trimmingCharacters(in: .whitespacesAndNewlines)
+            displayName = outer
+                .trimmingCharacters(in: CharacterSet(charactersIn: " \t\"\u{201C}\u{201D}"))
+        } else {
+            address = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            displayName = ""
+        }
+    }
+}
+
+/// The server for a sender address, or the one the user typed.
     ///
     /// A typed host wins outright, and carries its own port and mode with it: a
     /// mailbox on an unlisted domain is only usable by typing these, so nothing is

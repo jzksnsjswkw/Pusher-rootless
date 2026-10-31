@@ -1,7 +1,7 @@
 import Foundation
 
 /// Central `CFPreferences` access for the Pusher preference domain
-/// (`com.noahsaso.pusher`).
+/// (`com.jzksnsjswkw.pusher`).
 ///
 /// The tweak core and the Preferences bundle read and write the same nested
 /// `BuiltInServices` / `CustomServices` / `Global` layout, so raw plist I/O,
@@ -34,6 +34,56 @@ public enum PrefsStore {
         synchronize()
         if notify { notifyPrefsChanged() }
     }
+
+    /// Copies the configuration of an earlier preference domain into this one.
+    ///
+    /// The package and its preference domain were renamed from
+    /// `com.noahsaso.pusher` to `com.jzksnsjswkw.pusher`. Nothing in the code reads
+    /// the old domain, so without this an upgrade would look like a fresh install:
+    /// every instance, rule and script gone, with the data still sitting in a plist
+    /// the user cannot reach from the UI.
+    ///
+    /// Runs once, and only into an empty domain. That condition is what makes it
+    /// safe to call on every launch: a user who has since configured the new
+    /// domain is never overwritten, and a user who deliberately cleared their
+    /// settings does not get them resurrected from a stale copy.
+    public static func migrateLegacyDomainIfNeeded() {
+        // The configuration and the log live in two domains, and both moved.
+        copyDomain(from: legacyAppID, to: Pusher.appID)
+        copyDomain(from: legacyLogDomain, to: Pusher.logDomain)
+    }
+
+    /// Copies every key the destination does not already have.
+    ///
+    /// Per-key rather than all-or-nothing. An earlier version bailed out when the
+    /// destination held *any* key, which meant one setting written by the new
+    /// build before the migration ran — a default, a migrated log flag — blocked
+    /// the whole of the user's old configuration for ever. Copying only the keys
+    /// that are absent is idempotent and cannot overwrite a newer value.
+    private static func copyDomain(from old: String, to new: String) {
+        guard let values = CFPreferencesCopyMultiple(
+            nil, old as CFString, kCFPreferencesCurrentUser, kCFPreferencesAnyHost
+        ) as? [String: Any], !values.isEmpty else { return }
+
+        let existing = (CFPreferencesCopyMultiple(
+            nil, new as CFString, kCFPreferencesCurrentUser, kCFPreferencesAnyHost
+        ) as? [String: Any]) ?? [:]
+
+        var copied = 0
+        for (key, value) in values where existing[key] == nil {
+            CFPreferencesSetValue(
+                key as CFString, value as CFPropertyList?,
+                new as CFString, kCFPreferencesCurrentUser, kCFPreferencesAnyHost
+            )
+            copied += 1
+        }
+        CFPreferencesAppSynchronize(new as CFString)
+        _ = copied
+    }
+
+    /// The domains the tweak used before the package was renamed.
+    static let legacyAppID = "com.noahsaso.pusher"
+    static let legacyLogDomain = "com.noahsaso.pusher~log"
 
     /// A full snapshot of the domain, or `[:]` when it is empty.
     public static func snapshot() -> [String: Any] {
@@ -188,7 +238,7 @@ public enum PrefsStore {
 }
 
 /// Central `CFPreferences` access for the Pusher log domain
-/// (`com.noahsaso.pusher~log`).
+/// (`com.jzksnsjswkw.pusher~log`).
 ///
 /// Both the tweak core and the Preferences log viewer read and write the same
 /// per-service `<service>Log` arrays, so raw plist I/O and the reload
@@ -270,4 +320,14 @@ public enum LogStore {
     public static func notifyLogChanged() {
         notify_post(Pusher.logPrefsNotification)
     }
+}
+
+/// The migration, reachable from the ObjC `%ctor`.
+///
+/// `PrefsStore` is a Swift enum, so it has no ObjC name to message, and `@_cdecl`
+/// only applies to a global function. This is the same bridge `PusherLogError`
+/// uses for the shortcut runner.
+@_cdecl("NSPMigrateLegacyPreferences")
+public func NSPMigrateLegacyPreferences() {
+    PrefsStore.migrateLegacyDomainIfNeeded()
 }

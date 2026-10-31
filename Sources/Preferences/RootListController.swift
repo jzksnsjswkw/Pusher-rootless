@@ -17,6 +17,12 @@ public final class RootListController: ListController {
     public override func viewDidLoad() {
         super.viewDidLoad()
 
+        // The Preferences app is a separate process; the migration in the tweak's
+        // `%ctor` only ever runs in SpringBoard. Without this, opening Settings
+        // before SpringBoard has restarted would show an empty page over
+        // configuration that is about to be migrated.
+        NSPMigrateLegacyPreferences()
+
         // Remember the tint Settings had before the page was opened, so leaving
         // it can restore what the user's other tweaks expect.
         if priorTintColor == nil {
@@ -62,7 +68,14 @@ public final class RootListController: ListController {
         frame.size.width = width
         frame.size.height *= ratio
         imageView.frame = frame
-        container.frame = frame
+
+        // The banner used to carry its own breathing room as a transparent strip
+        // at the bottom. It was part of the image, so the gap scaled with the
+        // screen — and it scaled into the table header's height too. The gap is
+        // a fixed number here instead, and the image was cropped to the artwork.
+        let gap: CGFloat = 40
+        container.frame = CGRect(x: 0, y: 0,
+                                 width: width, height: frame.height + gap)
 
         let tooTall = frame.height >= UIScreen.main.bounds.height / 3
         if isShowingHeader, tooTall {
