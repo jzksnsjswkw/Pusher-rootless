@@ -73,20 +73,33 @@ public enum BarkService: PushService {
     }
 
     public static func request(context: BulletinContext, config: ServiceConfig) throws -> PushRequest? {
-        var infoDict: [String: Any] = [
-            "title": context.displayTitle,
-            "body": context.message ?? "",
-        ]
-        // Bark has a field for the subtitle, so the three arrive as three and the
-        // notification keeps its own shape. `displayMessage` is not used here for
-        // exactly that reason: it joins the subtitle to the body for services
-        // that have only one place to put both, and Bark is not one of them —
-        // its own subtitle line would be blank while the words sat at the top of
-        // the body.
+        var infoDict: [String: Any] = ["body": context.message ?? ""]
+
+        // Where the app's name goes depends on what the notification has below it.
         //
-        // Absent when there is none, which is what the API means by unset: an
-        // empty `subtitle` would draw a blank line above the body.
-        if let subtitle = context.subtitle, !subtitle.isEmpty {
+        // Bark draws three lines: title, subtitle, body. A notification without a
+        // subtitle has only two things to put there, so the app's name takes the
+        // title and the notification's own title becomes the subtitle — which is
+        // what Bark's own notifications look like. With a subtitle present, all
+        // three lines are used as they are.
+        //
+        // `displayTitle` is not used for any of them: it is the joined
+        // "app: title" form, which would put the app's name on the title line twice
+        // in the first case and duplicate it in the second.
+        let appName = context.appName
+        let title = context.title ?? ""
+        let subtitle = context.subtitle ?? ""
+
+        if subtitle.isEmpty {
+            // Two lines to fill: the app names the notification, and the
+            // notification's title sits under it.
+            infoDict["title"] = appName
+            if !title.isEmpty { infoDict["subtitle"] = title }
+        } else {
+            // Three lines, and the app's name is the one that gets dropped — Bark's
+            // notification only has room for the three fields, and losing the
+            // subtitle to repeat the app name would lose the part a person reads.
+            infoDict["title"] = title.isEmpty ? appName : title
             infoDict["subtitle"] = subtitle
         }
         for (prefKey, apiName) in parameters {
