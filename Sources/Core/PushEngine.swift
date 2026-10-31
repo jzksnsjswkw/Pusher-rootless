@@ -131,6 +131,19 @@ public final class PushEngine: NSObject {
 
         var context = BulletinAdapter.context(for: bulletin)
 
+        // A notification the user composed on the test page is published so they can
+        // look at it, and that is all the publish is for. It is forwarded by the
+        // test path, which names the instance it is aimed at — running it through
+        // the fan-out as well is what sent an enabled instance two requests for one
+        // press of the button.
+        //
+        // Returned before the filters and the loop guard so a composed notification
+        // costs nothing here: no logging, no lookup, no send.
+        if context.isComposed {
+            PusherLog.debug("Composed notification, shown only")
+            return
+        }
+
         // Which SIM carried this message is not in the bulletin — the notification
         // layer never sees a subscription. `imagent` does, so the answer is asked
         // for over IPC, and only for SMS, because nothing else has a SIM.
@@ -361,12 +374,11 @@ public final class PushEngine: NSObject {
         let snapshot = config ?? currentConfig()
         guard let instance = snapshot.instance(id: id) else { return }
 
-        // A context built here always carries its own settings: in SpringBoard the
-        // adapter read them from `BBServer`, and a test skips the conditions that
-        // would read them. There used to be a hop to SpringBoard for the case where
-        // neither held — it could only be reached from Preferences, which only sends
-        // tests, so it never ran and is gone. The hop was also the last thing
-        // writing a preferences domain of its own.
+        // Sent whether or not the instance is switched on: this entry point is the
+        // one a test button and a hook's Run use, and both name the destination
+        // they mean. "Is this instance enabled" answers a different question —
+        // whether live notifications reach it — and consulting it here is what made
+        // a test on a switched-off instance look like a broken credential.
         deliver(context, to: instance, config: snapshot)
     }
 
@@ -445,13 +457,20 @@ public final class PushEngine: NSObject {
         // hiding — which is an effect on the device and takes any list's answer —
         // forwarding is per destination, so each list is asked about its own
         // destination only and the answer is local to this call.
-        let ownRules = FilterRules.instance(id).outcome(for: context)
-        let globalRules = FilterRules.global().outcome(for: context)
-        if let action = ownRules ?? globalRules, !action.forwards {
-            let label = "Filtered by a rule (\(action.rawValue))"
-            PusherLog.debug("[S:\(id),A:\(context.appID)] \(label)")
-            PushLog.add(service: id, context: context, label: label)
-            return
+        //
+        // Skipped for a test push: a test asks whether this instance can send, and
+        // a rule that would stop a real notification is exactly what it must not be
+        // stopped by — otherwise the answer it returns is about the rule, not about
+        // the credential.
+        if !context.isTest {
+            let ownRules = FilterRules.instance(id).outcome(for: context)
+            let globalRules = FilterRules.global().outcome(for: context)
+            if let action = ownRules ?? globalRules, !action.forwards {
+                let label = "Filtered by a rule (\(action.rawValue))"
+                PusherLog.debug("[S:\(id),A:\(context.appID)] \(label)")
+                PushLog.add(service: id, context: context, label: label)
+                return
+            }
         }
 
         // ── The "received" hook ─────────────────────────────────────────────

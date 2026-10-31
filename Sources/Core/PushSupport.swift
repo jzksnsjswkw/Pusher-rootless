@@ -185,6 +185,13 @@ public struct BulletinContext {
     /// Whether this is a test rather than a live notification.
     public var isTest: Bool { test != nil }
 
+    /// A notification the user composed on the test page.
+    ///
+    /// It is published so it can be looked at, and forwarded by the test path —
+    /// never by the fan-out, which would send it to every instance instead of the
+    /// one it was aimed at.
+    public var isComposed: Bool { test == .composed }
+
     // MARK: Raw content
 
     /// Bulletin content exactly as `BBBulletin` carried it. Used by the shared

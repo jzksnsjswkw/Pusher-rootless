@@ -94,20 +94,16 @@
   // `BulletinAdapter.wasPresented`.
   if ([userInfo[@"display"] boolValue]) {
     NSDictionary *shown = [self displayDraftJSON:draftJSON];
-    // Nothing is sent from here. The published notification re-enters the engine
-    // as a real bulletin, and the engine forwards it to every enabled instance —
-    // which is the behaviour a notification the user composed should have. Sending
-    // as well is what made an enabled instance receive it twice.
+    // Shown, then sent to the one instance named. The publish is what puts it on
+    // the screen, and the engine does not forward a composed bulletin — so this
+    // send is the only forwarding that happens, to the destination the page was
+    // opened from, and no fan-out is involved.
     //
-    // The one case that needs the push: publishing failed, so no bulletin exists
-    // and no forward will happen. The reply says which of the two it was, and the
-    // page reports it.
-    if ([shown[@"displayed"] boolValue]) {
-      return @{@"displayed": @YES, @"hasInstance": @YES};
-    }
-    NSMutableDictionary *reply =
-        [@{@"displayed": @NO,
-           @"reason": shown[@"reason"] ?: @"SpringBoard could not publish"} mutableCopy];
+    // The push still happens when publishing failed: the notification is the
+    // answer to "does this look right", but the request is the answer to "does my
+    // instance take it", and only the second of those is what a user runs a test
+    // for.
+    NSMutableDictionary *reply = [shown mutableCopy];
     [reply addEntriesFromDictionary:
         [NSPTestPush sendTestPushToService:service draftJSON:draftJSON]];
     return reply;
