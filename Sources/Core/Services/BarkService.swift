@@ -103,7 +103,7 @@ public enum BarkService: PushService {
         // message, the picture is the extra.
         if infoDict["image"] == nil, let url = context.attachmentURL,
            let data = try? Data(contentsOf: url),
-           let hosted = ImageHost.url(for: data, storage: config.name) {
+           let hosted = ImageHosts.url(for: data, host: BasePicHost.self) {
             infoDict["image"] = hosted
         }
         // `delete` is only meaningful together with an id.
