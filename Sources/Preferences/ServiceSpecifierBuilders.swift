@@ -29,6 +29,15 @@ public final class ServiceSpecifierBuilders: NSObject {
 
     private var builders: [String: Builder] = [:]
 
+    /// Whether this service has a builder of its own.
+    ///
+    /// Asked by pages that would otherwise append a second copy of cells the
+    /// builder already produced — the registry is the only thing that knows, and a
+    /// page appending "the payload options" without asking gets them twice.
+    public func hasBuilder(for service: String) -> Bool {
+        builders[service] != nil
+    }
+
     private override init() {
         super.init()
         registerAll()

@@ -771,7 +771,15 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         if needsBuiltAppFilter {
             all.append(contentsOf: appFilterSpecifiers())
         }
-        if needsBuiltPayloadOptions {
+        // Only when the type's own builder did not already produce them. A
+        // registered builder is the service's own answer — Bark's is `bark()`,
+        // which ends with the payload options — so appending another copy put two
+        // sets of switches and two sets of size fields on the page.
+        //
+        // A type with no builder, or a script, has nothing to ask, and that is the
+        // case this branch exists for.
+        if needsBuiltPayloadOptions,
+           !ServiceSpecifierBuilders.shared.hasBuilder(for: serviceType) {
             // The switches are asked for by the type's own name: for a script they
             // are the ones *this definition* declared, which is what makes the
             // definition's choices meaningful rather than a default a page can
