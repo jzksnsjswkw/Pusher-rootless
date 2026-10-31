@@ -32,9 +32,25 @@ else
     # resource trees, every service plist, and the control file itself. A plist
     # edit that skipped the full stage would ship the previous build's bundle.
     SCHEME_STAMP=.theos/.staged-scheme
-if [ -f "$SCHEME_STAMP" ] && [ "$(cat "$SCHEME_STAMP")" != "$SCHEME" ]; then
-    NEEDS_STAGE=1
-fi
+    if [ -f "$SCHEME_STAMP" ] && [ "$(cat "$SCHEME_STAMP")" != "$SCHEME" ]; then
+        NEEDS_STAGE=1
+    fi
+
+    # The stamp records which scheme last *ran* here, and it is written by this
+    # script — so a build started by hand for the other scheme leaves it saying
+    # roothide while `.theos/_` holds arm64. That is how an arm64 Preferences
+    # bundle reached a roothide device and the page refused to load. The staged
+    # file's own architecture is the fact; the stamp is only a hint.
+    for staged in .theos/_/Library/PreferenceBundles/Pusher.bundle/Pusher \
+                   .theos/_/Library/MobileSubstrate/DynamicLibraries/Pusher.dylib; do
+        [ -f "$staged" ] || continue
+        want=arm64e
+        [ "$SCHEME" = "rootless" ] && want=arm64
+        if ! lipo -info "$staged" 2>/dev/null | grep -qw "$want"; then
+            echo "→ staged $(basename "$staged") is not $want"
+            NEEDS_STAGE=1
+        fi
+    done
 
 NEWER=$(find Sources -type f \( -name '*.plist' -o -path '*/Resources/*' \) \
                  -newer "$DEB" 2>/dev/null | head -1)
