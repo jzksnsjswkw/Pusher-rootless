@@ -123,6 +123,14 @@
   NSString *slotText = draft[@"simSlot"];
   long long slot = [slotText respondsToSelector:@selector(longLongValue)]
       ? [slotText longLongValue] : 0;
+  // Logged because a composed notification that does not appear leaves nothing
+  // behind: the page gets a reply, and the reply is all the user sees. The app id
+  // is the one field that decides whether SpringBoard can resolve a section for
+  // it, so it is the first thing to look at when a notification with a name like
+  // 爱加速 does not draw.
+  NSLog(@"[Pusher] publish draft: appID=%@ title=%@ subtitle=%@ attachment=%@",
+        draft[@"appID"], draft[@"title"], draft[@"subtitle"],
+        draft[@"attachmentPath"] ?: @"(none)");
   BOOL shown = PusherPublishBanner(draft[@"appID"],
                                    draft[@"title"],
                                    subtitle.length > 0 ? subtitle : nil,

@@ -245,11 +245,22 @@ static BOOL PusherPublishOnMain(NSString *sectionID,
     // The one attachment builder, in Swift: a hand-copied second version here is
     // what gave the composed banner a different identifier than the pipeline's,
     // and a mismatched identifier is an attachment that does not load.
-    id metadata = [NSPBulletinAttachment metadataForPath:attachmentPath];
+    //
+    // A failure to load is reported rather than fatal: the notification is the
+    // thing being tested, and dropping it because the picture would not load
+    // answers a question nobody asked. The page shows the reason.
+    id metadata = nil;
+    @try {
+      metadata = [NSPBulletinAttachment metadataForPath:attachmentPath];
+    } @catch (NSException *exception) {
+      metadata = nil;
+    }
     if (metadata != nil) {
       PusherSetIfPossible(bulletin, @"primaryAttachment", metadata);
     } else {
-      PusherPublishBannerFailure = @"Could not build an attachment";
+      NSLog(@"[Pusher] publish: attachment could not be built from %@", attachmentPath);
+      PusherPublishBannerFailure =
+          @"The attachment could not be loaded; the notification was not shown";
       return NO;
     }
   }
@@ -276,7 +287,20 @@ static BOOL PusherPublishOnMain(NSString *sectionID,
     if (target != NULL) {
       // The queue the server demands. `dispatch_sync` from here blocks the waiting
       // IPC caller, not SpringBoard's UI.
-      dispatch_sync(target, publish);
+      //
+      // Caught, because publishing is not a leaf: SpringBoard resolves the
+      // section's icon while drawing the notification, and an icon it cannot make
+      // raises rather than returning nil. Uncaught, that exception travels back
+      // through the messaging centre and the notification simply never appears —
+      // with the forward still sent, since that is a separate call.
+      @try {
+        dispatch_sync(target, publish);
+      } @catch (NSException *exception) {
+        PusherPublishBannerFailure = [NSString
+            stringWithFormat:@"Publishing raised %@: %@",
+                             exception.name, exception.reason];
+        return NO;
+      }
     } else {
       // Without the private symbol there is no queue to satisfy. Publishing from
       // any thread would trip the same assertion, so the answer is "no" rather
