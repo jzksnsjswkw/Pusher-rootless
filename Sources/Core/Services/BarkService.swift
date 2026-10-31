@@ -176,6 +176,20 @@ public enum BarkService: PushService {
         return request
     }
 
+    /// Whether this instance asked for the picture fields.
+    ///
+    /// The protocol's defaults are `false`, so a service that supports pictures
+    /// has to say so here as well: declaring `supportsImage` only makes the switch
+    /// appear, and without these the switch would be drawn, stored, and read by
+    /// nobody.
+    public static func shouldIncludeIcon(config: ServiceConfig) -> Bool {
+        config.raw.bool(PrefKey.includeIcon)
+    }
+
+    public static func shouldIncludeImage(config: ServiceConfig) -> Bool {
+        config.raw.bool(PrefKey.includeImage)
+    }
+
     public static func defaultPrefs() -> [String: Any] {
         var prefs: [String: Any] = [PrefKey.serverURL: defaultServer]
         for (prefKey, _) in parameters {
