@@ -68,32 +68,45 @@ public final class ImageHostPickerController: UITableViewController {
 
     // MARK: - Table
 
-    public override func numberOfSections(in tableView: UITableView) -> Int { 1 }
+    public override func numberOfSections(in tableView: UITableView) -> Int { 2 }
 
     public override func tableView(
         _ tableView: UITableView, numberOfRowsInSection section: Int
     ) -> Int {
-        ImageHostRegistry.all.count
+        section == 0 ? ImageHostRegistry.all.count : 1
     }
 
     public override func tableView(
         _ tableView: UITableView, titleForHeaderInSection section: Int
     ) -> String? {
-        "上传到".localized
+        section == 0 ? "上传到".localized : nil
     }
 
     public override func tableView(
         _ tableView: UITableView, titleForFooterInSection section: Int
     ) -> String? {
+        guard section == 0 else {
+            // What the other section is for, since the button there is destructive
+            // looking and its effect is invisible until the next push.
+            return ("清空后，下次推送时会重新上传。已经上传到图床的图片不会被删除。").localized
+        }
         // The consequence, in one sentence: a service that only takes a link will
         // get one from here, and a user choosing between these needs to know what
         // the choice affects.
-        "服务只能接收图片链接时，附件会先上传到这里，再把链接发出去。".localized
+        return "服务只能接收图片链接时，附件会先上传到这里，再把链接发出去。".localized
     }
 
     public override func tableView(
         _ tableView: UITableView, cellForRowAt indexPath: IndexPath
     ) -> UITableViewCell {
+        guard indexPath.section == 0 else {
+            let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+            cell.textLabel?.text = "Clear cache".localized
+            cell.textLabel?.textColor = .systemRed
+            cell.textLabel?.textAlignment = .center
+            cell.textLabel?.numberOfLines = 1
+            return cell
+        }
         let host = ImageHostRegistry.all[indexPath.row]
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
         cell.textLabel?.text = host.displayName
@@ -121,6 +134,10 @@ public final class ImageHostPickerController: UITableViewController {
         _ tableView: UITableView, didSelectRowAt indexPath: IndexPath
     ) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard indexPath.section == 0 else {
+            confirmClearCache()
+            return
+        }
         let host = ImageHostRegistry.all[indexPath.row]
         PrefsStore.updateGlobal { $0[PrefKey.imageHostKey] = host.identifier }
         onSelect?(host.identifier)
@@ -129,6 +146,36 @@ public final class ImageHostPickerController: UITableViewController {
         // are reloaded rather than the sheet being rebuilt — a rebuild would drop
         // the scroll position for no gain.
         tableView.reloadData()
+    }
+
+    /// Empties the link cache, after asking.
+    ///
+    /// The next push re-uploads, so nothing breaks — but an icon that has been
+    /// cached for months becomes one request per notification until it is cached
+    /// again, and a user tapping a red row deserves to know that is what it does.
+    private func confirmClearCache() {
+        let count = ImageHosts.cachedEntryCount()
+        let alert = UIAlertController(
+            title: "Clear cache".localized,
+            message: String(
+                format: "%d cached image links will be removed; the next push uploads them again.".localized,
+                count
+            ),
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel".localized, style: .cancel))
+        alert.addAction(UIAlertAction(title: "Clear".localized, style: .destructive) { _ in
+            ImageHosts.clearCache()
+            self.tableView.reloadData()
+            let done = UIAlertController(
+                title: nil,
+                message: "Cleared".localized,
+                preferredStyle: .alert
+            )
+            done.addAction(UIAlertAction(title: "Ok".localized, style: .default))
+            self.present(done, animated: true)
+        })
+        present(alert, animated: true)
     }
 
     /// Presents the sheet over `presenter`.

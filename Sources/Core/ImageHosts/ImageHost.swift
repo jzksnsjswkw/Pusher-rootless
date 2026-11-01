@@ -149,6 +149,26 @@ public enum ImageHosts {
         return uploaded
     }
 
+    /// How many links are stored, over every host.
+    ///
+    /// Shown before the cache is cleared: "清空缓存" with no number is a button whose
+    /// effect the user cannot judge.
+    public static func cachedEntryCount() -> Int {
+        let hosts = PrefsStore.global()[storageKey] as? [String: Any] ?? [:]
+        return hosts.values.reduce(0) { total, value in
+            total + ((value as? [String: Any])?.count ?? 0)
+        }
+    }
+
+    /// Forgets every link.
+    ///
+    /// Only the cache: the pictures themselves stay on the host, where a link that
+    /// has already been sent still resolves. Clearing here means the next push
+    /// uploads again, which is the point — a stale entry is what the button is for.
+    public static func clearCache() {
+        PrefsStore.updateGlobal { $0.removeValue(forKey: storageKey) }
+    }
+
     /// Every link stored for `data`, by host, so a caller can report what it has.
     static func cachedLinks(for data: Data) -> [String: String] {
         let key = contentKey(for: data)
