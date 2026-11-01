@@ -325,12 +325,16 @@ enum HookGuide {
                     + "all.").localized),
 
                 .heading("Let an AI write it".localized),
-                .text(("Tap Copy AI Prompt (top right). It is a system prompt that "
-                    + "teaches the assistant this hook's API. The dialog asks what "
-                    + "you want; paste the whole thing to your assistant, then "
-                    + "paste the JavaScript it writes back here.").localized),
+                .text(("Tap Copy AI Prompt (top right) and send the whole thing to "
+                    + "your assistant. It knows this hook's API, and it will ask "
+                    + "what you want before writing anything — answer in plain "
+                    + "words. Then paste the JavaScript it writes back here.").localized),
             ],
-            prompt: { JavaScriptAPI.hookPrompt(requirement: $0) }
+            prompt: { JavaScriptAPI.hookPrompt(requirement: $0) },
+            // The AI asks its own questions, so there is nothing to type before
+            // copying: asking here would be the same question twice, and the quick
+            // answer typed into an alert would be worse than the conversation.
+            asksForRequirement: false
         )
     }
 }

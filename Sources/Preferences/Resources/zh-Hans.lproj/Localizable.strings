@@ -855,3 +855,5 @@
 "Should the forwarded text change? If so, what should it look like — an example of before and after helps more than a description." = "转发出去的内容要不要改写？如果要，希望变成什么样——给个「改前 / 改后」的例子比描述更清楚。";
 "Anything that should be remembered between notifications, like 「only once every ten minutes」? If you are not sure, say no." = "有什么需要在多条通知之间记住的吗？比如「十分钟内只提醒一次」。不确定就说没有。";
 "If an answer is vague, ask one follow-up question rather than guessing — a hook that does the wrong thing is harder to notice than one that does nothing." = "如果我的回答含糊，追问一句，不要猜。做错事的钩子比什么都不做的钩子更难发现。";
+"Copied. Send it to your AI assistant as-is." = "已复制，请原样发送给 AI";
+"Tap Copy AI Prompt (top right) and send the whole thing to your assistant. It knows this hook's API, and it will ask what you want before writing anything — answer in plain words. Then paste the JavaScript it writes back here." = "点右上角「复制 AI 提示词」，整段发给 AI。它知道钩子的 API，而且会先问你想要什么再写代码——用大白话回答就行。然后把 AI 写的 JavaScript 粘回这里。";

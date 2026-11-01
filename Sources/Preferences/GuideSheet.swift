@@ -61,12 +61,22 @@ enum GuideSheet {
     private final class Target: NSObject {
         weak var host: UIViewController?
         var prompt: ((String) -> String)?
+        /// Whether the prompt needs something typed before it can be copied.
+        ///
+        /// A prompt that tells the AI to ask its own questions does not: asking the
+        /// user for a requirement first would be the same question twice, and the
+        /// second answer — the quick one typed into an alert — would be worse.
+        var asksForRequirement = true
 
         @objc func close() {
             host?.dismiss(animated: true)
         }
 
         @objc func copyPrompt() {
+            guard asksForRequirement else {
+                self.copy("")
+                return
+            }
             let alert = UIAlertController(
                 title: "Copy AI Prompt".localized,
                 message: ("The prompt describes this API. Add what you want "
@@ -79,18 +89,22 @@ enum GuideSheet {
                 field.autocorrectionType = .yes
             }
             alert.addAction(UIAlertAction(title: "Copy".localized, style: .default) { _ in
-                UIPasteboard.general.string =
-                    self.prompt?(alert.textFields?.first?.text ?? "")
-                let done = UIAlertController(
-                    title: nil,
-                    message: "Copied. Paste it into your AI assistant.".localized,
-                    preferredStyle: .alert
-                )
-                done.addAction(UIAlertAction(title: "Ok".localized, style: .default))
-                self.host?.present(done, animated: true)
+                self.copy(alert.textFields?.first?.text ?? "")
             })
             alert.addAction(UIAlertAction(title: "Cancel".localized, style: .cancel))
             host?.present(alert, animated: true)
+        }
+
+        /// Puts the prompt on the pasteboard and says so.
+        private func copy(_ requirement: String) {
+            UIPasteboard.general.string = prompt?(requirement)
+            let done = UIAlertController(
+                title: nil,
+                message: "Copied. Send it to your AI assistant as-is.".localized,
+                preferredStyle: .alert
+            )
+            done.addAction(UIAlertAction(title: "Ok".localized, style: .default))
+            host?.present(done, animated: true)
         }
     }
 
@@ -108,7 +122,8 @@ enum GuideSheet {
         from controller: UIViewController,
         title: String,
         blocks: [Block],
-        prompt: ((String) -> String)? = nil
+        prompt: ((String) -> String)? = nil,
+        asksForRequirement: Bool = true
     ) {
         let host = UIViewController()
         host.view.backgroundColor = .systemGroupedBackground
@@ -117,6 +132,7 @@ enum GuideSheet {
         let target = Target()
         target.host = host
         target.prompt = prompt
+        target.asksForRequirement = asksForRequirement
         // The copy button is for the guides whose subject is code an AI can
         // write. A guide whose subject is a sequence of taps in another app has
         // nothing to hand over, and offering the button would suggest otherwise.
