@@ -451,7 +451,11 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
         // compose page use: one notification on screen, one push to the instance.
         // A Run that only printed the outcome left the user guessing whether the
         // hook's edits reached a real payload.
-        if outcome.isKept, let json = NotificationDraftController.payload(for: outgoing) {
+        // The draft shown on screen is what the user typed, not what the hook made
+        // of it: the banner is the input, and the output already says what changed.
+        // Sending the edited version too would show a notification whose text no
+        // longer matches the fields on the page.
+        if let json = NotificationDraftController.payload(for: draft, ranHook: phase) {
             let reply = NotificationDraftController.deliver(json, to: instanceID)
             let displayed = (reply?["displayed"] as? NSNumber)?.boolValue == true
             let built = (reply?["builtRequest"] as? NSNumber)?.boolValue

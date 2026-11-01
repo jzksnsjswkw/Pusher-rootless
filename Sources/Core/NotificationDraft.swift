@@ -30,6 +30,14 @@ public struct NotificationDraft {
     /// `sim` field on a WeChat notification would be a lie a script could read.
     public var sim: SIMSubscription?
 
+    /// The hook a Run already executed in its editor, if this draft came from one.
+    ///
+    /// Carried to the pipeline so it skips that phase: the editor runs the hook to
+    /// show what it decided, and running it again on the way to the service would
+    /// apply its edits twice — a hook that appends text appended it twice in the
+    /// payload that actually went out.
+    public var ranHook: BulletinHookRunner.Phase?
+
     /// The content a test notification starts with.
     ///
     /// One set, here, because every test page opens on it: the instance's test
@@ -156,8 +164,13 @@ public struct NotificationDraft {
     ///   app, notification-settings and device filters skip it. A custom test
     ///   notification still asks "does my *credential* work"; the rules that
     ///   suppress unwanted pushes are not meant to interfere with answering that.
-    public func makeContext(test: TestOrigin? = .composed) -> BulletinContext {
+    public func makeContext(test: TestOrigin? = nil) -> BulletinContext {
         let draft = normalised()
+        // A draft from a hook's Run carries the phase its editor already executed.
+        // That is what tells the pipeline to skip it — the same `hasRun` check the
+        // editor sets when it builds the sample context, except this one survives
+        // the trip through the messaging centre.
+        let resolvedTest = test ?? draft.ranHook.map { TestOrigin.hook($0) } ?? .composed
 
         let bulletin = BBBulletin()
         bulletin.title = draft.title
@@ -177,7 +190,7 @@ public struct NotificationDraft {
 
         var context = BulletinAdapter.context(
             for: bulletin,
-            test: test,
+            test: resolvedTest,
             appName: draft.appName,
             displayTitle: BulletinAdapter.displayTitle(
                 appName: draft.appName, title: draft.title

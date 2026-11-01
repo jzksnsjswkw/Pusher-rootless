@@ -20,7 +20,8 @@ FOUNDATION_EXPORT BOOL PusherPublishBanner(NSString *sectionID,
                                           NSString *attachmentPath,
                                           long long simSlot,
                                           NSString *simPhone,
-                                          NSString *simLabel);
+                                          NSString *simLabel,
+                                          NSString *ranHook);
 
 /// Why the last ``PusherPublishBanner`` returned `NO`, or `nil` when it worked.
 ///

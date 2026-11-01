@@ -176,7 +176,15 @@ public final class BulletinAdapter: NSObject {
         // asked. Marked as a test, so the rules skip it exactly as they skip the
         // instance page's test push.
         if (bulletin.context?["PusherComposed"] as? NSNumber)?.boolValue == true {
-            context.test = .composed
+            // A composed notification is usually just shown, but a hook's Run also
+            // carries the phase its editor executed — and that phase must not run
+            // again here.
+            if let ran = bulletin.context?["PusherRanHook"] as? String,
+               let phase = BulletinHookRunner.Phase(rawValue: ran) {
+                context.test = .hook(phase)
+            } else {
+                context.test = .composed
+            }
         }
 
         // A card the user chose on the compose page. A real message's card is

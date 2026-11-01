@@ -138,7 +138,8 @@
                                    draft[@"attachmentPath"],
                                    slot,
                                    draft[@"simPhone"],
-                                   draft[@"simLabel"]);
+                                   draft[@"simLabel"],
+                                   draft[@"ranHook"]);
   if (shown) { return @{@"displayed": @YES}; }
   NSString *why = PusherPublishBannerFailure;
   return @{@"displayed": @NO,

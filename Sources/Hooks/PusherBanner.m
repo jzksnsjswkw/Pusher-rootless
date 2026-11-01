@@ -112,7 +112,8 @@ static BOOL PusherPublishOnMain(NSString *sectionID,
                                 NSString *attachmentPath,
                                 long long simSlot,
                                 NSString *simPhone,
-                                NSString *simLabel);
+                                NSString *simLabel,
+                                NSString *ranHook);
 
 BOOL PusherPublishBanner(NSString *sectionID,
                          NSString *title,
@@ -121,7 +122,8 @@ BOOL PusherPublishBanner(NSString *sectionID,
                          NSString *attachmentPath,
                          long long simSlot,
                          NSString *simPhone,
-                         NSString *simLabel) {
+                         NSString *simLabel,
+                         NSString *ranHook) {
   // Cleared before every attempt. It is a module-level variable because the reason
   // has to outlive the call, and a reason left over from a previous failure made
   // every later publish report that failure — the page was reading an answer to a
@@ -132,7 +134,7 @@ BOOL PusherPublishBanner(NSString *sectionID,
     return NO;
   }
   return PusherPublishOnMain(sectionID, title, subtitle, message, attachmentPath,
-                             simSlot, simPhone, simLabel);
+                             simSlot, simPhone, simLabel, ranHook);
 }
 
 /// Whether SpringBoard knows this app well enough to put a notification under it.
@@ -166,7 +168,8 @@ static BOOL PusherPublishOnMain(NSString *sectionID,
                                 NSString *attachmentPath,
                                 long long simSlot,
                                 NSString *simPhone,
-                                NSString *simLabel) {
+                                NSString *simLabel,
+                                NSString *ranHook) {
 
   id server = Nil;
   Class serverClass = NSClassFromString(@"BBServer");
@@ -266,6 +269,10 @@ static BOOL PusherPublishOnMain(NSString *sectionID,
   // what a test is for.
   NSMutableDictionary *context = [NSMutableDictionary dictionary];
   context[@"PusherComposed"] = @YES;
+  // The hook a Run already executed in its editor. Read back by the adapter so the
+  // pipeline skips that phase — one notification edited twice is a hook that
+  // appends text appearing to append it twice.
+  if (ranHook.length > 0) { context[@"PusherRanHook"] = ranHook; }
   if (simSlot > 0) {
     context[@"PusherSIMSlot"] = @(simSlot);
     if (simPhone.length > 0) { context[@"PusherSIMPhone"] = simPhone; }

@@ -129,6 +129,7 @@ public final class TestPush: NSObject {
             fields["simPhone"] = sim.phoneNumber
             fields["simLabel"] = sim.label
         }
+        fields["ranHook"] = draft.ranHook
         return fields
     }
 
@@ -146,6 +147,12 @@ public final class TestPush: NSObject {
         draft.message = fields["message"] as? String ?? ""
         if let path = fields["attachmentPath"] as? String, !path.isEmpty {
             draft.attachmentURL = URL(fileURLWithPath: path)
+        }
+        // The hook a Run already executed in its editor. Carried through the IPC
+        // hop so the pipeline skips it — running it again would apply its edits a
+        // second time, which shows up as a hook that doubles whatever it appends.
+        if let ran = fields["ranHook"] as? String {
+            draft.ranHook = BulletinHookRunner.Phase(rawValue: ran)
         }
         if let sim = fields["sim"] as? [String: Any] {
             draft.sim = SIMSubscription(
