@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// A place an attachment can be uploaded to, so a service that only accepts a URL
 /// can be sent one.
@@ -35,6 +36,26 @@ public protocol ImageHost {
 
     /// Uploads `data` and returns the public link, or `nil` on failure.
     static func upload(_ data: Data, key: String) -> String?
+}
+
+/// What is being uploaded, which decides how long its link is kept.
+///
+/// An icon is the same picture every time it is needed, and one that outlives its
+/// entry here is an upload repeated on the next notification. An attachment is a
+/// photograph of one moment — kept long enough for the notification to still make
+/// sense days later, and no longer, because every one of them is a copy of
+/// something private sitting on someone else's server.
+public enum ImageHostKind: String {
+    case icon
+    case attachment
+
+    /// How long a link of this kind is reused before uploading again.
+    var cacheLifetime: TimeInterval {
+        switch self {
+        case .icon: return 90 * 24 * 60 * 60
+        case .attachment: return 3 * 24 * 60 * 60
+        }
+    }
 }
 
 /// The hosts this app knows about, and which one is in use.
@@ -102,27 +123,29 @@ public enum ImageHosts {
     /// `nil` when there is no usable host, the file is too large for the one
     /// chosen, or the upload fails. Every caller omits the image field in that
     /// case: a push without a picture is better than a push that does not arrive.
-    public static func url(for data: Data) -> String? {
+    public static func url(for data: Data, kind: ImageHostKind) -> String? {
         guard let host = ImageHostRegistry.configured() else { return nil }
         if let limit = host.maximumBytes, data.count > limit { return nil }
-        return url(for: data, host: host)
+        return url(for: data, host: host, kind: kind)
     }
 
     /// A link for `data` through one specific host.
-    public static func url(for data: Data, host: any ImageHost.Type) -> String? {
+    public static func url(
+        for data: Data, host: any ImageHost.Type, kind: ImageHostKind
+    ) -> String? {
         let key = contentKey(for: data)
         if let cached = entry(host: host.identifier, key: key),
            let link = cached["url"] as? String, !link.isEmpty,
            let at = cached["at"] as? Date,
-           // Checked against the clock, not just presence: an entry that outlives
-           // the host's own retention is an image that silently stops appearing.
-           Date().timeIntervalSince(at) < host.cacheLifetime {
+           // The shorter of the two: a link is only as good as the host's own
+           // retention, and how long this app would like to keep it.
+           Date().timeIntervalSince(at) < min(host.cacheLifetime, kind.cacheLifetime) {
             return link
         }
         guard let uploaded = host.upload(data, key: ImageHostRegistry.key(for: host)),
               !uploaded.isEmpty
         else { return nil }
-        store(host: host.identifier, key: key, url: uploaded)
+        store(host: host.identifier, key: key, url: uploaded, kind: kind)
         return uploaded
     }
 
@@ -149,24 +172,99 @@ public enum ImageHosts {
     ///
     /// Read-modify-write of the whole nested object: preferences have no partial
     /// update, and writing only this host's sub-object would drop the others.
-    static func store(host: String, key: String, url: String) {
+    static func store(host: String, key: String, url: String, kind: ImageHostKind) {
         PrefsStore.updateGlobal { global in
             var hosts = (global[storageKey] as? [String: Any]) ?? [:]
             var cache = (hosts[host] as? [String: Any]) ?? [:]
-            cache[key] = ["url": url, "at": Date()]
+            // Pruned on every write: the cache only ever grows otherwise, and what
+            // it holds are links to pictures on someone else's server — the ones
+            // nobody will fetch again have no reason to stay.
+            cache = pruned(cache)
+            cache[key] = ["url": url, "at": Date(), "kind": kind.rawValue]
             hosts[host] = cache
             global[storageKey] = hosts
         }
     }
 
-    /// The cache key for `data`, derived from its content rather than its path.
+    /// Drops entries past their retention.
     ///
-    /// The compose page writes each pick to a fresh file, so a path would never
-    /// repeat. 64-bit FNV-1a: a cryptographic digest would be the obvious choice,
-    /// but CommonCrypto is not linked into the Preferences bundle, and a collision
-    /// only shows the wrong photo — which a 64-bit digest over a handful of picker
-    /// outputs does not reach.
+    /// An entry is worth keeping as long as the link in it still works *and* could
+    /// still be asked for. Past that it is a dead link holding a place in the
+    /// preferences file, and nothing reads it again — the next upload writes a new
+    /// entry under the same key.
+    static func pruned(_ cache: [String: Any]) -> [String: Any] {
+        let now = Date()
+        return cache.filter { _, value in
+            guard let entry = value as? [String: Any],
+                  let at = entry["at"] as? Date
+            else { return false }
+            let kind = (entry["kind"] as? String).flatMap(ImageHostKind.init(rawValue:))
+                ?? .attachment
+            // Twice the lifetime: an entry that just expired is still the link the
+            // last notification used, and dropping it keeps nothing.
+            return now.timeIntervalSince(at) < kind.cacheLifetime * 2
+        }
+    }
+
+    /// The cache key for `data`.
+    ///
+    /// Not the file's bytes. The same picture encoded twice is rarely the same
+    /// file: PNG carries the encoder's name, a timestamp, and the exact chunk
+    /// splitting any UIKit render happened to choose, so a byte hash of an icon
+    /// rendered on two different notifications produced two keys — and an upload
+    /// for each. That is what the fifteen identical entries in the settings file
+    /// were: one icon, uploaded fifteen times.
+    ///
+    /// The pixels are what makes two pictures the same, so the pixels are what is
+    /// hashed. Decoded through `UIImage` and reduced to the first bytes of its
+    /// bitmap, which is stable across encoders for the same drawing.
+    ///
+    /// 64-bit FNV-1a over those bytes: a cryptographic digest would be the obvious
+    /// choice, but CommonCrypto is not linked into the Preferences bundle, and a
+    /// collision here only shows the wrong photo — which a 64-bit digest over a
+    /// handful of pictures does not reach.
     static func contentKey(for data: Data) -> String {
+        if let key = pixelKey(for: data) { return key }
+        // Not a picture, or not one UIImage can draw. Hashing the bytes still gives
+        // a correct cache for a file that is only ever uploaded verbatim.
+        return fnv1a(data)
+    }
+
+    /// The hash of a decoded picture's pixels, or `nil` when it does not decode.
+    private static func pixelKey(for data: Data) -> String? {
+        guard let image = UIImage(data: data),
+              let pixels = bitmapBytes(of: image)
+        else { return nil }
+        return fnv1a(pixels)
+    }
+
+    /// A picture's pixels, at a fixed size.
+    ///
+    /// Drawn into a 64×64 RGBA buffer rather than read from `CGImage`: the source
+    /// bitmap's layout depends on how the image was made (premultiplied or not,
+    /// wide colour or not), and two encodings of one drawing need not produce the
+    /// same buffer. Redrawing normalises both into the same layout, and 64×64 is
+    /// enough that two different pictures do not collide while being far cheaper
+    /// than hashing a full-size photograph.
+    private static func bitmapBytes(of image: UIImage) -> Data? {
+        let side = 64
+        var buffer = [UInt8](repeating: 0, count: side * side * 4)
+        guard let context = CGContext(
+            data: &buffer,
+            width: side, height: side,
+            bitsPerComponent: 8, bytesPerRow: side * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.interpolationQuality = .high
+        UIGraphicsPushContext(context)
+        image.draw(in: CGRect(x: 0, y: 0, width: side, height: side))
+        UIGraphicsPopContext()
+        return Data(buffer)
+    }
+
+    /// 64-bit FNV-1a.
+    private static func fnv1a(_ data: Data) -> String {
         var hash: UInt64 = 0xcbf2_9ce4_8422_2325
         for byte in data {
             hash ^= UInt64(byte)

@@ -122,7 +122,7 @@ public enum BarkService: PushService {
            infoDict["image"] == nil,
            let url = context.attachmentURL,
            let data = try? Data(contentsOf: url),
-           let hosted = ImageHosts.url(for: data) {
+           let hosted = ImageHosts.url(for: data, kind: .attachment) {
             infoDict["image"] = hosted
         }
 
@@ -135,7 +135,7 @@ public enum BarkService: PushService {
         if shouldIncludeIcon(config: config), infoDict["icon"] == nil,
            let icon = ServiceIcon.image(from: config.raw) ?? context.iconImage,
            let data = icon.pngData(),
-           let hosted = ImageHosts.url(for: data) {
+           let hosted = ImageHosts.url(for: data, kind: .icon) {
             infoDict["icon"] = hosted
         }
         // `delete` is only meaningful together with an id.
