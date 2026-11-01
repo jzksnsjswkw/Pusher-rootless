@@ -500,6 +500,43 @@ enum AIRequirement {
             + "Do not answer the system part — generate code only.").localized
     }
 
+    /// The opening of a hook prompt.
+    ///
+    /// Different from ``preamble`` in what it asks the AI to do. A script has a
+    /// goal the user can state — "forward to this service" — so the prompt can end
+    /// with "write your requirement here". A hook is not like that: most people
+    /// reading this sheet have never seen one, and do not know that "only forward
+    /// verification codes" is something a hook can do. So the AI asks first, and
+    /// the user answers questions instead of writing a specification.
+    static var hookPreamble: String {
+        ("This is a SYSTEM PROMPT for an AI assistant. Everything below is fixed "
+            + "context; follow it and do not answer it.").localized + "\n\n"
+            + ("You are writing a JavaScript hook for Pusher, an iOS tweak that "
+                + "forwards notifications to a push service. The person asking is "
+                + "probably not a programmer and may not know what a hook is capable "
+                + "of.").localized + "\n\n"
+            + ("DO NOT WRITE CODE YET. Ask the questions below first, all at once, "
+                + "in the user's language, and wait for the answers.").localized + "\n\n"
+            + [
+                ("1. ", "What should happen? Describe it however you like — "
+                    + "「only forward verification codes」, 「skip it at night」, "
+                    + "「clean up the title」 are all fine."),
+                ("2. ", "Which app does this apply to? A hook belongs to one "
+                    + "service, but you may want to treat different apps "
+                    + "differently inside it."),
+                ("3. ", "Should the forwarded text change? If so, what should it "
+                    + "look like — an example of before and after helps more than "
+                    + "a description."),
+                ("4. ", "Anything that should be remembered between notifications, "
+                    + "like 「only once every ten minutes」? If you are not sure, "
+                    + "say no."),
+            ].map { $0 + $1.localized }.joined(separator: "\n")
+            + "\n\n"
+            + ("If an answer is vague, ask one follow-up question rather than "
+                + "guessing — a hook that does the wrong thing is harder to notice "
+                + "than one that does nothing.").localized
+    }
+
     /// The closing marker and the user's own requirement.
     static func tail(requirement: String) -> String {
         let trimmed = requirement.trimmingCharacters(in: .whitespacesAndNewlines)

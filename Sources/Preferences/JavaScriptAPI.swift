@@ -218,15 +218,38 @@ enum JavaScriptAPI {
     }
 
     /// The prompt for writing an instance hook.
+    /// The prompt for a hook.
+    ///
+    /// Written for someone who has never seen a hook and does not know what one
+    /// could be used for, which is most people the sheet is shown to. So it opens
+    /// with what the thing does in plain language and three worked examples, and
+    /// only then says what the code has access to.
+    ///
+    /// The AI is told to ask before writing. A user who reached this sheet without
+    /// a clear idea would otherwise get a plausible script for a problem they do
+    /// not have, and have no way to tell.
     static func hookPrompt(requirement: String) -> String {
-        AIRequirement.preamble + "\n\n"
-            + ("Write a JavaScript hook for Pusher, an iOS tweak that forwards "
-                + "notifications to push services.").localized + "\n\n"
-            + ("A hook decides whether a notification is forwarded, and may "
-                + "rewrite its text. It cannot send anything: there is no push(). "
-                + "It runs once per notification as an async function, so "
-                + "top-level await works. There is no DOM, no Node APIs and no "
-                + "timers.").localized + "\n\n"
+        AIRequirement.hookPreamble + "\n\n"
+            + ("What a hook is".localized + "\n"
+                + ("Pusher forwards your phone's notifications to another device. "
+                    + "A hook is a small piece of JavaScript that sits in the middle "
+                    + "of that: it can decide whether a notification gets forwarded, "
+                    + "and it can rewrite the text before it goes out.").localized
+                + "\n\n"
+                + ("You do not need to be a programmer to use one — describe what "
+                    + "you want in plain words and the AI writes it for you. Some "
+                    + "things people use hooks for:").localized + "\n"
+                + "- " + ("Only forward verification codes. Everything else from "
+                    + "that app stays on the phone.").localized + "\n"
+                + "- " + ("Leave out the app name some notifications put in front "
+                    + "of the title, so the forwarded message reads cleanly.").localized + "\n"
+                + "- " + ("Skip forwarding at night, or while the screen is "
+                    + "unlocked and you can already see it.").localized + "\n"
+                + "- " + ("Collapse a burst: the same sender can only reach you "
+                    + "once every few minutes.").localized) + "\n\n"
+            + ("A hook cannot send anything by itself — there is no push(). It only "
+                + "lets the notification through, optionally changed. Sending is "
+                + "what the service already does.").localized + "\n\n"
             + "API:".localized + "\n" + hookBullet + "\n" + hookDevice + "\n"
             + hookKeep + "\n" + hookFunctions + "\n"
             + ("Rules:".localized + "\n"
@@ -239,7 +262,8 @@ enum JavaScriptAPI {
                 + "level does not survive to the next one. Use localStorage for that.").localized
             + "\n\n"
             + ("Output ONLY the JavaScript source — no markdown fences, no "
-                + "explanation, no commentary.").localized + "\n\n"
+                + "explanation, no commentary.").localized
+            + "\n\n"
             + AIRequirement.tail(requirement: requirement)
     }
 }
