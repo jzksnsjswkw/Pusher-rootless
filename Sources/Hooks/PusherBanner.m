@@ -135,6 +135,30 @@ BOOL PusherPublishBanner(NSString *sectionID,
                              simSlot, simPhone, simLabel);
 }
 
+/// Whether SpringBoard knows this app well enough to put a notification under it.
+///
+/// A section is what carries an app's notification settings and its icon.
+/// Publishing to an app that has none is *accepted* and then dropped — no
+/// exception, no notification, and no reply that says why. It happens for an app
+/// that never asked for notification permission, which is common enough that a
+/// test for one looks broken.
+static BOOL PusherHasSection(id server, NSString *sectionID) {
+  SEL lookup = @selector(_sectionInfoForSectionID:effective:);
+  if (![server respondsToSelector:lookup]) {
+    // Cannot ask, so assume yes: refusing every publish on a system where the
+    // selector is missing would be worse than trying.
+    return YES;
+  }
+  @try {
+    id info = ((id (*)(id, SEL, id, BOOL))objc_msgSend)(server, lookup, sectionID, YES);
+    return info != nil;
+  } @catch (NSException *exception) {
+    // The selector asserts it runs on the server's queue, which the caller
+    // guarantees — but a wrong guess here should not stop the notification.
+    return YES;
+  }
+}
+
 static BOOL PusherPublishOnMain(NSString *sectionID,
                                 NSString *title,
                                 NSString *subtitle,
@@ -275,6 +299,17 @@ static BOOL PusherPublishOnMain(NSString *sectionID,
 
   dispatch_queue_t target = PusherServerQueue();
     void (^publish)(void) = ^{
+
+      // An app with no section cannot receive a notification, and publishing to
+      // one is silently dropped. Said out loud so the page can report it, rather
+      // than the notification simply not appearing.
+      if (!PusherHasSection(server, sectionID)) {
+        PusherPublishBannerFailure = [NSString stringWithFormat:
+            @"%@ has never asked for notification permission, so SpringBoard has "
+            @"nowhere to put this notification", sectionID];
+        return;
+      }
+
       SEL request = @selector(publishBulletinRequest:destinations:);
       SEL plain = @selector(publishBulletin:destinations:);
       SEL legacy = @selector(publishBulletin:destinations:alwaysToLockScreen:);
