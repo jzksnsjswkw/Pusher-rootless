@@ -180,13 +180,21 @@ public final class NotificationDraftController: PlainViewController {
             ?? (reply?["built"] as? NSNumber)?.boolValue
         if displayed, built != false { return }
 
-        // Only the failures are reported, and through a real notification so the
-        // result looks like every other result Pusher shows.
+        // Unavailable for preview is not a failure of the push. An app that never
+        // asked for notification permission has no section, so SpringBoard has
+        // nowhere to put a banner — while the forward is a separate path and went
+        // out as usual. Saying "could not show" beside a successful send would
+        // describe the wrong half.
         let reason = Self.localizedReason(
             reply?["reason"] as? String
                 ?? "SpringBoard has not been restarted since installation"
         )
-        TestNotification.present(reason, from: self)
+        // The forward is what this page is for; the banner is how it is looked at.
+        let forwarded = built == true
+        let summary = forwarded
+            ? reason + " " + "The push was sent.".localized
+            : reason
+        TestNotification.present(summary, from: self)
     }
 
     /// Turns a reason from SpringBoard into a sentence in the user's language.
