@@ -205,7 +205,16 @@ public enum BarkService: PushService {
     }
 
     public static func defaultPrefs() -> [String: Any] {
-        var prefs: [String: Any] = [PrefKey.serverURL: defaultServer]
+        var prefs: [String: Any] = [
+            PrefKey.serverURL: defaultServer,
+            // Both pictures on. Bark renders them, and a Bark notification without
+            // its app icon is the one users notice as wrong. Absent here, the
+            // switches would be drawn on and the request builder would read
+            // `false` — a setting that appears saved and is never consulted,
+            // because the key it reads was never written.
+            PrefKey.includeIcon: true,
+            PrefKey.includeImage: true,
+        ]
         for (prefKey, _) in parameters {
             prefs[prefKey] = ""
         }
