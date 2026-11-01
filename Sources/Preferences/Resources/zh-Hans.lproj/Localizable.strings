@@ -831,3 +831,10 @@
 "128 MB, deleted after three hours" = "128 MB，3 小时后自动删除";
 "Enter the API key for %@." = "填入 %@ 的 API Key。";
 "When on, the Icon and Image fields under Optional Parameters are ignored." = "开启后，可选参数中的 Icon 和 Image 字段将被忽略。";
+"No notification permission" = "该应用未获得通知权限，请先打开它并允许通知";
+"No app to show a notification for" = "未选择应用";
+"No BBServer to publish through" = "无法连接 SpringBoard";
+"No BBBulletinRequest class" = "此系统不支持通知预览";
+"No publishing selector on BBServer" = "此系统不支持通知预览";
+"No __BBServerQueue to publish on" = "无法连接 SpringBoard";
+"The attachment could not be loaded; the notification was not shown" = "附件无法读取，通知未显示";

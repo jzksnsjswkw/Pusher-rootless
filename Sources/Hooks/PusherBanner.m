@@ -304,9 +304,10 @@ static BOOL PusherPublishOnMain(NSString *sectionID,
       // one is silently dropped. Said out loud so the page can report it, rather
       // than the notification simply not appearing.
       if (!PusherHasSection(server, sectionID)) {
+        // An English key: the page localises it, and the app id is interpolated
+        // after the lookup so the Chinese can word the sentence its own way.
         PusherPublishBannerFailure = [NSString stringWithFormat:
-            @"%@ has never asked for notification permission, so SpringBoard has "
-            @"nowhere to put this notification", sectionID];
+            @"No notification permission||%@", sectionID];
         return;
       }
 

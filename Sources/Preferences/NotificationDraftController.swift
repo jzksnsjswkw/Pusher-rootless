@@ -182,9 +182,24 @@ public final class NotificationDraftController: PlainViewController {
 
         // Only the failures are reported, and through a real notification so the
         // result looks like every other result Pusher shows.
-        let reason = reply?["reason"] as? String
-            ?? "SpringBoard has not been restarted since installation".localized
+        let reason = Self.localizedReason(
+            reply?["reason"] as? String
+                ?? "SpringBoard has not been restarted since installation"
+        )
         TestNotification.present(reason, from: self)
+    }
+
+    /// Turns a reason from SpringBoard into a sentence in the user's language.
+    ///
+    /// The tweak cannot call `.localized` — it lives in this bundle — so it sends
+    /// an English key with its arguments appended after `||`, and the wording is
+    /// chosen here. A string with no `||` is already a finished sentence, which is
+    /// what an unexpected exception produces, and is shown as it came.
+    static func localizedReason(_ raw: String) -> String {
+        guard let separator = raw.range(of: "||") else { return raw.localized }
+        let key = String(raw[raw.startIndex..<separator.lowerBound])
+        let argument = String(raw[separator.upperBound...])
+        return String(format: key.localized, argument)
     }
 
     /// Shows the notification and sends it to the instance.
