@@ -343,11 +343,13 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
     /// a service uses, so a Run produces the same log lines, the same retries and
     /// the same answer the pipeline would.
     private func performRun(with draft: NotificationDraft) {
-        // A test notification: the app rules are skipped, and the hook runs even
-        // when its switch is off — see `PushEngine.runHook`.
-        // The same context a plain test notification builds, with one thing
-        // added: which hook this Run is about. That hook runs even with its switch
-        // off; the other keeps its own.
+        // The editor's own copy, for showing what the hook decides. Its `test`
+        // origin matters only here: `.hook(phase)` is what lets this one run even
+        // when its switch is off, which is what "does my hook work" means.
+        //
+        // The notification actually sent is a separate call and carries no such
+        // marker, so the pipeline runs the hook for real — the hook's edits reach
+        // the payload exactly once, and the banner shows what the user typed.
         var sample = draft.makeContext(test: .hook(phase))
 
         let state = BulletinAdapter.currentDeviceState()
@@ -451,11 +453,13 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
         // compose page use: one notification on screen, one push to the instance.
         // A Run that only printed the outcome left the user guessing whether the
         // hook's edits reached a real payload.
-        // The draft shown on screen is what the user typed, not what the hook made
-        // of it: the banner is the input, and the output already says what changed.
-        // Sending the edited version too would show a notification whose text no
-        // longer matches the fields on the page.
-        if let json = NotificationDraftController.payload(for: draft, ranHook: phase) {
+        // The draft, untouched: the banner shows what the user typed and the
+        // pipeline runs the hook on its way to the service. Sending the edited
+        // version instead made the banner disagree with the fields still on the
+        // page, and skipping the hook made the Run claim an edit the payload never
+        // received — the output pane showed what the hook decided, not what was
+        // sent.
+        if let json = NotificationDraftController.payload(for: draft) {
             let reply = NotificationDraftController.deliver(json, to: instanceID)
             let displayed = (reply?["displayed"] as? NSNumber)?.boolValue == true
             let built = (reply?["builtRequest"] as? NSNumber)?.boolValue

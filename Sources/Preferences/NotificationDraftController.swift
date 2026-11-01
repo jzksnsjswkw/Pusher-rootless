@@ -226,10 +226,7 @@ public final class NotificationDraftController: PlainViewController {
     }
 
     /// The draft as the JSON the IPC hop carries.
-    static func payload(
-        for draft: NotificationDraft,
-        ranHook: BulletinHookRunner.Phase? = nil
-    ) -> String? {
+    static func payload(for draft: NotificationDraft) -> String? {
         let fields = draft.normalised()
         var payload: [String: Any] = [
             "appID": fields.appID,
@@ -244,13 +241,6 @@ public final class NotificationDraftController: PlainViewController {
                               "phoneNumber": sim.phoneNumber,
                               "label": sim.label]
         }
-        // Which hook the editor already ran.
-        //
-        // A Run executes its hook in the editor so the decision can be shown, and
-        // then hands the notification to the pipeline. Without this the pipeline
-        // runs the same hook again — the edits then apply twice, so a hook that
-        // appends something appends it twice in what actually gets sent.
-        if let ranHook { payload["ranHook"] = ranHook.rawValue }
         guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
         return String(data: data, encoding: .utf8)
     }
