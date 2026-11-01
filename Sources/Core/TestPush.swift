@@ -129,7 +129,11 @@ public final class TestPush: NSObject {
             fields["simPhone"] = sim.phoneNumber
             fields["simLabel"] = sim.label
         }
-        fields["ranHook"] = draft.ranHook
+        // `rawValue`, not the enum. This dictionary goes straight into an
+        // Objective-C reply, and a Swift enum is not an object there: it arrives as
+        // an opaque value that `_copyDescription` cannot describe, and passing it
+        // to a `NSString *` parameter aborts the process.
+        if let phase = draft.ranHook { fields["ranHook"] = phase.rawValue }
         return fields
     }
 
