@@ -1,22 +1,44 @@
+# Build output.
 .theos/
-# Build output. The one exception is `packages/mirrored`, which holds dependency
-# debs this source publishes — those are inputs, not output, and the index cannot
-# be rebuilt without them.
-packages/*
-!packages/mirrored/
 obj/
 *.o
 *.d
-.vscode/
-.DS_Store
 Generated/
+
+# Deb output. `packages/mirrored` is the exception: those debs are dependencies
+# this source publishes, so they are inputs, not output — the index cannot be
+# rebuilt without them.
+packages/*
+!packages/mirrored/
+
+# The generated package index and its copies. `scripts/make_repo.sh` writes these
+# into a directory that is then pushed to the `repo` repository, not this one.
+repo/
+
+# Editor and OS noise.
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
 # Binaries and disassembly kept for local analysis. Not this project's code —
 # the Shortcuts app and other people's tweaks are not ours to redistribute — and
 # large enough that no reader of a diff wants them.
 reverse/
+
+# Frida hook handlers dumped while reverse-engineering iOS internals. Inputs to an
+# investigation, not to the build — 8507 files and 33 MB of them.
+__handlers__/
+
+# Agent scratch space.
 .sisyphus/
-repo/
+
+# Crash reports and captured logs, which land here when pulled off the device.
+*.ips
+*.log
+
 # Raw screenshots as they come off the device. The ones the package page uses are
-# cropped and renamed into scripts/depiction/shots/.
+# cropped and renamed into scripts/depiction/shots/. The `Screenshots/` directory
+# is different: those are the ones already prepared, and they are tracked.
 IMG_*.png
 IMG_*.jpeg

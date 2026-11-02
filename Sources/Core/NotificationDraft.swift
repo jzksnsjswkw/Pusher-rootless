@@ -130,17 +130,62 @@ public struct NotificationDraft {
     ///
     /// The attachment crosses the process boundary as a path, so it has to live
     /// somewhere both processes may read. Each side's own `temporaryDirectory` is
-    /// inside its sandbox container and invisible to the other; the shared
-    /// preferences directory is not, and it is already where this tweak keeps the
-    /// files the two sides hand over.
+    /// inside its sandbox container and invisible to the other — but a system app
+    /// such as Settings runs outside a container, and its `Library` resolves to
+    /// `/var/mobile/Library`, which is why this worked at all.
+    ///
+    /// It writes to `/tmp` rather than to that Library directory. The file is
+    /// somebody's photograph, held for the few seconds between picking it and
+    /// publishing the notification, and `Library/Preferences` is backed up: a copy
+    /// of every picture anyone ever tested with would be in their iCloud backup,
+    /// and would stay there after they deleted the draft. `/tmp` is neither backed
+    /// up nor long-lived — it is emptied on reboot.
+    ///
+    /// Falls back to the Library directory when `/tmp` cannot be written, which is
+    /// the sandbox's decision to make and not this code's.
     public static func attachmentScratchURL() -> URL? {
-        guard let directory = NSSearchPathForDirectoriesInDomains(
-            .libraryDirectory, .userDomainMask, true
-        ).first.map({ URL(fileURLWithPath: $0).appendingPathComponent("Preferences") })
-        else { return nil }
-        // A fresh name per pick, so two drafts open at once cannot overwrite each
-        // other's image while both are on screen.
-        return directory.appendingPathComponent("pusher-draft-\(UUID().uuidString).png")
+        let candidates = [
+            URL(fileURLWithPath: "/tmp", isDirectory: true),
+            NSSearchPathForDirectoriesInDomains(
+                .libraryDirectory, .userDomainMask, true
+            ).first.map { URL(fileURLWithPath: $0).appendingPathComponent("Preferences") },
+        ].compactMap { $0 }
+
+        for directory in candidates {
+            guard FileManager.default.isWritableFile(atPath: directory.path) else { continue }
+            // Old files first: nothing but this writes them here, and the only
+            // reader is a notification published seconds after the pick.
+            pruneScratchFiles(in: directory)
+            // A fresh name per pick, so two drafts open at once cannot overwrite
+            // each other's image while both are on screen.
+            return directory.appendingPathComponent("pusher-draft-\(UUID().uuidString).png")
+        }
+        return nil
+    }
+
+    /// Removes scratch images older than ten minutes.
+    ///
+    /// The only reader is a composed notification, published within seconds of the
+    /// pick. Ten minutes is long past the point where one can still be needed and
+    /// short enough that `/tmp` never holds more than a moment's worth — shorter
+    /// than the hour it was, because the file is a private picture and this is the
+    /// only thing that ever deletes it.
+    private static func pruneScratchFiles(in directory: URL) {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: directory.path)
+        else { return }
+        let cutoff = Date().addingTimeInterval(-600)
+        for name in names where name.hasPrefix("pusher-draft-") && name.hasSuffix(".png") {
+            let path = directory.appendingPathComponent(name)
+            // Modification time, not creation: a file is written once and never
+            // touched again, so the two agree — except that `creationDate` is
+            // absent on filesystems that do not record it, and a missing attribute
+            // silently kept every file alive.
+            guard let modified = (try? manager.attributesOfItem(atPath: path.path))?[.modificationDate]
+                    as? Date, modified < cutoff
+            else { continue }
+            try? manager.removeItem(at: path)
+        }
     }
 
     /// Whether this app can carry a SIM slot.

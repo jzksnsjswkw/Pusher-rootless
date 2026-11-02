@@ -124,11 +124,7 @@ public enum ImageHosts {
     /// chosen, or the upload fails. Every caller omits the image field in that
     /// case: a push without a picture is better than a push that does not arrive.
     public static func url(for data: Data, kind: ImageHostKind) -> String? {
-        NSLog("[PusherImageCache] REQUEST kind=%@ bytes=%lu", kind.rawValue, data.count)
-        guard let host = ImageHostRegistry.configured() else {
-            NSLog("[PusherImageCache] NO-HOST kind=%@", kind.rawValue)
-            return nil
-        }
+        guard let host = ImageHostRegistry.configured() else { return nil }
         if let limit = host.maximumBytes, data.count > limit { return nil }
         return url(for: data, host: host, kind: kind)
     }
@@ -144,15 +140,11 @@ public enum ImageHosts {
            // The shorter of the two: a link is only as good as the host's own
            // retention, and how long this app would like to keep it.
            Date().timeIntervalSince(at) < min(host.cacheLifetime, kind.cacheLifetime) {
-            NSLog("[PusherImageCache] HIT kind=%@ key=%@", kind.rawValue, key)
             return link
         }
         guard let uploaded = host.upload(data, key: ImageHostRegistry.key(for: host)),
               !uploaded.isEmpty
-        else {
-            NSLog("[PusherImageCache] UPLOAD-FAILED kind=%@", kind.rawValue)
-            return nil
-        }
+        else { return nil }
         store(host: host.identifier, key: key, url: uploaded, kind: kind)
         return uploaded
     }
@@ -174,7 +166,7 @@ public enum ImageHosts {
     /// has already been sent still resolves. Clearing here means the next push
     /// uploads again, which is the point — a stale entry is what the button is for.
     public static func clearCache() {
-        PrefsStore.updateGlobal { $0.removeValue(forKey: storageKey) }
+        PrefsStore.updateGlobalQuietly { $0.removeValue(forKey: storageKey) }
     }
 
     /// Every link stored for `data`, by host, so a caller can report what it has.
@@ -201,22 +193,19 @@ public enum ImageHosts {
     /// Read-modify-write of the whole nested object: preferences have no partial
     /// update, and writing only this host's sub-object would drop the others.
     static func store(host: String, key: String, url: String, kind: ImageHostKind) {
-        PrefsStore.updateGlobal { global in
+        // Quietly: this is a cache, not a setting. Announcing it made every
+        // uploaded picture reload the whole config — inside a push, which is
+        // itself running from that config.
+        PrefsStore.updateGlobalQuietly { global in
             var hosts = (global[storageKey] as? [String: Any]) ?? [:]
             var cache = (hosts[host] as? [String: Any]) ?? [:]
-            NSLog("[PusherImageCache] BEFORE: kind=%@ key=%@ existing=%lu",
-                  kind.rawValue, key, (cache as NSDictionary).count)
             // Pruned on every write: the cache only ever grows otherwise, and what
             // it holds are links to pictures on someone else's server — the ones
             // nobody will fetch again have no reason to stay.
             cache = pruned(cache)
-            NSLog("[PusherImageCache] AFTER-PRUNE: existing=%lu",
-                  (cache as NSDictionary).count)
             cache[key] = ["url": url, "at": Date(), "kind": kind.rawValue]
             hosts[host] = cache
             global[storageKey] = hosts
-            NSLog("[PusherImageCache] AFTER-WRITE: kind=%@ total=%lu",
-                  kind.rawValue, (cache as NSDictionary).count)
         }
     }
 

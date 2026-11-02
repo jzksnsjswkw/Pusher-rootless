@@ -20,7 +20,7 @@ import Foundation
 public enum ImgbbHost: ImageHost {
     public static let identifier = "imgbb"
     public static let displayName = "imgbb"
-    public static let summary = "Permanent, 32 MB, original quality, fastest"
+    public static let summary = "永久保存、原图不压缩，但移动网络打不开"
     public static let maximumBytes: Int? = 32 * 1024 * 1024
     /// No expiry on the file, so the entry only has to outlive a notification's
     /// usefulness — a year is well past that and still short of forever.

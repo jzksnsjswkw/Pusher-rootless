@@ -12,7 +12,7 @@ import Foundation
 public enum BasePicHost: ImageHost {
     public static let identifier = "basepic"
     public static let displayName = "BasePic"
-    public static let summary = "Kept for a year, no account needed"
+    public static let summary = "保存一年，不需要注册"
     /// Not published; the year of retention is the only figure it states, and the
     /// request is refused by the server rather than by a guess here.
     public static let maximumBytes: Int? = nil

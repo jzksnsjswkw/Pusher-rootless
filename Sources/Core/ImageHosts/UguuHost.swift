@@ -16,7 +16,7 @@ import Foundation
 public enum UguuHost: ImageHost {
     public static let identifier = "uguu"
     public static let displayName = "uguu"
-    public static let summary = "128 MB, deleted after three hours"
+    public static let summary = "128 MB，3 小时后自动删除"
     public static let maximumBytes: Int? = 128 * 1024 * 1024
     /// Shorter than the file's own life, so the entry is never the reason a dead
     /// link keeps being handed out.

@@ -16,7 +16,7 @@ import Foundation
 public enum KappaLolHost: ImageHost {
     public static let identifier = "kappa"
     public static let displayName = "kappa.lol"
-    public static let summary = "100 MB, deletable, but nothing is promised"
+    public static let summary = "100 MB，可删除，但不承诺长期保存"
     public static let maximumBytes: Int? = 100 * 1024 * 1024
     /// Nothing is promised, so a link is not trusted for long. Thirty days is far
     /// beyond when a notification is read and well inside when the file may vanish.
