@@ -660,9 +660,14 @@ public final class ServiceSpecifierBuilders: NSObject {
         let key = liveKey ?? stored.string(BarkPrefKey.cipherKey) ?? ""
         guard !key.isEmpty else { return nil }   // nothing typed yet is not an error
 
-        guard let algorithm = BarkCipher.Algorithm(
+        // A missing value means the default, not "no check". The segment control
+        // draws AES128 highlighted when nothing is stored, so a key typed against
+        // that page is being compared against AES128's sixteen bytes whether or
+        // not the choice was ever written down — and returning `nil` here meant
+        // the warning stayed silent for everyone who had not touched the segment.
+        let algorithm = BarkCipher.Algorithm(
             rawValue: stored.string(BarkPrefKey.cipherAlgorithm) ?? ""
-        ) else { return nil }
+        ) ?? .aes128
 
         // Bytes, not characters — the same unit CCCrypt uses. A Chinese key would
         // otherwise pass this check and fail at send time.

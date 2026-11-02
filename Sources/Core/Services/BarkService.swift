@@ -108,35 +108,32 @@ public enum BarkService: PushService {
             if !value.isEmpty { infoDict[apiName] = value }
         }
 
-        // The notification's own attachment, as a link.
+        // The two pictures, which Bark takes as URLs.
         //
-        // Bark takes `image` as a URL, so the attachment is uploaded before it can
-        // ride along — and only when the instance's switch asks for it. A link the
-        // user typed in the parameters wins over both: they asked for that picture
-        // on every push, and replacing it with the notification's would undo a
-        // setting they made deliberately.
+        // On: upload the notification's own picture and send that link. Off: send
+        // the URL the user typed in the parameter. The switch decides which source
+        // is used — it is the more specific setting, and the footer under it says
+        // it overrides the field.
         //
-        // An upload that fails leaves the field alone rather than failing the push:
-        // the notification is the message, the picture is the extra.
-        if shouldIncludeImage(config: config),
-           infoDict["image"] == nil,
-           let url = context.attachmentURL,
-           let data = try? Data(contentsOf: url),
-           let hosted = ImageHosts.url(for: data, kind: .attachment) {
-            infoDict["image"] = hosted
-        }
+        // A failed upload under an on switch leaves the field absent rather than
+        // falling back to the typed URL: the user asked for the notification's
+        // picture, and quietly sending a different one would be the worse outcome.
+        infoDict["image"] = shouldIncludeImage(config: config)
+            ? context.attachmentURL
+                .flatMap { try? Data(contentsOf: $0) }
+                .flatMap { ImageHosts.url(for: $0, kind: .attachment) }
+            : config.raw.string(BarkPrefKey.image)
 
-        // The icon beside the notification, likewise as a link.
-        //
-        // The same picture the other services carry as Base64 — the app's own icon,
-        // or the one the user gave this destination. Bark cannot take Base64, so it
-        // is uploaded and sent as a URL. A `icon` the user typed takes precedence,
-        // for the same reason as above.
-        if shouldIncludeIcon(config: config), infoDict["icon"] == nil,
-           let icon = ServiceIcon.image(from: config.raw) ?? context.iconImage,
-           let data = icon.pngData(),
-           let hosted = ImageHosts.url(for: data, kind: .icon) {
-            infoDict["icon"] = hosted
+        // The app's own picture, or the one given to this destination.
+        infoDict["icon"] = shouldIncludeIcon(config: config)
+            ? (ServiceIcon.image(from: config.raw) ?? context.iconImage)
+                .flatMap { $0.pngData() }
+                .flatMap { ImageHosts.url(for: $0, kind: .icon) }
+            : config.raw.string(BarkPrefKey.icon)
+
+        // A field that ended up empty is left out rather than sent blank.
+        for key in ["image", "icon"] where (infoDict[key] as? String)?.isEmpty == true {
+            infoDict.removeValue(forKey: key)
         }
         // `delete` is only meaningful together with an id.
         if infoDict["delete"] != nil, infoDict["id"] == nil {
