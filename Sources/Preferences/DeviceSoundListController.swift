@@ -335,7 +335,13 @@ public final class DeviceListController: DeviceSoundListController {
     }
 
     /// Pushbullet returns the account's devices; only active ones are offered.
+    ///
+    /// `PushbulletAPI.instanceID` is how the client finds the token — the API is not
+    /// per-instance, but the credential is. Nothing assigned it, so `currentToken()`
+    /// returned nil and every fetch failed with "no credentials", which is what the
+    /// device list showing nothing looked like.
     private func updatePushbulletDevices() async throws {
+        PushbulletAPI.instanceID = instanceID
         let response = try await PushbulletAPI.get("devices")
         let devices = response["devices"] as? [[String: Any]] ?? []
         let fetched = devices.compactMap { device -> (String, String)? in

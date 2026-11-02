@@ -1268,9 +1268,18 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
     }
 
     /// Opens the page that composes a notification, then sends it.
+    ///
+    /// Presented as a sheet rather than pushed. The page is a form with one action,
+    /// and a pushed form needs a Cancel button in the bar to get back out — which
+    /// this page does not want, because dismissing it means abandoning the
+    /// notification and the swipe does that already.
     @objc public func sendCustomNotification(_ specifier: PSSpecifier) {
         view.endEditing(true)
-        push(NotificationDraftController(serviceID: serviceInstanceID))
+        let compositor = NotificationDraftController(serviceID: serviceInstanceID)
+        compositor.onClose = { [weak self] in self?.dismiss(animated: true) }
+        let navigation = UINavigationController(rootViewController: compositor)
+        navigation.modalPresentationStyle = .pageSheet
+        present(navigation, animated: true)
     }
 
     // MARK: - Rows
@@ -1349,7 +1358,7 @@ public class ServiceController: ListController, UNUserNotificationCenterDelegate
         // whether a request exists; the delivery itself shows up in the log.
         let result: String
         let hasInstance = (reply?["hasInstance"] as? NSNumber)?.boolValue
-        let built = (reply?["built"] as? NSNumber)?.boolValue
+        let built = (reply?["builtRequest"] as? NSNumber)?.boolValue
         if hasInstance == nil {
             // No reply: SpringBoard has not been restarted since installation.
             result = String(format: "%@Failed to Send".localized, testPushResultPrefix)

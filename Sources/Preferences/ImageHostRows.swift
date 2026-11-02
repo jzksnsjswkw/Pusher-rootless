@@ -54,16 +54,13 @@ public final class ImageHostPickerController: UITableViewController {
     public override func viewDidLoad() {
         super.viewDidLoad()
         title = "图片上传".localized
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            barButtonSystemItem: .done, target: self, action: #selector(dismissSheet)
-        )
+        // No Done button: the sheet is dismissed by swiping it down, which is what
+        // a half-height sheet invites. A button in the bar would be a second way
+        // to do the one thing the swipe already does.
+        //
         // The sheet sizes itself to content, so a table with one screen of rows
         // should not bounce.
         tableView.alwaysBounceVertical = false
-    }
-
-    @objc private func dismissSheet() {
-        dismiss(animated: true)
     }
 
     // MARK: - Table

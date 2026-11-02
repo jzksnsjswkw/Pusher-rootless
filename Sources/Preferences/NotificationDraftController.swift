@@ -82,6 +82,12 @@ public final class NotificationDraftController: PlainViewController {
     @available(*, unavailable)
     public required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
+    /// How to dismiss, when this page did not present itself.
+    ///
+    /// A sheet owns its own dismissal; a page presented by a parent has to be
+    /// closed by that parent. Set by whoever presents it.
+    public var onClose: (() -> Void)?
+
     // MARK: - Lifecycle
 
     public override func viewDidLoad() {
@@ -89,9 +95,16 @@ public final class NotificationDraftController: PlainViewController {
         title = "Notification".localized
         view.backgroundColor = .systemGroupedBackground
 
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            barButtonSystemItem: .cancel, target: self, action: #selector(close)
-        )
+        // Only when the page was pushed and has no swipe to go back by. Presented
+        // as a sheet it has one, and a Cancel button beside a form with a single
+        // action is a second way out of the same room.
+        if presentingViewController == nil, onClose == nil {
+            let cancel = UIBarButtonItem(
+                barButtonSystemItem: .cancel, target: self, action: #selector(close)
+            )
+            cancel.tintColor = Theme.activeTintColor
+            navigationItem.rightBarButtonItem = cancel
+        }
 
         table.dataSource = self
         table.delegate = self
@@ -141,7 +154,7 @@ public final class NotificationDraftController: PlainViewController {
     }
 
     @objc private func close() {
-        dismiss(animated: true)
+        if let onClose { onClose() } else { dismiss(animated: true) }
     }
 
     // MARK: - Sending

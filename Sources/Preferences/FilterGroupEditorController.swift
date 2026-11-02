@@ -388,7 +388,11 @@ extension FilterGroupEditorController: UITableViewDataSource, UITableViewDelegat
     }
 
     public func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
-        indexPath.section == 2
+        // The rules are the fourth section; the third is the app scope, whose two
+        // rows are a segment and a link and cannot be reordered. This said 2, which
+        // let a user drag the scope rows and, because `moveRowAt` below did not
+        // check, silently reorder the *rules* by the scope row numbers.
+        indexPath.section == 3
     }
 
     public func tableView(
@@ -396,6 +400,7 @@ extension FilterGroupEditorController: UITableViewDataSource, UITableViewDelegat
         moveRowAt sourceIndexPath: IndexPath,
         to destinationIndexPath: IndexPath
     ) {
+        guard sourceIndexPath.section == 3, destinationIndexPath.section == 3 else { return }
         moveRule(from: sourceIndexPath.row, to: destinationIndexPath.row)
     }
 

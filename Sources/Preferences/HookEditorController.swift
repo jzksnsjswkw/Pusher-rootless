@@ -70,6 +70,11 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
         navigationItem.title = phase == .received
             ? "On Receiving".localized
             : "After Filtering".localized
+        // Tinted like every other button in the app. A bar button item takes its
+        // colour from the navigation bar's tint, and this page sets its own
+        // `activeTintColor` on cells — without this the three buttons render in
+        // the system default blue while everything around them is green.
+        let tint = Theme.activeTintColor
         navigationItem.rightBarButtonItems = [
             UIBarButtonItem(title: "Run".localized, style: .plain,
                             target: self, action: #selector(runHook)),
@@ -77,7 +82,12 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
                             target: self, action: #selector(formatHook)),
             UIBarButtonItem(title: "Guide".localized, style: .plain,
                             target: self, action: #selector(showGuide)),
-        ]
+            UIBarButtonItem(title: "Examples".localized, style: .plain,
+                            target: self, action: #selector(showExamples)),
+        ].map { item in
+            item.tintColor = tint
+            return item
+        }
 
         view.backgroundColor = .systemGroupedBackground
 
@@ -321,8 +331,14 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
         // A Run is a test of the hook, so it is a test notification. See
         // `PushEngine.runHook`: a test runs the hook whether or not its switch is
         // on, because "does my hook work" is the question a Run asks.
-        // The same starting notification every test page shows.
-        composer.initialDraft = runDraft ?? NotificationDraft()
+        // A starting notification the hook's examples can act on: a verification
+        // code, which is what two of the three examples are for. Kept after the
+        // first Run, so changing one field does not mean retyping the rest.
+        composer.initialDraft = runDraft ?? NotificationDraft(
+            title: "10086",
+            subtitle: "",
+            message: "【通知示例】您的验证码是：392511，请在10分钟内完成验证。".localized
+        )
         composer.onRun = { [weak self] draft in
             guard let self else { return }
             self.runDraft = draft
@@ -335,6 +351,43 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
         let navigation = UINavigationController(rootViewController: composer)
         navigation.modalPresentationStyle = .pageSheet
         present(navigation, animated: true)
+    }
+
+    /// Offers the API as snippets, and inserts the chosen one.
+    ///
+    /// An action sheet rather than a page: the list is six titles, and the text
+    /// lands in the editor behind it — a pushed list would have to be dismissed
+    /// before the result could be read.
+    @objc private func showExamples() {
+        view.endEditing(true)
+        let sheet = UIAlertController(
+            title: "Examples".localized, message: nil, preferredStyle: .actionSheet
+        )
+        for example in JavaScriptAPI.hookExamples {
+            sheet.addAction(UIAlertAction(
+                title: example.title.localized, style: .default
+            ) { [weak self] _ in
+                self?.insert(example.code)
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "Cancel".localized, style: .cancel))
+        sheet.popoverPresentationController?.barButtonItem =
+            navigationItem.rightBarButtonItems?.first
+        present(sheet, animated: true)
+    }
+
+    /// Puts a snippet in the editor.
+    ///
+    /// Replaces an empty script outright and appends to a non-empty one: a user
+    /// who already wrote something is adding to it, and one who has not is
+    /// starting from the example.
+    private func insert(_ code: String) {
+        let existing = (textView.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        textView.text = existing.isEmpty ? code : existing + "\n\n" + code
+        // The gutter is driven by the delegate, which a programmatic change does
+        // not call.
+        gutterNeedsRebuild = true
+        textViewDidChange(textView)
     }
 
     /// Runs the hook against a composed notification.
@@ -425,19 +478,14 @@ public final class HookEditorController: PSViewController, UITextViewDelegate {
             output.appendColored(line, .label)
         }
 
-        // The edits this hook made are carried into the send, not just listed in
-        // the output: a hook whose rewritten title was thrown away here would make
-        // the Run describe an edit the push never received.
-        //
-        // Applied to the *draft*, because that is what goes over the IPC hop. The
-        // context is derived from the draft, so editing one and sending the other
-        // is how the changes went missing the first time.
-        var outgoing = draft
+        // The rule outcome and the edits are reported in the output pane, not
+        // folded into the sent draft: the pipeline runs the hook itself on the way
+        // to the service, so applying the edits here as well would send a payload
+        // with them applied twice. `draft` is what goes over the IPC hop, untouched
+        // — the banner shows what the user typed, and `sample` below carries the
+        // hook's own decision for anything the output needs to report.
         if outcome.isKept {
             _ = outcome.changes.apply(to: &sample)
-            if let title = outcome.changes.title { outgoing.title = title }
-            if let subtitle = outcome.changes.subtitle { outgoing.subtitle = subtitle }
-            if let message = outcome.changes.message { outgoing.message = message }
         }
 
         // The notification then goes through the real pipeline for this instance:

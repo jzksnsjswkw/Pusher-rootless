@@ -34,6 +34,12 @@ public final class ConfigFieldEditorController: ListController {
         self.definitionID = definitionID
         self.field = field
         self.isNew = isNew
+        // Captured here, before anything can edit it: `field` is mutated by the
+        // key field's setter, and the whole point of this value is to remember
+        // what the key *was*. Reading it later returned the new key, so the
+        // lookup below never matched and a rename appended a second declaration
+        // instead of replacing the first.
+        self.originalKey = field.key
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -44,6 +50,7 @@ public final class ConfigFieldEditorController: ListController {
         self.definitionID = ""
         self.field = ConfigField(key: "field")
         self.isNew = true
+        self.originalKey = "field"
         super.init(nibName: nibName, bundle: bundle)
     }
 
@@ -51,6 +58,7 @@ public final class ConfigFieldEditorController: ListController {
         self.definitionID = ""
         self.field = ConfigField(key: "field")
         self.isNew = true
+        self.originalKey = "field"
         super.init(forContentSize: contentSize)
     }
 
@@ -321,11 +329,7 @@ public final class ConfigFieldEditorController: ListController {
 
     /// The key the field had when this page opened, so renaming it to the same
     /// name is not reported as a clash with itself.
-    private var originalKey: String {
-        get { objc_getAssociatedObject(self, &Self.originalKeyKey) as? String ?? field.key }
-        set { objc_setAssociatedObject(self, &Self.originalKeyKey, newValue, .OBJC_ASSOCIATION_RETAIN) }
-    }
-    private static var originalKeyKey = 0
+    private let originalKey: String
 
     // MARK: - Saving
 

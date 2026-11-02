@@ -218,6 +218,65 @@ enum JavaScriptAPI {
     }
 
     /// The prompt for writing an instance hook.
+    // MARK: - Hook examples
+
+    /// The hook API, as snippets a user can insert and then edit.
+    ///
+    /// A hook cannot send anything — there is no `push()` — so every example ends
+    /// in `keep()` or in nothing at all. The first is a decision about whether the
+    /// notification is forwarded, the second is a decision not to.
+    ///
+    /// Each one is a whole answer to a question someone actually has, rather than a
+    /// tour of the API: a hook that does not do what its author meant is silent,
+    /// which makes a working example more valuable here than a reference list.
+    static var hookExamples: [(title: String, code: String)] {
+        func comment(_ lines: String...) -> [String] {
+            lines.map { "// " + $0.localized }
+        }
+
+        let phone = (
+            comment("Puts the receiving number in the message, so a forward from a",
+                    "two-SIM phone says which SIM it arrived on.")
+            + [""] + [
+            "if (bullet.sim && bullet.sim.phoneNumber) {",
+            "  bullet.message = `${bullet.message} 来自【${bullet.sim.phoneNumber}】`;",
+            "}",
+            "keep();",
+        ]).joined(separator: "\n")
+
+        let code = (
+            comment("Forwards only verification codes. Everything else stays on the",
+                    "phone — not calling keep() is what discards a notification.")
+            + [""] + [
+            "const isCode = /验证码|校验码|verification/i.test(bullet.message || \"\");",
+            "if (isCode) keep();",
+        ]).joined(separator: "\n")
+
+        let extract = (
+            comment("Moves the code to the front of the message, so it is readable",
+                    "from a notification without opening anything.",
+                    "Falls back to just the number when the text has no code in it.")
+            + [""] + [
+            "if (bullet.sim && bullet.sim.phoneNumber) {",
+            "  const prefix = \"来自手机号\" + bullet.sim.phoneNumber.slice(-4);",
+            "  const match = bullet.message.match(/(?:验证码|校验码|动态码|确认码|code)[^\\d]*(\\d[\\d ]{2,9}\\d)/i);",
+            "  if (match) {",
+            "    const code = match[1].replace(/\\s/g, \"\");",
+            "    bullet.message = \"【验证码\" + code + \"】\" + prefix + \" \" + bullet.message;",
+            "  } else {",
+            "    bullet.message = prefix + \" \" + bullet.message;",
+            "  }",
+            "}",
+            "keep();",
+        ]).joined(separator: "\n")
+
+        return [
+            ("Put the receiving number in the message", phone),
+            ("Forward only verification codes", code),
+            ("Move the code to the front", extract),
+        ]
+    }
+
     /// The prompt for a hook.
     ///
     /// Written for someone who has never seen a hook and does not know what one

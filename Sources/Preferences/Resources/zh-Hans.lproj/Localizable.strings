@@ -863,3 +863,14 @@
 "%d cached image links will be removed; the next push uploads them again." = "已缓存的 %d 条图片链接会被清除，下次推送时重新上传。";
 "You cannot undo this, but nothing breaks." = "此操作无法撤销，但不会影响推送。";
 "Clear" = "清空";
+"Put the receiving number in the message" = "在内容里带上收信手机号";
+"Forward only verification codes" = "只转发验证码";
+"Move the code to the front" = "把验证码移到最前面";
+"Puts the receiving number in the message, so a forward from a" = "把收信号码写进内容，双卡的转发出去就知道是哪张卡收到的";
+"two-SIM phone says which SIM it arrived on." = "。";
+"Forwards only verification codes. Everything else stays on the" = "只转发验证码，其余通知留在手机上";
+"phone — not calling keep() is what discards a notification." = "。不调用 keep() 就是丢弃这条通知。";
+"Moves the code to the front of the message, so it is readable" = "把验证码移到内容最前面，不打开应用也能看到";
+"from a notification without opening anything." = "。";
+"Falls back to just the number when the text has no code in it." = "内容里没有验证码时只加号码。";
+"【通知示例】您的验证码是：392511，请在10分钟内完成验证。" = "【通知示例】您的验证码是：392511，请在10分钟内完成验证。";

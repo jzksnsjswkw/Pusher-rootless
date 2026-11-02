@@ -260,6 +260,29 @@ public final class FilterRuleEditorController: ListController {
         return sentence + String(format: " (position %d)".localized, offset)
     }
 
+    /// Watches the keyword field as it is typed into.
+    ///
+    /// No `super` call: `PSListController` does not implement this delegate
+    /// method, so forwarding raises `doesNotRecognizeSelector`.
+    ///
+    /// Without this override nothing watched the field at all: `observeKeywordField`
+    /// existed and was never called, so `editingChanged` was never attached, and
+    /// the warning about an invalid pattern only appeared after the page was left
+    /// and reopened. A rule that can never match then looks like a rule that
+    /// simply does not.
+    public override func tableView(
+        _ tableView: UITableView, willDisplay cell: UITableViewCell,
+        forRowAt indexPath: IndexPath
+    ) {
+        guard let specifier = specifierForRow(indexPath),
+              specifier.identifier == ID.keyword
+        else { return }
+        observeKeywordField(in: cell)
+        // Seeded from the field so a page opened on a broken pattern says so
+        // before anything is typed.
+        refreshNotes(keyword: keywordField?.text ?? rule.keyword)
+    }
+
     /// The keyword field, watched as it is typed into.
     ///
     /// `setKeyword` fires when the framework calls the setter, which is when the
