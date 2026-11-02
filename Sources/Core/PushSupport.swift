@@ -28,36 +28,6 @@ public struct NotificationSettings: Equatable {
     /// `sectionInfo.alertType == BBSectionInfoAlertTypeBanner`.
     public var isBanner = false
 
-    /// The settings as property-list values, for the trip between processes.
-    ///
-    /// Preferences has no `BBServer` and cannot read these itself; a Run there has
-    /// to be told what the app's settings are, or the notification conditions it
-    /// is meant to exercise cannot be evaluated.
-    public var propertyList: [String: Any] {
-        [
-            "allowsNotifications": allowsNotifications,
-            "showsInLockScreen": showsInLockScreen,
-            "showsInNotificationCenter": showsInNotificationCenter,
-            "showsMessagePreview": showsMessagePreview,
-            "isBanner": isBanner,
-            "showsBadges": showsBadges,
-            "showsSounds": showsSounds,
-        ]
-    }
-
-    /// Rebuilds from ``propertyList``.
-    public init?(propertyList: [String: Any]) {
-        guard let allowsNotifications = propertyList["allowsNotifications"] as? Bool
-        else { return nil }
-        self.allowsNotifications = allowsNotifications
-        showsInLockScreen = propertyList["showsInLockScreen"] as? Bool ?? false
-        showsInNotificationCenter = propertyList["showsInNotificationCenter"] as? Bool ?? false
-        showsMessagePreview = propertyList["showsMessagePreview"] as? Bool ?? false
-        isBanner = propertyList["isBanner"] as? Bool ?? false
-        showsBadges = propertyList["showsBadges"] as? Bool ?? false
-        showsSounds = propertyList["showsSounds"] as? Bool ?? false
-    }
-
     public init() {}
 
     /// `sectionInfo.pushSettings & Badges`.

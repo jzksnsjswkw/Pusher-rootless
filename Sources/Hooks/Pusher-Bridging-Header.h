@@ -77,10 +77,6 @@ typedef struct {
 /// Injected by the hook in PusherHooks.xm; forwards one bulletin to the
 /// pipeline.
 - (void)sendBulletinToPusher:(BBBulletin *)bulletin;
-/// Injected by the hook in PusherHooks.xm; pushes a synthetic test bulletin to
-/// one service.
-- (void)sendToPusherService:(NSString *)service
-                    context:(id)context;
 @end
 
 #pragma mark - Test push IPC

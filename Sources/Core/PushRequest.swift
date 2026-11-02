@@ -39,6 +39,14 @@ public final class PushRequest {
     /// which request — the last one looked like the only one that had answered.
     public var sequenceTag: String?
 
+    /// The retry-budget key this request was sent under.
+    ///
+    /// Set by the sender when the budget is allocated. `finish` clears the budget
+    /// by this key, because it does not receive the context the key was derived
+    /// from — an email or a Shortcut finishes through a different path than an
+    /// HTTP response does, and both used to leave the entry behind.
+    var retryKey: String?
+
     /// Called once when the request is finally done with — delivered, failed, or
     /// out of retries.
     ///

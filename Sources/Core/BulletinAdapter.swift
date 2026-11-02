@@ -229,18 +229,6 @@ public final class BulletinAdapter: NSObject {
     }
 
     /// Reduces a `BBSectionInfo` to the filter's value type.
-    /// The notification settings for an app, as the pipeline sees them.
-    ///
-    /// Available only in a process that holds the server — the lookup asserts it
-    /// runs on `BBServer`'s queue. Preferences has no server, which is why the
-    /// pipeline asks for these over IPC instead.
-    static func sectionSettings(for appID: String) -> NotificationSettings? {
-        guard let server = shared.server,
-              let sectionInfo = server._sectionInfo(forSectionID: appID, effective: true)
-        else { return nil }
-        return settings(from: sectionInfo)
-    }
-
     private static func settings(from sectionInfo: BBSectionInfo) -> NotificationSettings {
         var settings = NotificationSettings()
         settings.allowsNotifications = sectionInfo.allowsNotifications

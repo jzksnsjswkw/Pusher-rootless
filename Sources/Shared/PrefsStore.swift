@@ -235,6 +235,19 @@ public enum PrefsStore {
         mutate(&object)
         setValue(object, forKey: PrefKey.global)
     }
+
+    /// Changes a part of `Global` without announcing a configuration change.
+    ///
+    /// `Global` holds two kinds of thing: settings the pipeline is built from, and
+    /// bookkeeping that has nothing to do with a rebuild — the image-host cache is
+    /// the second kind. Writing it through `updateGlobal` posted the Darwin
+    /// notification the engine listens for, so every uploaded picture made the
+    /// whole config reload while that reload's own work was still running.
+    public static func updateGlobalQuietly(_ mutate: (inout [String: Any]) -> Void) {
+        var object = global().raw
+        mutate(&object)
+        setValue(object, forKey: PrefKey.global, notify: false)
+    }
 }
 
 /// Central `CFPreferences` access for the Pusher log domain

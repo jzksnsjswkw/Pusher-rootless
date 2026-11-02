@@ -146,24 +146,8 @@ public final class PushEngine: NSObject {
 
         // Which SIM carried this message is not in the bulletin — the notification
         // layer never sees a subscription. `imagent` does, so the answer is asked
-        // for over IPC, and only for SMS, because nothing else has a SIM.
-        //
-        // Resolved here, once, and carried on the context: each instance logs it
-        // from there, so one lookup covers every service and the line lands in the
-        // same section as that service's request.
-        // Skipped when the context already carries one: that means the card was
-        // chosen rather than resolved, and the lookup would overwrite the choice
-        // with the answer for a GUID that points at no row.
-        if context.appID == Pusher.smsBundleID, context.simSubscription == nil {
-            context.simSubscription = SMSLookup.subscription(
-                guid: context.publisherBulletinID
-            )
-            if let sim = context.simSubscription {
-                PusherLog.debug("[SMS] \(sim.description)")
-            } else {
-                PusherLog.debug("[SMS] \(SMSLookup.lastFailure ?? "not found")")
-            }
-        }
+        // for over IPC, and only for SMS, because nothing else has a SIM. The ask
+        // happens below, once the notification is known to be going somewhere.
 
         // A bulletin without a `lastInterruptDate` is normally a queued one being
         // replayed after a restart — but it is also what a bulletin looks like
@@ -210,10 +194,31 @@ public final class PushEngine: NSObject {
             return
         }
 
-
         guard !config.enabledInstances.isEmpty else {
             PusherLog.debug("No services enabled!")
             return
+        }
+
+        // Resolved once, and carried on the context: each instance logs it from
+        // there, so one lookup covers every service and the line lands in the same
+        // section as that service's request.
+        //
+        // Only for an SMS, and only when the context does not already carry one —
+        // that means the card was chosen rather than resolved, and the lookup would
+        // overwrite the choice with the answer for a GUID that points at no row.
+        //
+        // Reached only when the notification is actually going out: the lookup
+        // waits on another process with a 1.5s bound, and the checks above drop
+        // most notifications long before this point.
+        if context.appID == Pusher.smsBundleID, context.simSubscription == nil {
+            context.simSubscription = SMSLookup.subscription(
+                guid: context.publisherBulletinID
+            )
+            if let sim = context.simSubscription {
+                PusherLog.debug("[SMS] \(sim.description)")
+            } else {
+                PusherLog.debug("[SMS] \(SMSLookup.lastFailure ?? "not found")")
+            }
         }
 
         // The per-instance work goes to a background queue as a whole, hooks
@@ -612,12 +617,6 @@ public final class PushEngine: NSObject {
             PusherLog.debug("[S:\(service),T:\(context.isTest),A:\(context.appName)] Pushed")
             if !context.isTest {
                 PushLog.add(service: service, context: context, label: "Pushed")
-                // Now it is part of the loop-prevention window: a service was
-                // asked to send it, so a notification caused by it can be the
-                // second link in a chain.
-                // No longer recorded here: the transport counts every send, which
-                // includes this one and any a script makes.
-                _ = self
             }
         }
     }

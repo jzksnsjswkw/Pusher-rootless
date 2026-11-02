@@ -21,6 +21,13 @@ cd "$(dirname "$0")/.."
 SCHEME=roothide
 DEVICE=root@192.168.0.219
 
+# Assigned before the branch: it is a constant, and the function that writes it at
+# the end of the script runs whether or not a deb was found. `set -u` turns the
+# first use of an unset variable into an exit, and this one was only assigned in
+# one of the two branches — so a build from a clean tree compiled the package and
+# then died before copying anything.
+SCHEME_STAMP=.theos/.staged-scheme
+
 DEB=$(ls -t packages/*_iphoneos-arm64e.deb 2>/dev/null | head -1)
 NEEDS_STAGE=0
 if [ -z "$DEB" ]; then
@@ -31,7 +38,6 @@ else
     # Everything that goes into the package without being compiled: the two
     # resource trees, every service plist, and the control file itself. A plist
     # edit that skipped the full stage would ship the previous build's bundle.
-    SCHEME_STAMP=.theos/.staged-scheme
     if [ -f "$SCHEME_STAMP" ] && [ "$(cat "$SCHEME_STAMP")" != "$SCHEME" ]; then
         NEEDS_STAGE=1
     fi

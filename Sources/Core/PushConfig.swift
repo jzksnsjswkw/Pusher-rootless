@@ -38,10 +38,22 @@ public struct ServiceConfig {
     /// The normalized settings.
     public let raw: Prefs
 
+    /// The `fw.`-prefixed half of ``raw``, with the prefix stripped.
+    ///
+    /// Built once per snapshot. It used to be a computed property that rebuilt the
+    /// dictionary on every read — and every filter, every hook and every condition
+    /// reads it, several times per instance per notification, each walk over the
+    /// whole settings blob.
+    public let framework: Prefs
+
     public init(name: String, type: String, raw: Prefs) {
         self.name = name
         self.type = type
         self.raw = raw
+        self.framework = Prefs(raw.raw.reduce(into: [String: Any]()) { result, pair in
+            guard pair.key.hasPrefix(PrefKey.frameworkPrefix) else { return }
+            result[String(pair.key.dropFirst(PrefKey.frameworkPrefix.count))] = pair.value
+        })
     }
 
     /// Whether this instance is a user-defined webhook.
@@ -84,13 +96,6 @@ public struct ServiceConfig {
     /// A view of `raw` rather than a copy: the two are one dictionary, and
     /// writing through either is visible to the other. The prefix is what keeps
     /// them apart — see ``PrefKey/frameworkPrefix``.
-    public var framework: Prefs {
-        Prefs(raw.raw.reduce(into: [String: Any]()) { result, pair in
-            guard pair.key.hasPrefix(PrefKey.frameworkPrefix) else { return }
-            result[String(pair.key.dropFirst(PrefKey.frameworkPrefix.count))] = pair.value
-        })
-    }
-
     // MARK: - Instance hooks
 
     /// The "received" hook: runs as soon as a notification arrives.

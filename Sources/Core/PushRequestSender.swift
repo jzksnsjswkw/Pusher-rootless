@@ -26,7 +26,9 @@ public final class RequestSender {
         service: String,
         context: BulletinContext
     ) {
-        setRetriesLeft(Pusher.tries - 1, for: retryKey(context, service))
+        let key = retryKey(context, service)
+        setRetriesLeft(Pusher.tries - 1, for: key)
+        request.retryKey = key
 
         // Every send passes through here — a service's single request, a script's
         // fifth `push()`, the editor's test run — so this is where a forwarded
@@ -76,10 +78,14 @@ public final class RequestSender {
         return remaining
     }
 
-    private func hasRetriesLeft(for key: String) -> Bool {
+    /// How many attempts are left, without taking one.
+    ///
+    /// `claimRetry` spends an attempt; this only reads. A caller that has already
+    /// been granted one needs the second, or it charges the budget twice.
+    private func retriesRemaining(for key: String) -> Int {
         lock.lock()
         defer { lock.unlock() }
-        return (retriesLeft[key] ?? 0) > 0
+        return retriesLeft[key] ?? 0
     }
 
     // MARK: - Email delivery
@@ -223,15 +229,10 @@ public final class RequestSender {
         }
 
         urlString = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
-        // The log is written to a plist the user can read, copy and paste into a
-        // bug report. A token in a URL query is the usual way a service
-        // authenticates — Gotify, ServerChan, WeCom all put the credential there —
-        // so the URL is logged with its values masked, while the request itself
-        // keeps the real one.
-        // Logged verbatim. Masking the credential here would also hide the one
+        // Logged verbatim, credential and all. Masking it would also hide the one
         // thing that explains a 401 — which key was actually sent — and the log is
-        // a local file the user already controls. The path/query masking helpers
-        // are kept for a future opt-in, but the default is to write what was sent.
+        // a local file the user already controls. Masking helpers exist and are
+        // not called here.
         PushLog.add(service: service, context: context, label: "URL",
                     object: urlString, tag: request.sequenceTag)
 
@@ -407,6 +408,13 @@ public final class RequestSender {
         // Cleared so a retry that somehow reaches here twice cannot deliver two
         // answers for one push.
         request.completion = nil
+        // The budget is per (notification, service) and is allocated by `send`,
+        // so it lives on after delivery unless it is cleared here. An email or a
+        // Shortcut finishes through this method rather than `handleResponse`,
+        // which is where the HTTP path clears it — so every notification that
+        // fanned out to such a service left a dictionary entry behind for the
+        // life of the process.
+        if let key = request.retryKey { setRetriesLeft(nil, for: key) }
     }
 
     private func handleResponse(
@@ -523,10 +531,16 @@ public final class RequestSender {
         context: BulletinContext,
         key: String
     ) -> Bool {
-        // The retry decision was already taken by `retryAfterFailure`, which owns
-        // the budget; this only builds the next request.
-        let remaining = claimRetry(for: key)
-        _ = remaining
+        // The retry decision was taken by `retryAfterFailure`, which already
+        // claimed an attempt from the budget — so this must not claim another.
+        // It did, and `_ = remaining` threw the result away: an image shrink cost
+        // two attempts, and the `remaining <= 0` test below could not see how many
+        // were really left.
+        //
+        // Read, not claimed: what `retryAfterFailure` granted is what this builds
+        // for. Zero means this was the last attempt, which is when the image is
+        // dropped rather than shrunk again.
+        let remaining = retriesRemaining(for: key)
 
         // `imageShrinkFactor` comes from user prefs, so a non-numeric value
         // falls back to the default rather than parsing as 0.
