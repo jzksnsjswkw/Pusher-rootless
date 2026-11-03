@@ -200,7 +200,7 @@ RELEASE
 # and a file called anything else is never fetched.
 # Clients pick the scale that matches the screen, so all three are published.
 for name in CydiaIcon CydiaIcon@2x CydiaIcon@3x; do
-    src="scripts/$name.png"
+    src=".github/scripts/$name.png"
     if [ ! -f "$src" ]; then
         echo "error: $src is missing — the source will list without an icon" >&2
         exit 1
@@ -210,7 +210,7 @@ done
 
 # The package page's images. The JSON points at this source, so they are copied in
 # rather than linked to an outside host, for the same reason the source icon is.
-DEPICTION_DIR="${DEPICTION_DIR:-scripts/depiction}"
+DEPICTION_DIR="${DEPICTION_DIR:-.github/scripts/depiction}"
 # Required, not optional: without the document the package page is a blank tab in
 # every client, and without the screenshots it is a page with empty frames. A
 # missing file used to be skipped silently, which is how a broken source shipped
@@ -231,7 +231,7 @@ fi
 # Served from here rather than from inside the deb because Sileo shows the icon
 # before anything is installed — a `file://` path only resolves afterwards, and to
 # a path that differs by packaging scheme.
-PACKAGE_ICON="${PACKAGE_ICON:-scripts/icon.png}"
+PACKAGE_ICON="${PACKAGE_ICON:-.github/scripts/icon.png}"
 if [ ! -f "$PACKAGE_ICON" ]; then
     echo "error: $PACKAGE_ICON is missing — every package row will show a placeholder" >&2
     exit 1

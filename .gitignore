@@ -38,7 +38,16 @@ __handlers__/
 *.log
 
 # Raw screenshots as they come off the device. The ones the package page uses are
-# cropped and renamed into scripts/depiction/shots/. The `Screenshots/` directory
-# is different: those are the ones already prepared, and they are tracked.
+# cropped and renamed into .github/scripts/depiction/shots/. The `Screenshots/`
+# directory is different: those are the ones already prepared, and they are
+# tracked.
 IMG_*.png
 IMG_*.jpeg
+
+# Python bytecode from the checkers in this directory.
+__pycache__/
+*.pyc
+
+# Local deployment. It names this machine's device and is only ever run by hand;
+# published builds come from CI.
+.github/scripts/deploy.sh

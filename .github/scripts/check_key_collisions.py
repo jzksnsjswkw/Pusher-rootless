@@ -13,7 +13,11 @@ service is being written rather than after a user's list goes missing.
 """
 import pathlib, re, sys
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+# The repository root, found by walking up to the directory that holds `.git` —
+# see the note in `check_localization.py`.
+ROOT = next(
+    path for path in pathlib.Path(__file__).resolve().parents if (path / ".git").exists()
+)
 
 # Keys the framework stores in an instance's config. Anything a service also uses
 # is a collision.

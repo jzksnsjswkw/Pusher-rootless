@@ -20,7 +20,14 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+# The repository root, found by walking up to the directory that holds `.git`.
+#
+# Not `parent.parent`: these scripts used to live in `scripts/`, one level below
+# the root, and were moved into `.github/scripts/`. Deriving the root from their
+# own position breaks again the next time they move.
+ROOT = next(
+    path for path in Path(__file__).resolve().parents if (path / ".git").exists()
+)
 SOURCES = ROOT / "Sources" / "Preferences"
 TABLE = SOURCES / "Resources" / "zh-Hans.lproj" / "Localizable.strings"
 
