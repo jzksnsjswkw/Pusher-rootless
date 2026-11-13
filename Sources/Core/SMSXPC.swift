@@ -30,7 +30,7 @@ enum SMSXPC {
     static func lookup(guid: String) -> [String: Any]? {
         guard !guid.isEmpty else { return nil }
         guard let center = makeCenter() else {
-            NSLog("[PusherSMS] client: SandyXpcMessagingCenter unavailable")
+            PusherLog.info("[PusherSMS] client: SandyXpcMessagingCenter unavailable")
             return nil
         }
         typealias Send = @convention(c) (
@@ -41,12 +41,18 @@ enum SMSXPC {
         else { return nil }
         let send = unsafeBitCast(method_getImplementation(method), to: Send.self)
         var error: NSError?
-        // The call itself runs off the caller's thread. The blocked thread cannot
-        // be reclaimed if the daemon never answers — `send` holds it until the
-        // connection is invalidated — so it is a `qos: .utility` thread that leaks
-        // in that case, which is the price of not freezing SpringBoard.
+        // The call itself runs off the caller's thread. `send` waits on a
+        // semaphore with no deadline of its own, so an unanswered one holds its
+        // thread forever and takes the connection with it.
+        //
+        // Timed out, the connection is dropped rather than reused: that is what
+        // makes the blocked `send` return, and it stops the next lookup from
+        // queuing behind a connection that is already stuck. Without this a burst
+        // of ten messages while `imagent` is starting up leaked ten threads and
+        // ten mach connections, once per message, for as long as the device ran.
         let done = DispatchSemaphore(value: 0)
         var box: [String: Any]?
+        var timedOut = false
         DispatchQueue.global(qos: .utility).async {
             let reply = send(
                 center, selector, messageName as NSString,
@@ -55,14 +61,24 @@ enum SMSXPC {
             box = reply as? [String: Any]
             done.signal()
         }
-        guard done.wait(timeout: .now() + timeout) == .success else {
-            NSLog("[PusherSMS] client: timeout after \(timeout)s")
+        if done.wait(timeout: .now() + timeout) == .timedOut {
+            timedOut = true
+        }
+        if timedOut {
+            PusherLog.info("[PusherSMS] client: timeout after \(timeout)s, dropping the connection")
+            // Rebuilt on the next lookup. The thread blocked inside the old send
+            // is released when the connection it is waiting on goes away.
+            lock.lock()
+            cached = nil
+            lock.unlock()
             return nil
         }
-        NSLog("[PusherSMS] client: reply \(box.map { "\($0)" } ?? "nil, error \(String(describing: error))")")
         return box
     }
 
+    /// Guards ``cached``, which is read on every lookup and replaced from the
+    /// utility queue after a timeout.
+    private static let lock = NSLock()
 
 
     /// The client side, made once.
@@ -72,6 +88,8 @@ enum SMSXPC {
     private static var cached: AnyObject?
 
     private static func makeCenter() -> AnyObject? {
+        lock.lock()
+        defer { lock.unlock() }
         if let cached { return cached }
         guard let cls = NSClassFromString("SandyXpcMessagingCenter") as? NSObject.Type
         else { return nil }

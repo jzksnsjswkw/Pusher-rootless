@@ -35,22 +35,53 @@ public struct SIMSubscription {
 public enum SIMSubscriptions {
     /// The current SIMs, in slot order.
     ///
-    /// Read every time rather than cached. The call is one XPC round trip to
-    /// CoreTelephony and the answer cannot go stale — a tray swap, a rename in
-    /// Settings, a SIM being removed: all of it is picked up immediately, which a
-    /// cache would silently get wrong for up to its lifetime.
+    /// Cached for a few seconds, and that is a deliberate reversal. Reading is one
+    /// XPC round trip to CoreTelephony, and this used to happen on every message:
+    /// the push pipeline asks for it while decorating a notification that is
+    /// already going out, so the cost landed between the message arriving and the
+    /// notification being published.
+    ///
+    /// The answer barely changes. A tray swap, a rename in Settings or a SIM being
+    /// removed are all things a person does once, not while a burst of messages is
+    /// arriving — and a few seconds of staleness means at worst the previous card's
+    /// name on a notification that was going to say the same thing anyway. The
+    /// settings page reads with ``refreshed()``, which is explicitly asking the
+    /// device rather than asking for what is known.
     public static func all() -> [SIMSubscription] {
-        read()
+        lock.lock()
+        defer { lock.unlock() }
+        if let cached, Date().timeIntervalSince(cachedAt) < lifetime {
+            return cached
+        }
+        let fresh = read()
+        cached = fresh
+        cachedAt = Date()
+        return fresh
     }
 
     /// The current SIMs, read again.
     ///
-    /// Kept as a separate name because its callers say what they mean — the SIM
-    /// page's "get" button is explicitly asking the device — even though there is
-    /// no longer a cached path for it to bypass.
+    /// Its callers say what they mean — the SIM page's "get" button is explicitly
+    /// asking the device — so it bypasses the cache rather than reading it.
     public static func refreshed() -> [SIMSubscription] {
-        read()
+        let fresh = read()
+        lock.lock()
+        cached = fresh
+        cachedAt = Date()
+        lock.unlock()
+        return fresh
     }
+
+    /// How long a read is reused for.
+    ///
+    /// Short. The value is used to label one notification with the card it arrived
+    /// on, and the only thing a longer window would save is an XPC round trip that
+    /// already only happens every few seconds at most.
+    private static let lifetime: TimeInterval = 10
+
+    private static let lock = NSLock()
+    private static var cached: [SIMSubscription]?
+    private static var cachedAt = Date.distantPast
 
     /// The SIM currently in a slot, `nil` when that slot is empty.
     public static func subscription(forSlot slot: Int) -> SIMSubscription? {

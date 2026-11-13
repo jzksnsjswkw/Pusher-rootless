@@ -241,8 +241,14 @@ public final class FilterRuleEditorController: ListController {
     /// never happens to. The wording follows the encryption key's, which reports
     /// its own problem the same way.
     private func keywordNotesText(keyword live: String? = nil) -> String {
-        let notes = ("Leave the keyword empty to match every notification from the apps "
-            + "this list covers.").localized
+        // What an empty keyword means depends on the field, and saying so is the
+        // only way the rule reads correctly before it is saved: "匹配" with no
+        // keyword is not a comparison at all, it is a question about whether the
+        // field is filled in.
+        let notes = ("With no keyword this rule matches whenever the selected field has "
+            + "content in it, and the comparison is ignored. A rule on the subtitle "
+            + "with no keyword therefore selects the notifications that have a "
+            + "subtitle.").localized
         guard let problem = patternProblem(keyword: live) else { return notes }
         return "⚠️ " + problem + "\n\n" + notes
     }

@@ -143,6 +143,21 @@ public final class RequestSender {
         context: BulletinContext
     ) {
         PushLog.add(service: service, context: context, label: "Shortcut", object: name, tag: request.sequenceTag)
+        // The payload travels with the entry, not just the name. A shortcut does
+        // not answer with an HTTP status or a response body, so this line is the
+        // whole record of what it was given — without it a run that produced the
+        // wrong notification left nothing to look at, and the shortcut itself is
+        // outside this app.
+        //
+        // Parsed back into a dictionary first, so the log's own formatter renders
+        // it one key per line instead of as a wall of JSON. Long values are still
+        // cut: a Base64 image travels in this payload, and "this field exists and
+        // is large" is what a reader needs from it.
+        if !input.isEmpty {
+            PushLog.add(service: service, context: context,
+                        label: "Input", object: Self.forLogging(input),
+                        tag: request.sequenceTag)
+        }
         PusherLog.debug("\(logString) Running shortcut \"\(name)\"")
 
         let error = ShortcutRunner.run(name: name, input: input)
@@ -156,6 +171,17 @@ public final class RequestSender {
             PushLog.add(service: service, context: context, label: "Shortcut started", tag: request.sequenceTag)
             finish(request, status: 200)
         }
+    }
+
+    /// The payload as a person would want to read it.
+    ///
+    /// Falls back to the raw string when it does not parse, which cannot happen for
+    /// a payload that was encoded a few lines earlier but is not worth a crash.
+    private static func forLogging(_ json: String) -> Any {
+        guard let data = json.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data)
+        else { return json }
+        return object
     }
 
     // MARK: - One attempt (HTTP)
@@ -640,8 +666,17 @@ enum PusherTrap {
     /// Runs `body`, catching an Objective-C exception rather than letting it
     /// unwind into the host process.
     ///
-    /// A missing hook runs the block plainly: a trap that is not loaded must not
-    /// turn a working send into a silent no-op.
+    /// The trap is an Objective-C function found by name, because Swift has no
+    /// `@try`: its `do`/`catch` sees only Swift errors, and an `NSException`
+    /// unwinds past every `catch` in this file.
+    ///
+    /// Known gap, not a design: the function lives in `ShortcutHooks.xm`, which is
+    /// linked into the tweak and not into the Preferences bundle. There the symbol
+    /// is absent and the block runs unprotected, so a Run that hits an exception
+    /// takes Settings.app with it. The fallback is still correct for a binary that
+    /// has no trap at all — it is wrong only because this bundle believes it is
+    /// protected. Fixing it needs an Objective-C file in that target, which the
+    /// build does not currently accommodate.
     static func run(_ body: @escaping @convention(block) () -> Void) {
         typealias TrapFn = @convention(c) (AnyObject) -> Void
         guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "PusherTrapExceptions")

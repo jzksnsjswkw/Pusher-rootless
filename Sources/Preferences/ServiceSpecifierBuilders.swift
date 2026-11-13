@@ -277,11 +277,24 @@ public final class ServiceSpecifierBuilders: NSObject {
         // noise.
         if descriptor.supportsIcon || descriptor.supportsImage {
             let group = PSSpecifier.groupSpecifier(withName: "")!
+            // The note sits at the end of the group the switches are in, so it is
+            // drawn after them rather than above them. It used to live in
+            // `Custom.plist`, on an "Options" group that the page places *before*
+            // these cells — so the paragraph explaining what happens to a large
+            // image appeared above the switch that decides whether an image is sent
+            // at all, and only on the two services whose options came from a plist.
+            //
+            // Both paragraphs, in the order they are read: what the switch
+            // overrides, then how the picture is sized.
+            var notes: [String] = []
             if service == BarkService.serviceName {
-                group.setProperty(
-                    "When on, the Icon and Image fields under Optional Parameters are ignored.".localized,
-                    forKey: "footerText"
-                )
+                notes.append("When on, the Icon and Image fields under Optional Parameters are ignored.".localized)
+            }
+            if descriptor.supportsImage {
+                notes.append(Self.imageNotes)
+            }
+            if !notes.isEmpty {
+                group.setProperty(notes.joined(separator: "\n\n"), forKey: "footerText")
             }
             specifiers.append(group)
         }
@@ -766,6 +779,21 @@ public final class ServiceSpecifierBuilders: NSObject {
         }
         return specifier
     }
+
+    /// What happens to an attachment that is too large.
+    ///
+    /// One paragraph for every service that sends a picture: the sizing fields
+    /// below it only mean anything in the light of it, and a copy per service would
+    /// drift. It is only shown while the image switch is on, which is when the
+    /// numbers it describes are on screen.
+    static let imageNotes = ("An attachment is resized to fit the maximum width and "
+        + "height before it is sent, unless it is already smaller. If the server "
+        + "rejects the request as too large, Pusher retries up to 5 times, dividing "
+        + "the picture's dimensions by the shrink factor on each attempt. The "
+        + "factor must be greater than 1.0, since it is a divisor: 2 halves each "
+        + "side. If the last attempt is still too large, the picture is left out "
+        + "and the payload carries 1 in its place, so the receiver can tell an "
+        + "attachment existed.").localized
 
     private static func decimalField(
         _ title: String,

@@ -246,13 +246,20 @@ public enum ConfigLoader {
 
         // One pass over the stored instances: each is normalized against its
         // own descriptor, and the enabled ones form the fan-out order.
+        //
+        // The definition table is decoded once for the whole pass. Asking per
+        // instance copied the preferences domain and rebuilt every definition
+        // each time — quadratic in the number of instances, on the path a
+        // notification takes.
         snapshot.instances = ServiceInstanceStore.instances()
         snapshot.configs = [:]
         snapshot.enabledInstances = []
-        for instance in snapshot.instances {
-            snapshot.configs[instance.id] = normalize(instance, snapshot: snapshot)
-            if instance.isEnabled {
-                snapshot.enabledInstances.append(instance)
+        CustomServiceStore.withLookupTable {
+            for instance in snapshot.instances {
+                snapshot.configs[instance.id] = normalize(instance, snapshot: snapshot)
+                if instance.isEnabled {
+                    snapshot.enabledInstances.append(instance)
+                }
             }
         }
 

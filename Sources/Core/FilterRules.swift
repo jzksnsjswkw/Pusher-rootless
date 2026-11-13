@@ -11,10 +11,15 @@ public enum FilterRules {
     // MARK: - Global
 
     public static func global() -> FilterRuleSet {
-        guard let object = PrefsStore.prefs().dict(PrefKey.globalRules) else {
-            return FilterRuleSet()
-        }
-        return FilterRuleSet(stored: object.raw)
+        // One key, not the whole domain.
+        //
+        // This runs once per notification per instance, on the path that sits
+        // between a bulletin arriving and the notification being published — and
+        // `PrefsStore.prefs()` copies every key in the domain to read one of them.
+        guard let stored = PrefsStore.value(forKey: PrefKey.globalRules)
+                as? [String: Any]
+        else { return FilterRuleSet() }
+        return FilterRuleSet(stored: stored)
     }
 
     public static func setGlobal(_ set: FilterRuleSet) {
@@ -29,6 +34,9 @@ public enum FilterRules {
 
     public static func instance(_ id: String) -> FilterRuleSet {
         guard !id.isEmpty else { return FilterRuleSet() }
+        // The instances array is one key, and the rules are inside it — there is
+        // no per-instance key to read instead. Reading that one key rather than
+        // the whole domain is still most of the saving.
         let config = PrefsStore.instance(id)
         guard let object = config.dict(PrefKey.instanceRules) else { return FilterRuleSet() }
         return FilterRuleSet(stored: object.raw)
@@ -54,7 +62,7 @@ public enum FilterRules {
     /// anything — asking the question that way keeps a half-built page from
     /// costing every notification in the system a context build.
     public static var hasAnyRules: Bool {
-        if holdsAMatchableRule(PrefsStore.prefs().dict(PrefKey.globalRules)?.raw) {
+        if holdsAMatchableRule(PrefsStore.value(forKey: PrefKey.globalRules) as? [String: Any]) {
             return true
         }
         return ServiceInstanceStore.instances().contains {

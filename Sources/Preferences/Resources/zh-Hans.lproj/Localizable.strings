@@ -97,7 +97,9 @@
 "Date Format:" = "日期格式：";
 "GET sends the data in the query string while POST sends the data in a JSON-formatted request body (Content-Type: application/json)." = "GET 会把数据放在查询字符串中，POST 会把数据放在 JSON 格式的 Request Body 中（Content-Type: application/json）。";
 "Param/Header Name is used to determine the name of the parameter to pass. For example, header authentication is typically passed through the 'Access-Token' header. If you are using the Request Body option and your API takes a parameter named 'token', you would enter 'token' as the name." = "Param/Header Name 用于确定要传递的参数名称。例如，header 身份验证通常通过 'Access-Token' header 传递。如果使用 Request Body 选项且 API 需要名为 'token' 的参数，请在名称栏输入 'token'。";
-"The server may reject the request if the data is too large, which is usually a result of the image being high resolution. Pusher will try to forward the notification 5 times, shrinking the image each time by the factor you specify (if the body is too large). If by the last retry the image is too large, it will remove the image but set the \"image\" property to a 1 to indicate that an image is attached. The image will initially be resized to fit the maximum width and height unless it is already smaller. The image shrink factor must be greater than 1.0 to work since it is division (a factor of 2 means it will divide the image dimensions in half).\n\nThe following properties will be passed to the URL endpoint (via the selected HTTP method/body format) specified above (property names in parentheses) [Must Turn on \"Include Icon\" and \"Include Image\" switches above in order to get the corresponding properties below]:\n\nDevice Name (deviceName), App Name (appName), App Bundle ID (appID), Title (title), Subtitle (subtitle), Message (message), Date (date), Base64 Encoded PNG Icon 58x58 (icon), Base64 Encoded Image (image)" = "如果数据过大（通常是因为图片分辨率过高），服务器可能会拒绝请求。Pusher 会尝试转发通知 5 次，每次按你指定的系数缩小图片（如果 Request Body 仍然过大）。如果最后一次重试时图片仍过大，它会移除图片，但将 \"image\" 属性设为 1 以表示附有图片。图片最初会被缩放到最大宽度和高度以内（如果尚未小于该尺寸）。图片缩小系数必须大于 1.0 才能生效，因为它是除法运算（系数为 2 表示将图片尺寸减半）。\n\n以下属性会通过所选 HTTP 方法和请求体格式传递给上方指定的 URL Endpoint（括号内为属性名）[必须开启上方的“包含图标”和“包含图片”开关才能获得对应属性]：\n\n设备名称 (deviceName)、应用名称 (appName)、应用 Bundle ID (appID)、标题 (title)、副标题 (subtitle)、消息 (message)、日期 (date)、Base64 编码的 58x58 PNG 图标 (icon)、Base64 编码的图片 (image)";
+"The following properties will be passed to the URL endpoint (via the selected HTTP method/body format) specified above (property names in parentheses) [Must Turn on \"Include Icon\" and \"Include Image\" switches above in order to get the corresponding properties below]:
+
+Device Name (deviceName), App Name (appName), App Bundle ID (appID), Title (title), Subtitle (subtitle), Message (message), Date (date), Base64 Encoded PNG Icon 58x58 (icon), Base64 Encoded Image (image)" = "以下属性会通过所选 HTTP 方法和请求体格式传递给上方指定的 URL Endpoint（括号内为属性名）[必须开启上方的“包含图标”和“包含图片”开关才能获得对应属性]：\n\n设备名称 (deviceName)、应用名称 (appName)、应用 Bundle ID (appID)、标题 (title)、副标题 (subtitle)、消息 (message)、日期 (date)、Base64 编码的 58x58 PNG 图标 (icon)、Base64 编码的图片 (image)";
 "INSTRUCTIONS:\n1. Click 'Open Date Format Instructions' above (https://nsdateformatter.com).\n2. Using the reference and examples, create your desired date format and enter it above. If you don't care about the date, you may leave it as the default\n\nExample formats for Saturday, April 13, 2019 @ 3:12 AM:\nEEEE, MMM d, yyyy = Saturday, Apr 13, 2019\nMM/dd/yyyy = 04/13/2019\nMM-dd-yyyy HH:mm = 04-13-2019 03:12\nMMM d, h:mm a = Apr 13, 3:12 AM\nE, d MMM yyyy HH:mm:ss Z = Sat, 13 Apr 2019 03:12:11 +0000\nyyyy-MM-dd'T'HH:mm:ssZ = 2019-04-13T03:12:11+0000\ndd.MM.yy = 13.04.19\nHH:mm:ss.SSS = 03:12:11.678\n" = "说明：\n1. 点击上方的“打开日期格式说明”(https://nsdateformatter.com)。\n2. 参考示例创建你想要的日期格式并输入上方。如果不关心日期，可以保留默认值。\n\n2019 年 4 月 13 日星期六 @ 上午 3:12 的示例格式：\nEEEE, MMM d, yyyy = Saturday, Apr 13, 2019\nMM/dd/yyyy = 04/13/2019\nMM-dd-yyyy HH:mm = 04-13-2019 03:12\nMMM d, h:mm a = Apr 13, 3:12 AM\nE, d MMM yyyy HH:mm:ss Z = Sat, 13 Apr 2019 03:12:11 +0000\nyyyy-MM-dd'T'HH:mm:ssZ = 2019-04-13T03:12:11+0000\ndd.MM.yy = 13.04.19\nHH:mm:ss.SSS = 03:12:11.678\n";
 "SETUP:\n1. Click 'Open IFTTT Maker Webhooks Account' above (https://ifttt.com/services/maker_webhooks/settings).\n2. Click the 'Connect' button if it is not already connected.\n3. Copy the key at the end of the URL displayed (https://maker.ifttt.com/use/YOUR_KEY) into the associated field above.\n4. When you make an applet on IFTTT with the Maker Webhooks service, it will ask you for an event name. Enter that event name in the associated field above.\n\nWEBHOOK REQUEST DATA:\nIf Curate Request Data is enabled:\nThe \"Value1\" ingredient is set to the title (which includes app name), \"Value2\" is set to the message (which includes subtitle), and \"Value3\" is either the base64 encoded PNG 58x58 icon if \"Include Icon\" is turned on or the date string if \"Include Icon\" is turned off.\n\nIf Curate Request Data is disabled:\nThe following properties will be passed to the webhook trigger under the \"Value1\" ingredient (property names in parentheses) [Must Turn on \"Include Icon\" switch above in order to get the icon property]:\nDevice Name (deviceName), App Name (appName), App Bundle ID (appID), Title (title), Subtitle (subtitle), Message (message), Date (date), Base64 Encoded PNG Icon 58x58 (icon)" = "设置：\n1. 点击上方的“打开 IFTTT Maker Webhooks 账户”(https://ifttt.com/services/maker_webhooks/settings)。\n2. 如果尚未连接，请点击“Connect”按钮。\n3. 将显示的 URL（https://maker.ifttt.com/use/YOUR_KEY）末尾的 Key 复制到上方对应字段。\n4. 在 IFTTT 上使用 Maker Webhooks 服务创建 applet 时，它会要求你输入事件名称。请将事件名称输入到上方对应字段。\n\nWEBHOOK REQUEST DATA：\n如果启用了“整理请求数据”：\n\"Value1\" 会设置为标题（包含应用名称），\"Value2\" 会设置为消息（包含副标题），\"Value3\" 为 Base64 编码的 58x58 PNG 图标（如果开启“包含图标”）或日期字符串（如果关闭“包含图标”）。\n\n如果未启用“整理请求数据”：\n以下属性会作为 \"Value1\" 成分传递给 Webhook 触发器（括号内为属性名）[必须开启上方的“包含图标”开关才能获得图标属性]：\n设备名称 (deviceName)、应用名称 (appName)、应用 Bundle ID (appID)、标题 (title)、副标题 (subtitle)、消息 (message)、日期 (date)、Base64 编码的 58x58 PNG 图标 (icon)";
 "SETUP:\n1. Click 'Open Pushbullet Account' above (https://www.pushbullet.com/#settings/account).\n2. Scroll down and click 'Create Access Token' on your account page.\n3. Copy the displayed access token into the associated field above.\n4. Click 'Receiving Devices' to validate your credentials and load the receiving device list." = "设置：\n1. 点击上方的“打开 Pushbullet 账户”(https://www.pushbullet.com/#settings/account)。\n2. 在账户页面向下滚动并点击“Create Access Token”。\n3. 将显示的 Access Token 复制到上方对应字段。\n4. 点击“接收设备”以验证凭据并加载接收设备列表。";
@@ -874,3 +876,39 @@
 "from a notification without opening anything." = "。";
 "Falls back to just the number when the text has no code in it." = "内容里没有验证码时只加号码。";
 "【通知示例】您的验证码是：392511，请在10分钟内完成验证。" = "【通知示例】您的验证码是：392511，请在10分钟内完成验证。";
+
+/* Log lines. Written in English by the pipeline, translated here at drawing time — the stored file stays language-neutral. */
+"Processing" = "处理";
+"SMS subscription" = "收信";
+"URL" = "URL";
+"Method" = "方法";
+"Request Body Dictionary" = "请求内容";
+"Network Response: Success" = "网络响应：成功";
+"Network Response: Error" = "网络响应：错误";
+"Network Response: Failed after all resend attempts" = "网络响应：所有重试均失败";
+"Network Response: Failed by resend handler" = "网络响应：被重发处理器终止";
+"Prevented loop" = "阻止循环";
+"Not sent" = "未发送";
+"Sent" = "已发送";
+"Hidden by a rule" = "被规则隐藏";
+"Shortcut started" = "快捷指令已启动";
+"Shortcut failed" = "快捷指令失败";
+"Input" = "输入";
+"Script is empty or its service was deleted" = "脚本为空或其服务已删除";
+"Image shrunk for the retry" = "重试时已缩小图片";
+"Image removed for the retry" = "重试时已移除图片";
+"Invalid URL" = "无效的 URL";
+"JSON Serialization Error" = "JSON 序列化错误";
+"SpringBoard not ready" = "SpringBoard 尚未就绪";
+"Global prefs" = "全局偏好";
+"Filtered by a rule" = "被规则过滤";
+"Hook forced the push past the filters" = "Hook 强制越过过滤器";
+"With no keyword this rule matches whenever the selected field has content in it, and the comparison is ignored. A rule on the subtitle with no keyword therefore selects the notifications that have a subtitle." = "关键字留空时，只要所选字段有内容就视为匹配，比较方式不参与判断。因此选择「副标题」并留空关键字，只会匹配带副标题的通知。";
+"All notifications" = "所有通知";
+"Has a title" = "存在标题";
+"No title" = "无标题";
+"Has a subtitle" = "存在副标题";
+"No subtitle" = "无副标题";
+"Has a message" = "存在内容";
+"No message" = "无内容";
+"An attachment is resized to fit the maximum width and height before it is sent, unless it is already smaller. If the server rejects the request as too large, Pusher retries up to 5 times, dividing the picture's dimensions by the shrink factor on each attempt. The factor must be greater than 1.0, since it is a divisor: 2 halves each side. If the last attempt is still too large, the picture is left out and the payload carries 1 in its place, so the receiver can tell an attachment existed." = "图片发送前会先缩放到不超过最大宽度和高度（如果本来就更小则保持不变）。如果服务器以数据过大为由拒绝，Pusher 最多重试 5 次，每次按缩小因子除以图片尺寸。因子必须大于 1.0，因为它是除数：2 表示每边减半。如果最后一次仍然过大，图片会被移除，payload 中该字段改为 1，让接收端知道原本有附件。";

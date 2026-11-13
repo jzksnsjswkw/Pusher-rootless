@@ -65,6 +65,17 @@ public enum Localization {
 extension String {
     /// This string, localized through the Preferences bundle.
     var localized: String { Localization.string(self) }
+
+    /// This string localized, or itself when there is no translation.
+    ///
+    /// `localized` cannot tell the two apart — it returns the key when the table
+    /// has no entry — which is fine for a label whose English is what you want as
+    /// a fallback, and not fine for deciding whether a translation happened. That
+    /// decision is what lets a log line translate only the part before the colon.
+    func localizedIfKnown() -> String {
+        let translated = Localization.string(self)
+        return translated == self ? self : translated
+    }
 }
 
 /// Access to the bundle's resources (icons, banner, specifier plists).

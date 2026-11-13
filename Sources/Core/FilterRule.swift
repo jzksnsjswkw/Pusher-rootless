@@ -235,17 +235,46 @@ public struct FilterRule {
 
     /// Whether this rule's condition holds for `context`.
     ///
-    /// An empty keyword matches everything: it is how a rule says "every
-    /// notification from these apps", which is the common case — someone who wants
-    /// one app's notifications to stop forwarding has no keyword to give.
+    /// An empty keyword asks a different question, and it is about the field rather
+    /// than about a word: "does this notification have anything to say there". A
+    /// rule watching the subtitle with no keyword is how someone says "notifications
+    /// with no subtitle", and that only means anything if an empty keyword can fail
+    /// — which it does when the field is empty.
+    ///
+    /// The comparison is ignored in that case. `contains`, `starts with` and
+    /// `matches regex` all ask about a word, and there is no word; what is left to
+    /// answer is whether there is a field at all. The negation still applies, since
+    /// that is a separate question and the two read as one sentence: "subtitle does
+    /// not match" with no keyword selects the notifications with no subtitle.
     public func matches(_ context: BulletinContext) -> Bool {
         let keyword = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !keyword.isEmpty else { return true }
+        guard !keyword.isEmpty else {
+            return hasContent(in: context) != relation.isNegated
+        }
         // A pattern that does not compile decides nothing, in either direction.
         // Inverting its failure would turn a typo into a rule matching everything —
         // the one outcome that is worse than a rule matching nothing.
         guard hasValidPattern else { return false }
         return compare(keyword, in: context) != relation.isNegated
+    }
+
+    /// Whether the field this rule watches has anything in it.
+    ///
+    /// `any` is satisfied by whichever of the three parts is filled in — a
+    /// notification is one thing, and one of its parts having text is what
+    /// "the whole message" having text means. A notification with nothing in any of
+    /// them has no content at all, and no rule about content should match it.
+    private func hasContent(in context: BulletinContext) -> Bool {
+        switch field {
+        case .any: return [context.title, context.subtitle, context.message]
+                .contains { !($0 ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        case .title:
+            return !(context.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .subtitle:
+            return !(context.subtitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .message:
+            return !(context.message ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
 
     /// Whether `keyword` appears in the field this rule watches.

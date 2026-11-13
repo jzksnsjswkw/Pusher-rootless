@@ -19,12 +19,89 @@ enum LogFilter {
 
     /// A log line as it should be shown.
     ///
-    /// Lines are written by the pipeline in English and drawn verbatim; the hook
-    /// markers are the exception, because they name which of the two hooks spoke
-    /// and that name has to match the settings page's wording.
+    /// Lines are written by the pipeline in English — that is what a bug report
+    /// should quote, and what the log file holds — and translated here, at the
+    /// point of drawing. Translating on the way in would put this device's language
+    /// into a file that is meant to be readable anywhere, and would make every
+    /// stored line wrong the moment somebody switches language.
+    ///
+    /// Only the label before the first colon is a message; everything after it is
+    /// the user's own content — an app name, a body, a URL — and is passed through
+    /// untouched.
     static func translated(_ line: String) -> String {
-        guard line.hasPrefix("Hook (") else { return line }
-        return line.localized
+        // A line with no colon is looked up whole, which covers `Pushed` and
+        // `Sent`. `Processing <bundle id>` is the one that carries a value and no
+        // colon — the id is printed after a space, so the whole line never
+        // matches. Its prefix is what is translated.
+        guard line.contains(": ") else {
+            let whole = line.localizedIfKnown()
+            if whole != line { return whole }
+            for (prefix, replacement) in prefixes where line.hasPrefix(prefix) {
+                return replacement + line.dropFirst(prefix.count)
+            }
+            // A line whose value sits in brackets at the end: the action names are
+            // translated, the words around them are part of the sentence.
+            for (open, close) in bracketed {
+                guard let start = line.range(of: open),
+                      line.hasSuffix(close)
+                else { continue }
+                let head = String(line[..<start.lowerBound])
+                let inside = String(line[start.upperBound..<line.index(line.endIndex, offsetBy: -close.count)])
+                let translatedHead = head.localizedIfKnown()
+                let translatedInside = inside.localizedIfKnown()
+                guard translatedHead != head || translatedInside != inside else { continue }
+                return (translatedHead == head ? head : translatedHead)
+                    + open + (translatedInside == inside ? inside : translatedInside) + close
+            }
+            return line
+        }
+
+        // The longest prefix that has a translation wins.
+        //
+        // Not just the text before the first colon: `Network Response: Success` is
+        // stored as one label and printed as `Network Response: Success: OK`, so
+        // cutting at the first colon leaves `Success` — a word with no entry — as
+        // an untranslated remainder. Trying the whole line first and shortening
+        // finds the stored label wherever the colons happen to fall.
+        let parts = line.components(separatedBy: ": ")
+        for count in stride(from: parts.count, through: 1, by: -1) {
+            let candidate = parts[0..<count].joined(separator: ": ")
+            let translated = candidate.localizedIfKnown()
+            guard translated != candidate else { continue }
+            let rest = parts[count...].joined(separator: ": ")
+            return rest.isEmpty ? translated : "\(translated): \(value(of: rest))"
+        }
+        return line
+    }
+
+    /// Prefixes that are translated even though they carry a value after a space.
+    private static let prefixes: [(String, String)] = [
+        ("Processing ", "处理 "),
+    ]
+
+    /// A trailing value in brackets, with the words before it a sentence.
+    ///
+    /// `Filtered by a rule (Hide and do not forward)` is one message with one
+    /// translated part inside it, so neither the whole line nor the text before
+    /// the bracket is a key.
+    private static let bracketed: [(String, String)] = [
+        (" (", ")"),
+    ]
+
+    /// Words that lead a value and are part of the sentence, not of the data.
+    ///
+    /// `slot 1` names a card slot; the number after it is the value. The stored
+    /// line has to stay language-neutral, so the word is translated here rather
+    /// than written translated.
+    private static let valuePrefixes: [(String, String)] = [
+        ("slot ", "卡槽 "),
+    ]
+
+    private static func value(of text: String) -> String {
+        for (prefix, replacement) in valuePrefixes where text.hasPrefix(prefix) {
+            return replacement + text.dropFirst(prefix.count)
+        }
+        return text
     }
 
     /// A stored log section with its marker lines removed, for display.

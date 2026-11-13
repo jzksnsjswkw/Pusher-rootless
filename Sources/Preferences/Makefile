@@ -16,8 +16,10 @@ SWIFT_OPTFLAG = -O -whole-module-optimization -num-threads $(shell sysctl -n hw.
 # discarded.
 ifeq ($(THEOS_PACKAGE_SCHEME),rootless)
 	ARCHS = arm64
-else
+else ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
 	ARCHS = arm64e
+else
+$(error THEOS_PACKAGE_SCHEME must be set: use THEOS_PACKAGE_SCHEME=roothide (or =rootless). Building this subproject on its own would otherwise pick arm64e by default and produce a binary for the wrong layout)
 endif
 
 include $(THEOS)/makefiles/common.mk

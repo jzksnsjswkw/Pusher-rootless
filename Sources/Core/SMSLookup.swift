@@ -42,14 +42,14 @@ public enum SMSLookup {
         // daemon may do, and the reply comes back on the call.
         guard let reply = SMSXPC.lookup(guid: guid) else {
             lastFailure = "imagent is not reachable"
-            NSLog("[PusherSMS] lookup failed: \(lastFailure ?? "")")
+            PusherLog.info("[PusherSMS] lookup failed: \(lastFailure ?? "")")
             return nil
         }
 
         // The database records the receiving number and nothing else — there is no
         // slot column — so the number is what identifies the card, and CoreTelephony
         // is what turns it into a slot.
-        NSLog("[PusherSMS] lookup reply: \(reply)")
+        PusherLog.info("[PusherSMS] lookup reply: \(reply)")
         guard (reply["found"] as? NSNumber)?.boolValue == true,
               let number = reply["phoneNumber"] as? String,
               !number.isEmpty

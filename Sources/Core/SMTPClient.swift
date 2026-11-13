@@ -167,7 +167,7 @@ enum SMTPClient {
         // so it is waiting for a ClientHello and will never send the greeting in
         // the clear. Only with plain or STARTTLS does the server greet first.
         if message.security == .tls {
-            switch SSLSession.over(socket: socket, host: message.host) {
+            switch SSLSession.over(socket: socket, host: message.host, deadline: deadline) {
             case .failure(let error):
                 return .failure(.connection(error.detail))
             case .success(let session):
@@ -192,7 +192,7 @@ enum SMTPClient {
                                                    expecting: "220", step: "STARTTLS") {
                 return .failure(error)
             }
-            switch SSLSession.over(socket: socket, host: message.host) {
+            switch SSLSession.over(socket: socket, host: message.host, deadline: deadline) {
             case .failure(let error):
                 return .failure(.connection(error.detail))
             case .success(let session):
@@ -473,6 +473,12 @@ private struct BSDSocket {
 private final class SSLSession {
     private let context: SSLContext
     private var socket: BSDSocket
+    /// When this conversation must be over.
+    ///
+    /// `errSSLWouldBlock` means "not yet" rather than "no", so the read loop has
+    /// to be able to give up on its own — otherwise a server that pauses forever
+    /// holds the send forever.
+    private let deadline: Date
     /// The socket is handed to the TLS callbacks as a stable pointer, so it is
     /// stored here rather than passed by value into `SSLSetConnection`.
     private let fdBox: UnsafeMutablePointer<Int32>
@@ -485,9 +491,10 @@ private final class SSLSession {
         fdBox.deallocate()
     }
 
-    private init(context: SSLContext, socket: BSDSocket) {
+    private init(context: SSLContext, socket: BSDSocket, deadline: Date) {
         self.context = context
         self.socket = socket
+        self.deadline = deadline
         self.fdBox = .allocate(capacity: 1)
         fdBox.pointee = socket.descriptor
         SSLSetConnection(context, UnsafeRawPointer(fdBox))
@@ -509,28 +516,38 @@ private final class SSLSession {
     }
 
     /// TLS from the first byte, as on port 465.
-    static func over(socket: BSDSocket, host: String) -> Result<SSLSession, TransportError> {
+    static func over(socket: BSDSocket, host: String, deadline: Date) -> Result<SSLSession, TransportError> {
         guard let context = SSLCreateContext(nil, .clientSide, .streamType) else {
             return .failure(TransportError(detail: "cannot create TLS context"))
         }
-        let session = SSLSession(context: context, socket: socket)
+        let session = SSLSession(context: context, socket: socket, deadline: deadline)
         return session.handshake(host: host)
     }
 
     /// TLS starting now, on a socket that has already been talking, as after
     /// `STARTTLS`.
-    static func upgrade(socket: BSDSocket, host: String) -> Result<SSLSession, TransportError> {
-        over(socket: socket, host: host)
+    static func upgrade(socket: BSDSocket, host: String, deadline: Date) -> Result<SSLSession, TransportError> {
+        over(socket: socket, host: host, deadline: deadline)
     }
 
     private func handshake(host: String) -> Result<SSLSession, TransportError> {
         SSLSetProtocolVersionMin(context, .tlsProtocol12)
         SSLSetPeerDomainName(context, host, host.utf8.count)
-        let status = SSLHandshake(context)
-        guard status == errSecSuccess else {
+        // A handshake on a socket that is not ready yet reports `errSSLWouldBlock`
+        // and expects to be called again. Treating the first one as fatal failed
+        // against a server on a slow link before a single byte had been exchanged,
+        // which is why the same mailbox worked from a desktop and not from here.
+        while true {
+            let status = SSLHandshake(context)
+            if status == errSecSuccess { return .success(self) }
+            if status == errSSLWouldBlock {
+                if Date() > deadline {
+                    return .failure(TransportError(detail: "TLS handshake timed out"))
+                }
+                continue
+            }
             return .failure(TransportError(detail: "TLS handshake failed (\(status))"))
         }
-        return .success(self)
     }
 
     private func setNonBlocking(_ fd: Int32, _ on: Bool) {
@@ -573,6 +590,21 @@ private final class SSLSession {
             var byte: UInt8 = 0
             var processed = 0
             let status = SSLRead(context, &byte, 1, &processed)
+            // `errSSLWouldBlock` is not a failure: Secure Transport returns it when
+            // no bytes were ready in the time it was willing to wait, and the next
+            // call picks up where this one left off. Treating it as fatal made a
+            // slow or jittery server fail at random — the handshake succeeded and
+            // the conversation then died on a pause, which reads as a broken
+            // account rather than a broken read.
+            //
+            // Bounded, because a server that keeps saying "not yet" must not hold
+            // the send forever: the session has its own deadline and this checks it.
+            if status == errSSLWouldBlock {
+                if Date() > deadline {
+                    return .failure(TransportError(detail: "TLS read timed out"))
+                }
+                continue
+            }
             if status != errSecSuccess { return .failure(TransportError(detail: "TLS read failed (\(status))")) }
             if processed == 0 { return .failure(TransportError(detail: "connection closed")) }
             if byte == 0x0A {

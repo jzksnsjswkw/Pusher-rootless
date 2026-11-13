@@ -27,8 +27,16 @@ public enum ServiceImporter {
 
         public var added: [String] { services + instances }
 
-        /// Whether anything was written.
-        public var isEmpty: Bool { services.isEmpty && instances.isEmpty }
+        /// Whether nothing was written.
+        ///
+        /// Renamed entries are still written, so they do not count — but skipped
+        /// ones are not, and the callers use this to decide whether a document was
+        /// worth anything at all. Leaving them out made a document where every
+        /// entry was already present look like a successful import: the page said
+        /// it added nothing, and the check below never fired.
+        public var isEmpty: Bool {
+            services.isEmpty && instances.isEmpty && skipped.isEmpty
+        }
     }
 
     /// One entry the import left out.
@@ -137,7 +145,10 @@ public enum ServiceImporter {
             result.instances.append(name)
         }
 
-        guard !result.isEmpty || !result.skipped.isEmpty else {
+        // Every entry was refused. Still worth returning the reasons rather than
+        // throwing: "already here" is a different answer from "this file is not a
+        // document", and the page shows one line per entry for the first.
+        if result.isEmpty && result.skipped.isEmpty {
             throw ServiceImportError.malformed("The document has no services in it")
         }
         return result

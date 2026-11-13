@@ -29,7 +29,7 @@ enum ScriptHTTP {
         let semaphore = DispatchSemaphore(value: 0)
         let box = Box()
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
             defer { semaphore.signal() }
             if let error {
                 // `NSURLErrorCancelled` on a timeout reads as a cancellation, so
@@ -59,11 +59,18 @@ enum ScriptHTTP {
                 body: data ?? Data(),
                 finalURL: http.url?.absoluteString
             )
-        }.resume()
+        }
+        task.resume()
 
         // A little past the request's own timeout, so URLSession reports the
         // timeout itself rather than the wait giving up first.
+        //
+        // Cancelled when it does give up. A script's fetch blocks the thread it
+        // runs on, so a request the caller has already stopped waiting for is one
+        // nobody will read — left running it holds a connection, and a script that
+        // retries in a loop held one per attempt.
         guard semaphore.wait(timeout: .now() + request.timeoutInterval + 5) == .success else {
+            task.cancel()
             return JavaScriptRunner.FetchResult(error: "request timed out")
         }
         if let error = box.error { return JavaScriptRunner.FetchResult(error: error) }

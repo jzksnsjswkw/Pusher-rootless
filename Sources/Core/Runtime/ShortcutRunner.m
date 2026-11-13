@@ -40,32 +40,31 @@
 /// through the same class.
 static const void *PusherShortcutMarker = &PusherShortcutMarker;
 
-/// Input to hand to the next shortcut run, keyed by workflow identifier.
+/// The input to hand to the request currently asking for one.
 ///
-/// A dictionary rather than one slot because two instances may fire at once and
-/// the daemon may ask for either.
-static NSMutableDictionary<NSString *, NSString *> *PusherShortcutInputs(void) {
-  static NSMutableDictionary *inputs = nil;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{ inputs = [NSMutableDictionary dictionary]; });
-  return inputs;
-}
-
+/// Attached to the request object itself under ``PusherShortcutMarker``, not kept
+/// in a table keyed by shortcut name. The table had one slot per shortcut, so two
+/// notifications for the same shortcut arriving within a second overwrote each
+/// other: the daemon asked for the first request's input and got the second's,
+/// then the second found nothing and ran with no input at all. One input belongs
+/// to one request, and the request is the thing that knows which one it is.
+///
 /// `-[WFWorkflowRunRequest archivedInput]`, replaced.
 ///
 /// Returns a `WFContentCollection` wrapping the input registered for this
-/// request's shortcut, and calls the original for anything else — SpringBoard
-/// runs widget shortcuts through this class too, so answering unconditionally
-/// would corrupt them.
+/// request, and calls the original for anything else — SpringBoard runs widget
+/// shortcuts through this class too, so answering unconditionally would corrupt
+/// them.
 static id (*PusherOriginalArchivedInput)(id, SEL);
 
 static id PusherArchivedInput(id self, SEL _cmd) {
   @try {
-    NSString *identifier = objc_getAssociatedObject(self, PusherShortcutMarker);
-    NSString *input = identifier ? PusherShortcutInputs()[identifier] : nil;
+    NSString *input = objc_getAssociatedObject(self, PusherShortcutMarker);
     if (input) {
-      // One input belongs to one run.
-      [PusherShortcutInputs() removeObjectForKey:identifier];
+      // One input belongs to one run: consumed here, so a second ask from the
+      // same request gets the original behaviour rather than the payload twice.
+      objc_setAssociatedObject(self, PusherShortcutMarker, nil,
+                               OBJC_ASSOCIATION_RETAIN);
 
       Class collectionClass = NSClassFromString(@"WFContentCollection");
       Class itemClass = NSClassFromString(@"WFContentItem");
@@ -207,8 +206,7 @@ NSString *PusherRunShortcut(NSString *name, NSString *input) {
     id request = ((id (*)(id, SEL))objc_msgSend)(runner, sel_registerName("runRequest"));
     if (request) {
       if (input.length > 0) {
-        PusherShortcutInputs()[identifier] = input;
-        objc_setAssociatedObject(request, PusherShortcutMarker, identifier,
+        objc_setAssociatedObject(request, PusherShortcutMarker, input,
                                  OBJC_ASSOCIATION_RETAIN);
       }
       // Scalar setters go through objc_msgSend directly: `performSelector:`

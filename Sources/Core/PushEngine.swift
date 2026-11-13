@@ -471,7 +471,10 @@ public final class PushEngine: NSObject {
             let ownRules = FilterRules.instance(id).outcome(for: context)
             let globalRules = FilterRules.global().outcome(for: context)
             if let action = ownRules ?? globalRules, !action.forwards {
-                let label = "Filtered by a rule (\(action.rawValue))"
+                // The action's own label, not its raw value: the log is read by
+                // the person who set the rule, and `suppressAll` is a name they
+                // have never seen — the page calls it "Hide and do not forward".
+                let label = "Filtered by a rule (\(action.label))"
                 PusherLog.debug("[S:\(id),A:\(context.appID)] \(label)")
                 PushLog.add(service: id, context: context, label: label)
                 return

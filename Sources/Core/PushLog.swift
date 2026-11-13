@@ -47,7 +47,12 @@ public enum PushLog {
     ) {
         guard isEnabled(forService: service) else { return }
 
-        let sections = LogStore.logSections(forService: service)
+        // From memory when there is an unwritten change, from disk otherwise.
+        //
+        // Read from disk on every line and the pending lines are lost: the write
+        // is deferred, so the next call would load what was there before the last
+        // one and overwrite the entry it had just added.
+        let sections = pending(service) ?? LogStore.logSections(forService: service)
         var mutableSections = sections
         let index = mutableSections.firstIndex {
             $0["appID"] as? String == context.appID
@@ -68,7 +73,19 @@ public enum PushLog {
 
         var lines = (section["logs"] as? [String]) ?? []
         if lines.isEmpty {
-            lines.append("Processing \(context.appID)")
+            // The name travels with the id. The id alone is exact but unreadable
+            // — `com.tencent.xin` says nothing to the person reading their own log,
+            // and the name is the one thing that makes the section recognisable
+            // without going and looking the id up.
+            //
+            // The name itself is not translated: it is what the app calls itself,
+            // which is already in the device's language.
+            let name = context.appName
+            if !name.isEmpty, name != context.appID {
+                lines.append("Processing \(context.appID) (\(name))")
+            } else {
+                lines.append("Processing \(context.appID)")
+            }
         }
         lines.append(line(label: label, object: object,
                           dontTruncate: dontTruncate, tag: tag))
@@ -85,8 +102,66 @@ public enum PushLog {
             mutableSections.removeFirst(mutableSections.count - maxSections)
         }
 
-        LogStore.setLogSections(mutableSections, forService: service)
+        // Held in memory until the burst ends.
+        //
+        // Written to the log domain shortly after rather than on every line. A single
+        // request writes a dozen: URL, headers, body, then the response. Each one
+        // used to commit the whole log domain to disk and post the Darwin
+        // notification the log viewer listens for, so a busy notification woke
+        // SpringBoard a dozen times to redraw a screen nobody was looking at.
+        objc_sync_enter(flushLock)
+        dirty[service] = mutableSections
+        objc_sync_exit(flushLock)
+        scheduleFlush()
     }
+
+    /// What has been written for `service` but not yet flushed.
+    private static func pending(_ service: String) -> [[String: Any]]? {
+        objc_sync_enter(flushLock)
+        defer { objc_sync_exit(flushLock) }
+        return dirty[service]
+    }
+
+    /// Writes what has accumulated, once, after a pause.
+    ///
+    /// The log is a debugging aid: a few hundred milliseconds of lag before the
+    /// viewer sees a line is not something a user can notice, and the cost of not
+    /// waiting is a disk write per line.
+    private static func scheduleFlush() {
+        objc_sync_enter(flushLock)
+        defer { objc_sync_exit(flushLock) }
+        flushWorkItem?.cancel()
+        let item = DispatchWorkItem { flush() }
+        flushWorkItem = item
+        DispatchQueue.global(qos: .utility).asyncAfter(
+            deadline: .now() + flushDelay, execute: item
+        )
+    }
+
+    private static let flushLock = NSObject()
+    private static var flushWorkItem: DispatchWorkItem?
+    /// Service names with unwritten lines, and the sections to write for each.
+    private static var dirty: [String: [[String: Any]]] = [:]
+
+    /// How long to wait for more lines before writing.
+    private static let flushDelay: TimeInterval = 0.4
+
+    /// Writes every accumulated change, once.
+    private static func flush() {
+        objc_sync_enter(flushLock)
+        let pending = dirty
+        dirty.removeAll()
+        objc_sync_exit(flushLock)
+        for (service, sections) in pending {
+            LogStore.setLogSections(sections, forService: service)
+        }
+    }
+
+    /// Writes anything still pending, now.
+    ///
+    /// For a caller that is about to exit, or for a page that has just asked for
+    /// the log and would otherwise read what was there a moment ago.
+    public static func flushNow() { flush() }
 
     /// Combines the label and object the way the log viewer expects.
     private static func line(label: String?, object: Any?, dontTruncate: Bool,

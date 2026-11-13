@@ -1427,6 +1427,8 @@ private final class ScriptHost {
         lock.lock()
         pending.append(box)
         lock.unlock()
+        // Told, not waited for: the host is asleep until this arrives.
+        wake.signal()
 
         let deadline = options.timeout > 0 ? options.timeout : 30
         guard box.finished.wait(timeout: .now() + deadline) == .success else {
@@ -1450,6 +1452,15 @@ private final class ScriptHost {
 
     private var pending: [Box] = []
 
+    /// Wakes the host thread when work arrives.
+    ///
+    /// The thread used to run its run loop with a 20 ms deadline in a loop, which
+    /// woke it fifty times a second for as long as SpringBoard ran — a device that
+    /// never reaches deep sleep, and nothing in a profile that says why. It waits
+    /// on this instead, with no deadline at all, and is signalled when there is
+    /// something to do.
+    private let wake = DispatchSemaphore(value: 0)
+
     private func startThreadIfNeeded() {
         lock.lock()
         defer { lock.unlock() }
@@ -1457,14 +1468,16 @@ private final class ScriptHost {
 
         let host = Thread { [weak self] in
             guard let self else { return }
-            // Created here, on the thread that will own it.
+            // Created here, on the thread that will own it. A run loop is still
+            // needed — the JS engine schedules work on the current thread's — but
+            // nothing polls it.
             self.context = JSContext()
             self.ready.signal()
 
-            let runLoop = RunLoop.current
-            while !Thread.current.isCancelled {
-                // A short sleep keeps the thread responsive without spinning.
-                runLoop.run(mode: .default, before: Date().addingTimeInterval(0.02))
+            while true {
+                // No deadline: asleep until there is work, and the thread does
+                // not wake up at all while the device is idle.
+                self.wake.wait()
                 self.drainPending()
             }
         }

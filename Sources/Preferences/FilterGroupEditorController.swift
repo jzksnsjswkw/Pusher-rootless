@@ -126,10 +126,33 @@ public final class FilterGroupEditorController: PlainViewController {
     /// being matched, and two rules on the same word for different fields would
     /// look the same. A rule with no keyword matches everything, and says so.
     static func name(of rule: FilterRule) -> String {
+        guard rule.hasKeyword else { return emptyKeywordName(of: rule) }
         let head = rule.derivedNameParts.field.localized
             + rule.derivedNameParts.relation.localized
-        guard rule.hasKeyword else { return head }
         return head + " " + rule.keyword
+    }
+
+    /// What a rule with no keyword is called.
+    ///
+    /// The comparison is not part of it. With no keyword there is no word to
+    /// compare, and the rule asks one of two questions — is there anything in this
+    /// field, or is there nothing. Naming it after the comparison ("标题匹配") would
+    /// describe an option that has no effect on the answer.
+    ///
+    /// "All notifications" for the whole message, because that is what it means:
+    /// every notification has a title or a body.
+    private static func emptyKeywordName(of rule: FilterRule) -> String {
+        let negated = rule.relation.isNegated
+        switch rule.field {
+        case .any:
+            return "All notifications".localized
+        case .title:
+            return (negated ? "No title" : "Has a title").localized
+        case .subtitle:
+            return (negated ? "No subtitle" : "Has a subtitle").localized
+        case .message:
+            return (negated ? "No message" : "Has a message").localized
+        }
     }
 
     /// The same name the group list would derive, shown as the placeholder.

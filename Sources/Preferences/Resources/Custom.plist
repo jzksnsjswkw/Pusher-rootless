@@ -204,9 +204,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>The server may reject the request if the data is too large, which is usually a result of the image being high resolution. Pusher will try to forward the notification 5 times, shrinking the image each time by the factor you specify (if the body is too large). If by the last retry the image is too large, it will remove the image but set the "image" property to a 1 to indicate that an image is attached. The image will initially be resized to fit the maximum width and height unless it is already smaller. The image shrink factor must be greater than 1.0 to work since it is division (a factor of 2 means it will divide the image dimensions in half).
-
-The following properties will be passed to the URL endpoint (via the selected HTTP method/body format) specified above (property names in parentheses) [Must Turn on "Include Icon" and "Include Image" switches above in order to get the corresponding properties below]:
+			<string>The following properties will be passed to the URL endpoint (via the selected HTTP method/body format) specified above (property names in parentheses) [Must Turn on "Include Icon" and "Include Image" switches above in order to get the corresponding properties below]:
 
 Device Name (deviceName), App Name (appName), App Bundle ID (appID), Title (title), Subtitle (subtitle), Message (message), Date (date), Base64 Encoded PNG Icon 58x58 (icon), Base64 Encoded Image (image)</string>
 			<key>label</key>

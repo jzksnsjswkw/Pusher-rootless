@@ -162,14 +162,6 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>The server may reject the request if the data is too large, which is usually a result of the image being high resolution. Pusher will try to forward the notification 5 times, shrinking the image each time by the factor you specify. If by the last retry the image is too large, it will remove the image but leave an indication that one is attached so the application may display a placeholder. The image will initially be resized to fit the maximum width and height unless it is already smaller. The image shrink factor must be greater than 1.0 to work since it is division (a factor of 2 means it will divide the image dimensions in half).</string>
-			<key>label</key>
-			<string>Options</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>footerText</key>
 			<string>INSTRUCTIONS:
 1. Click 'Open Date Format Instructions' above (https://nsdateformatter.com).
 2. Using the reference and examples, create your desired date format and enter it above. If you don't care about the date, you may leave it as the default

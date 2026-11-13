@@ -51,3 +51,4 @@ __pycache__/
 # Local deployment. It names this machine's device and is only ever run by hand;
 # published builds come from CI.
 .github/scripts/deploy.sh
+.stamp

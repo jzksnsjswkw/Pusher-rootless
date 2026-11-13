@@ -526,7 +526,12 @@ enum ServiceTransfer {
         )
         lines += (scope == .services ? [serviceLine, instanceLine] : [instanceLine, serviceLine])
             .compactMap { $0 }
-        if result.isEmpty {
+        // Nothing written, and nothing to explain either.
+        //
+        // `result.isEmpty` now counts skipped entries, so it is no longer the right
+        // question here: a document whose every entry was already present is not
+        // silent, it has one line per entry below saying so.
+        if result.added.isEmpty && result.skipped.isEmpty {
             lines.append("Nothing was added.".localized)
         }
         if !result.renamed.isEmpty {

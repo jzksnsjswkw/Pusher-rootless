@@ -65,7 +65,39 @@ public enum CustomServiceStore {
 
     /// The definition with this id, or `nil` when it has been deleted.
     public static func definition(id: String) -> CustomServiceDefinition? {
-        definitions().first { $0.id == id }
+        // Through the per-call table below rather than `definitions().first`.
+        //
+        // `normalize` asks this once per instance while building a snapshot, and
+        // each ask used to copy the whole preferences domain and rebuild every
+        // definition — quadratic in the number of instances, on the path a
+        // notification takes.
+        index()[id]
+    }
+
+    /// A definition lookup that lasts for one snapshot build.
+    ///
+    /// Set by ``withLookupTable(_:)``; `nil` means the caller did not open one and
+    /// each ask builds its own table.
+    private static var scopedIndex: [String: CustomServiceDefinition]?
+
+    /// Runs `body` with the definitions decoded once.
+    ///
+    /// The snapshot loader opens this around its loop. Nothing else needs to: a
+    /// page reads one or two definitions and the cost there is a single decode.
+    static func withLookupTable<T>(_ body: () -> T) -> T {
+        let previous = scopedIndex
+        scopedIndex = Dictionary(
+            definitions().map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }
+        )
+        defer { scopedIndex = previous }
+        return body()
+    }
+
+    private static func index() -> [String: CustomServiceDefinition] {
+        if let scopedIndex { return scopedIndex }
+        return Dictionary(
+            definitions().map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }
+        )
     }
 
     /// A definition that is not in use, for the add list's default name.
