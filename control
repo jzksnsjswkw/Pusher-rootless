@@ -4,7 +4,7 @@ Depends: mobilesubstrate, firmware (>= 15.0), com.opa334.altlist, com.82flex.lib
 Conflicts: com.jzksnsjswkw.pusher, com.noahsaso.pusher
 Replaces: com.jzksnsjswkw.pusher, com.noahsaso.pusher
 Provides: com.jzksnsjswkw.pusher
-Version: 3.0.0~beta4
+Version: 3.0.0
 Architecture: iphoneos-arm
 Maintainer: jzksnsjswkw
 Author: jzksnsjswkw <214893178@qq.com>
