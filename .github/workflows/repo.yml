@@ -2,14 +2,20 @@ name: Repository
 
 # Builds the Sileo source from a release's assets and publishes it to Pages.
 #
-# Runs after the release job rather than inside it: the index lists the two debs
-# that release attached, and those are not available until it has finished.
+# Triggered by the build finishing, not by the release.
+#
+# Both workflows used to listen for `release: published`, so they started in the
+# same second: the index asked for the release's debs before the build had
+# uploaded any, and the run failed with "no assets to download" on every release.
+# Waiting for `Release` to complete is the actual dependency — the index lists the
+# two files that job attaches.
 on:
-  release:
+  workflow_run:
+    workflows: [Release]
     types:
-      - published
-  # Manual runs need the tag explicitly: `github.event.release` does not exist for
-  # a dispatch, so the download step would look for a release called "".
+      - completed
+  # Manual runs need the tag explicitly: there is no event to read it from, so the
+  # download step would look for a release called "".
   workflow_dispatch:
     inputs:
       tag:
@@ -21,17 +27,31 @@ permissions:
 
 jobs:
   publish:
+    # A failed build has no debs to index, and publishing an index built from
+    # nothing would replace a working source with an empty one.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
 
-      # One tag either way: from the release event, or from the dispatch input.
+      # One tag either way: from the build that finished, or from the dispatch input.
       - name: Resolve the tag
         id: tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          # From the dispatch input, or from the build that just finished.
+          #
+          # `workflow_run` carries no release object, so there is nothing to read a
+          # tag from directly. `head_branch` holds the tag name when a release
+          # triggered the build — GitHub reports the tag in that field for a
+          # tag-triggered run — and this is the only value that survives to here.
+          #
+          # Not `gh release list --isLatest`: a prerelease is never "latest", so a
+          # beta would resolve to the wrong tag or to none at all.
+          TAG="${{ inputs.tag || github.event.workflow_run.head_branch }}"
           if [ -z "$TAG" ]; then
-            echo "no tag — a dispatch must supply one" >&2
+            echo "no tag — the build had no branch and no tag was given" >&2
             exit 1
           fi
           echo "value=$TAG" >> "$GITHUB_OUTPUT"
