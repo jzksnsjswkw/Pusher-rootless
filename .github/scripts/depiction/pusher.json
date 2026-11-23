@@ -9,7 +9,7 @@
    "views": [
     {
      "class": "DepictionMarkdownView",
-     "markdown": "**将通知转发到其他设备**\n\n将设备上的通知转发到你想要的地方，不仅限于短信，还可拦截特定通知，让其不在设备上显示。\n\n- 将通知转发到 Bark、钉钉、企业微信、飞书、邮件、Gotify、Webhook 等\n- 写 JavaScript 自定义转发逻辑"
+     "markdown": "**将通知转发到其他设备**\n\n将收到的通知转发到你想要的地方，还可以根据关键字拦截通知\n\n- 将通知转发到 Bark、钉钉、企业微信、飞书、邮件、Gotify、Webhook 等\n- 写 JavaScript 自定义转发服务"
     },
     {
      "class": "DepictionSpacerView",
@@ -46,7 +46,7 @@
    "views": [
     {
      "class": "DepictionMarkdownView",
-     "markdown": "**Forward notifications to other devices**\n\nForward the notifications on your device wherever you want — not just SMS — and block the ones you would rather not see.\n\n- Forward to Bark, DingTalk, WeCom, Feishu, email, Gotify, webhooks and more\n- Write JavaScript for the forwarding logic"
+     "markdown": "**Forward notifications to other devices**\n\nForward what arrives to wherever you want, and block notifications by keyword.\n\n- Forward to Bark, DingTalk, WeCom, Feishu, email, Gotify, webhooks and more\n- Write JavaScript for your own forwarding service"
     },
     {
      "class": "DepictionSpacerView",

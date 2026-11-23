@@ -12,7 +12,7 @@ Section: Tweaks
 Icon: https://jzksnsjswkw.github.io/repo/icon.png
 Depiction: https://jzksnsjswkw.github.io/repo/
 Description: 将通知转发到其他设备
- 将设备上的通知转发到你想要的地方，不仅限于短信，还可拦截特定通知，让其不在设备上显示。
+ 将收到的通知转发到你想要的地方，还可以根据关键字拦截通知
  .
  - 将通知转发到 Bark、钉钉、企业微信、飞书、邮件、Gotify、Webhook 等
- - 写 JavaScript 自定义转发逻辑
+ - 写 JavaScript 自定义转发服务
