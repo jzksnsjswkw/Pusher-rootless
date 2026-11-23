@@ -971,7 +971,7 @@ public final class CustomServiceScriptController: PSViewController, UITextViewDe
             // or reachability, so the real device state comes from the same
             // UIKit calls the pipeline uses rather than from SpringBoard.
             device: EditorDeviceState.current(),
-            fetch: ScriptHTTP.perform,
+            fetch: { ScriptHTTP.perform($0, skipTLS: $1) },
             deliver: { request in
                 // Deliberately not a private copy of the transport: the editor
                 // runs in the Preferences process, where `RequestSender` works

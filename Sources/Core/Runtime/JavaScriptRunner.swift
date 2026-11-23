@@ -155,7 +155,7 @@ public enum JavaScriptRunner {
         options: Options = .default,
         prefs: [String: Any] = [:],
         device: [String: Any] = [:],
-        fetch: @escaping (URLRequest) -> FetchResult,
+        fetch: @escaping (URLRequest, Bool) -> FetchResult,
         deliver: Deliver? = nil
     ) -> Outcome {
         // A shared context lives on one thread; a private context may go
@@ -326,7 +326,7 @@ public enum JavaScriptRunner {
         )
         installFetch(into: context, options: .init(
             timeout: timeout, maximumResponseBytes: Pusher.defaultMaxResponseBytes
-        ), perform: { ScriptHTTP.perform($0) })
+        ), perform: { ScriptHTTP.perform($0, skipTLS: $1) })
         installFetchObserver(into: context)
 
         // `push()` only exists when the caller supplied a way to send one. The
@@ -499,7 +499,7 @@ public enum JavaScriptRunner {
         options: Options,
         prefs: [String: Any],
         device: [String: Any],
-        fetch: @escaping (URLRequest) -> FetchResult,
+        fetch: @escaping (URLRequest, Bool) -> FetchResult,
         deliver: Deliver? = nil
     ) -> Outcome {
         guard let context = JSContext() else {
@@ -534,7 +534,7 @@ public enum JavaScriptRunner {
         options: Options,
         prefs: [String: Any],
         device: [String: Any],
-        fetch: @escaping (URLRequest) -> FetchResult,
+        fetch: @escaping (URLRequest, Bool) -> FetchResult,
         deliver: Deliver? = nil
     ) -> Outcome {
         var requests: [PushRequest] = []
@@ -576,6 +576,10 @@ public enum JavaScriptRunner {
                 consoleOutput.append(message)
                 return envelope(FetchResult(error: message))
             }
+            // Per call, like `fetch`'s: a `push` to a self-hosted endpoint accepts
+            // any certificate without changing what the next push in the same
+            // script does.
+            request.allowsUntrustedCertificate = object["skipTLS"] as? Bool ?? false
             trace.append(.request(method: request.method, raw: rawHTTP(request)))
             requests.append(request)
 
@@ -604,7 +608,7 @@ public enum JavaScriptRunner {
             clear: { store.removeAll() },
             count: { Int32(store.count) }
         )
-        installFetch(into: context, options: options, perform: fetch)
+        installFetch(into: context, options: options, perform: fetch)  // (URLRequest, Bool) -> FetchResult
         installFetchRecorder(into: context) { trace.append($0) }
         installFetchObserver(into: context)
 
@@ -1091,7 +1095,7 @@ public enum JavaScriptRunner {
     private static func installFetch(
         into context: JSContext,
         options: Options,
-        perform: @escaping (URLRequest) -> FetchResult
+        perform: @escaping (URLRequest, Bool) -> FetchResult
     ) {
         /// The native half: builds the request, blocks on `perform`, and returns
         /// a JSON envelope the shim below turns into a `Response`.
@@ -1131,7 +1135,12 @@ public enum JavaScriptRunner {
                 }
             }
 
-            let result = perform(request)
+            // `skipTLS: true` accepts any certificate for this call only. The flag
+            // travels with the request rather than with the context so one
+            // script's fetch to a self-hosted box does not loosen the check for
+            // the next call in the same script.
+            let skipTLS = (initObject?.toObject() as? [String: Any])?["skipTLS"] as? Bool ?? false
+            let result = perform(request, skipTLS)
             if let error = result.error {
                 return envelope(error: "fetch: \(error)")
             }
@@ -1398,7 +1407,7 @@ private final class ScriptHost {
         options: JavaScriptRunner.Options,
         prefs: [String: Any],
         device: [String: Any],
-        fetch: @escaping (URLRequest) -> JavaScriptRunner.FetchResult,
+        fetch: @escaping (URLRequest, Bool) -> JavaScriptRunner.FetchResult,
         deliver: JavaScriptRunner.Deliver? = nil
     ) -> JavaScriptRunner.Outcome {
         startThreadIfNeeded()

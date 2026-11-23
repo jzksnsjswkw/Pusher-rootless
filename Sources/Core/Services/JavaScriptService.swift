@@ -75,7 +75,7 @@ public enum JavaScriptService: PushService {
             // background run starts: `push()` can block for seconds, and a battery
             // level read after that would describe the device at the wrong moment.
             device: BulletinAdapter.deviceStateForHooks().scriptValue,
-            fetch: ScriptHTTP.perform,
+            fetch: { ScriptHTTP.perform($0, skipTLS: $1) },
             deliver: { request in
                 // The request goes through the ordinary send, so it gets the
                 // ordinary treatment: the same log lines, the same retry budget,

@@ -30,6 +30,18 @@ public final class PushRequest {
     /// Optional human-readable reason set by a service when it marks the
     /// request as failed through ``resendHandler``. The sender logs it.
     public var failureReason: String?
+
+    /// Whether this request accepts any server certificate.
+    ///
+    /// Set by the service, honoured by the sender. A webhook pointed at a
+    /// self-hosted endpoint is the reason it exists: the certificate there is
+    /// often self-signed or issued for a name the IP does not answer on, and the
+    /// handshake fails before the request leaves the device.
+    ///
+    /// Off unless a service asks for it, and it is a per-request flag rather than
+    /// a global setting so one deliberately-permissive webhook cannot loosen the
+    /// check for Bark, Feishu or anything else on the same page.
+    public var allowsUntrustedCertificate = false
     /// Which request of a script's sequence this is, 1-based, or `nil` for a
     /// request that is not part of one.
     ///

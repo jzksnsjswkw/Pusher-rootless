@@ -17,7 +17,13 @@ enum ScriptHTTP {
     /// carrying `error`, which `fetch` turns into a rejected promise. That is
     /// what the specification does, and it means a script's `try/catch` sees a
     /// failed request the way it would in a browser.
-    static func perform(_ request: URLRequest) -> JavaScriptRunner.FetchResult {
+    /// - Parameter skipTLS: accept any server certificate. Chosen per call by the
+    ///   script — a `fetch` to a self-hosted endpoint with a certificate issued for
+    ///   a name it does not answer on fails the handshake before a byte is sent.
+    static func perform(
+        _ request: URLRequest,
+        skipTLS: Bool = false
+    ) -> JavaScriptRunner.FetchResult {
         var request = request
         if request.timeoutInterval <= 0 {
             request.timeoutInterval = Pusher.scriptFetchTimeout
@@ -29,7 +35,8 @@ enum ScriptHTTP {
         let semaphore = DispatchSemaphore(value: 0)
         let box = Box()
 
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        let task = (skipTLS ? Self.skipTLSSession : URLSession.shared)
+            .dataTask(with: request) { data, response, error in
             defer { semaphore.signal() }
             if let error {
                 // `NSURLErrorCancelled` on a timeout reads as a cancellation, so
@@ -75,6 +82,39 @@ enum ScriptHTTP {
         }
         if let error = box.error { return JavaScriptRunner.FetchResult(error: error) }
         return box.result ?? JavaScriptRunner.FetchResult(error: "no response")
+    }
+
+    /// A session that accepts any certificate.
+    ///
+    /// Created once, like the sender's: one per request would leak a connection
+    /// pool for every call a script makes in a loop.
+    private static let skipTLSSession: URLSession = {
+        URLSession(
+            configuration: .default,
+            delegate: SkipTLSDelegate(),
+            delegateQueue: nil
+        )
+    }()
+
+    /// Answers the server-trust challenge with the trust as given.
+    ///
+    /// Reached only by a request whose script passed `skipTLS: true`; every other
+    /// request goes through `URLSession.shared` and the system's own checks.
+    private final class SkipTLSDelegate: NSObject, URLSessionDelegate {
+        func urlSession(
+            _ session: URLSession,
+            didReceive challenge: URLAuthenticationChallenge,
+            completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        ) {
+            guard challenge.protectionSpace.authenticationMethod
+                    == NSURLAuthenticationMethodServerTrust,
+                  let trust = challenge.protectionSpace.serverTrust
+            else {
+                completionHandler(.performDefaultHandling, nil)
+                return
+            }
+            completionHandler(.useCredential, URLCredential(trust: trust))
+        }
     }
 
     /// Carries the callback's result back across the wait.

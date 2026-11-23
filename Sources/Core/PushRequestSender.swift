@@ -186,6 +186,17 @@ public final class RequestSender {
 
     // MARK: - One attempt (HTTP)
 
+    /// The session to send `request` through.
+    ///
+    /// Two, not one with a switch: see ``UntrustedCertificateSessions``. The
+    /// shared session is the default for every service, and only a request that
+    /// asked for the permissive one gets it.
+    private static func session(for request: PushRequest) -> URLSession {
+        request.allowsUntrustedCertificate
+            ? UntrustedCertificateSessions.trusting
+            : URLSession.shared
+    }
+
     private func sendAttempt(
         _ request: PushRequest,
         logString: String,
@@ -345,7 +356,7 @@ public final class RequestSender {
             }
         }
 
-        URLSession.shared.dataTask(with: urlRequest) { [weak self] data, response, error in
+        Self.session(for: request).dataTask(with: urlRequest) { [weak self] data, response, error in
             guard let self else { return }
             PusherLog.debug("\(logString) Got response back")
             let key = self.retryKey(context, service)
@@ -639,6 +650,45 @@ public final class RequestSender {
         case let flag as Bool: return flag ? "true" : "false"
         case nil: return ""
         default: return String(describing: value!)
+        }
+    }
+}
+
+/// A `URLSession` that can be told to accept any certificate.
+///
+/// One delegate per policy rather than one session with a flag: `URLSession`
+/// keeps the delegate for the session's lifetime and asks it per challenge, and a
+/// shared session would have to decide which request was asking. Two sessions,
+/// chosen when the request is built, keeps the answer with the request.
+///
+/// The permissive session is created on first use and kept: making one per push
+/// leaked a connection pool for every self-hosted webhook that fired.
+private enum UntrustedCertificateSessions {
+    static let trusting: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        return URLSession(
+            configuration: configuration,
+            delegate: TrustingDelegate(),
+            delegateQueue: nil
+        )
+    }()
+
+    /// Accepts any server trust. Only reached for a request whose service asked
+    /// for it — see `PushRequest.allowsUntrustedCertificate`.
+    private final class TrustingDelegate: NSObject, URLSessionDelegate {
+        func urlSession(
+            _ session: URLSession,
+            didReceive challenge: URLAuthenticationChallenge,
+            completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        ) {
+            guard challenge.protectionSpace.authenticationMethod
+                    == NSURLAuthenticationMethodServerTrust,
+                  let trust = challenge.protectionSpace.serverTrust
+            else {
+                completionHandler(.performDefaultHandling, nil)
+                return
+            }
+            completionHandler(.useCredential, URLCredential(trust: trust))
         }
     }
 }

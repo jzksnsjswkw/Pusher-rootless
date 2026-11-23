@@ -219,7 +219,7 @@ Device Name (deviceName), App Name (appName), App Bundle ID (appID), Title (titl
 "How to write a script" = "如何编写脚本";
 "Scripting Guide" = "脚本编写指南";
 "How a script works" = "脚本如何工作";
-"The script runs once per notification. Call push(req) to send a request — call it more than once to send several, or not at all to skip this notification. Top-level await works, so you can fetch a token before sending." = "脚本每条通知运行一次。调用 push(req) 发送请求——调用多次可发送多条，不调用则跳过这条通知。支持顶层 await，可以先 fetch token 再发送。";
+"The script runs once per notification. Call push(req) to send a request — call it more than once to send several, or not at all to skip this notification. Top-level await works, so you can fetch a token before sending." = "脚本对每条通知运行一次。调用 push(req) 发送请求——调用多次就是发多条，一次都不调就是跳过这条通知。顶层 await 可用，所以可以先取 token 再发送。";
 "bullet — the notification" = "bullet——通知内容";
 "bullet.deviceName, bullet.appName, bullet.appID, bullet.title, bullet.subtitle, bullet.message, bullet.date are strings. bullet.icon and bullet.image are base64 PNG data (strings), present when the notification has them." = "bullet.deviceName、bullet.appName、bullet.appID、bullet.title、bullet.subtitle、bullet.message、bullet.date 均为字符串。bullet.icon 和 bullet.image 是 base64 PNG 数据（字符串），通知带有图标/图片时才存在。";
 "Other functions" = "其它可用函数";
@@ -744,8 +744,7 @@ Device Name (deviceName), App Name (appName), App Bundle ID (appID), Title (titl
 "INSTRUCTIONS:\n1. Click 'Open Date Format Instructions' above (https://nsdateformatter.com).\n2. Using the reference and examples, create your desired date format and enter it above. If you don't care about the date, you may leave it as the default\n\nExample formats for Saturday, April 13, 2019 @ 3:12 AM:\nEEEE, MMM d, yyyy = Saturday, Apr 13, 2019\nMM/dd/yyyy = 04/13/2019\nMM-dd-yyyy HH:mm = 04-13-2019 03:12\nMMM d, h:mm a = Apr 13, 3:12 AM\nE, d MMM yyyy HH:mm:ss Z = Sat, 13 Apr 2019 03:12:11 +0000\nyyyy-MM-dd'T'HH:mm:ssZ = 2019-04-13T03:12:11+0000\ndd.MM.yy = 13.04.19\nHH:mm:ss.SSS = 03:12:11.678\n" = "格式说明：\n1. 点击上方「打开日期格式说明」（https://nsdateformatter.com）。\n2. 参照页面上的参考和示例，写出你想要的日期格式并填入上方。不在意日期的话可以保持默认值。\n\n以下示例对应 2019 年 4 月 13 日（周六）凌晨 3:12：\nEEEE, MMM d, yyyy = Saturday, Apr 13, 2019\nMM/dd/yyyy = 04/13/2019\nMM-dd-yyyy HH:mm = 04-13-2019 03:12\nMMM d, h:mm a = Apr 13, 3:12 AM\nE, d MMM yyyy HH:mm:ss Z = Sat, 13 Apr 2019 03:12:11 +0000\nyyyy-MM-dd'T'HH:mm:ssZ = 2019-04-13T03:12:11+0000\ndd.MM.yy = 13.04.19\nHH:mm:ss.SSS = 03:12:11.678\n";
 "留空则使用发件邮箱里尖括号前的那段文字。" = "留空则使用发件邮箱里尖括号前的那段文字。";
 "发件邮箱。也可以直接粘贴邮件客户端里显示的形式，例如 \"通知转发\" <you@qq.com>，只取尖括号里的地址。" = "发件邮箱。也可以直接粘贴邮件客户端里显示的形式，例如 \"通知转发\" <you@qq.com>，只取尖括号里的地址。";
-"Sends now and returns the response, so you can check res.ok and decide whether to push again." = "立即发送并返回响应，可以读 res.ok 决定要不要继续推送。";
-"The script runs once per notification. Call push(req) to send a request — call it more than once to send several, or not at all to skip this notification. Top-level await works, so you can fetch a token before sending.\npush() sends immediately and returns the response, so you can read res.ok and stop early:" = "脚本对每条通知运行一次。调用 push(req) 发送请求——调用多次就是发多条，一次都不调就是跳过这条通知。顶层 await 可用，所以可以先取 token 再发送。\npush() 立即发送并返回响应，可以读 res.ok 提前收手：";
+"The script runs once per notification. Call push(req) to send a request — call it more than once to send several, or not at all to skip this notification. Top-level await works, so you can fetch a token before sending." = "脚本对每条通知运行一次。调用 push(req) 发送请求——调用多次就是发多条，一次都不调就是跳过这条通知。顶层 await 可用，所以可以先取 token 再发送。";
 "const res = push({ url: primary, body: bullet });\nif (!res.ok) {\n  push({ url: backup, body: { text: bullet.message } });\n}" = "const res = push({ url: 主地址, body: bullet });\nif (!res.ok) {\n  push({ url: 备用地址, body: { text: bullet.message } });\n}";
 "Hook (On Receiving)" = "Hook (收到通知时)";
 "Hook (After Filtering)" = "Hook (筛选之后)";
@@ -912,3 +911,5 @@ Device Name (deviceName), App Name (appName), App Bundle ID (appID), Title (titl
 "Has a message" = "存在内容";
 "No message" = "无内容";
 "An attachment is resized to fit the maximum width and height before it is sent, unless it is already smaller. If the server rejects the request as too large, Pusher retries up to 5 times, dividing the picture's dimensions by the shrink factor on each attempt. The factor must be greater than 1.0, since it is a divisor: 2 halves each side. If the last attempt is still too large, the picture is left out and the payload carries 1 in its place, so the receiver can tell an attachment existed." = "图片发送前会先缩放到不超过最大宽度和高度（如果本来就更小则保持不变）。如果服务器以数据过大为由拒绝，Pusher 最多重试 5 次，每次按缩小因子除以图片尺寸。因子必须大于 1.0，因为它是除数：2 表示每边减半。如果最后一次仍然过大，图片会被移除，payload 中该字段改为 1，让接收端知道原本有附件。";
+"Ignore TLS Certificate" = "忽略 TLS 证书";
+"accept any server certificate, for this call only" = "仅本次调用接受任意服务器证书";

@@ -84,6 +84,18 @@
 		</dict>
 		<dict>
 			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.jzksnsjswkw.pusher</string>
+			<key>key</key>
+			<string>ignoreTLSCertificate</string>
+			<key>label</key>
+			<string>Ignore TLS Certificate</string>
+		</dict>
+		<dict>
+			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
 			<string>Param/Header Name is used to determine the name of the parameter to pass. For example, header authentication is typically passed through the 'Access-Token' header. If you are using the Request Body option and your API takes a parameter named 'token', you would enter 'token' as the name.</string>

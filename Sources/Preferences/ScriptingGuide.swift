@@ -20,9 +20,7 @@ enum ScriptingGuide {
                 .text(("The script runs once per notification. Call push(req) to "
                     + "send a request — call it more than once to send several, "
                     + "or not at all to skip this notification. Top-level await "
-                    + "works, so you can fetch a token before sending.\n"
-                    + "push() sends immediately and returns the response, so you "
-                    + "can read res.ok and stop early:").localized),
+                    + "works, so you can fetch a token before sending.").localized),
                 .code(("const res = push({ url: primary, body: bullet });\n"
                     + "if (!res.ok) {\n"
                     + "  push({ url: backup, body: { text: bullet.message } });\n"

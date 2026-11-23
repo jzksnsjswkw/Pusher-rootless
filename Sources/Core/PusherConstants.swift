@@ -303,6 +303,15 @@ public enum PrefKey {
     public static let method = "method"
     public static let bodyType = "bodyType"
 
+    /// Whether a webhook should accept a server certificate it cannot verify.
+    ///
+    /// Off by default, and offered because self-hosted endpoints are the common
+    /// case for this feature: a NAS or a home server reached by IP address has a
+    /// certificate issued for a name it does not answer on, or a self-signed one,
+    /// and the connection fails before the request is sent. Turning this on says
+    /// that reaching that server matters more than checking who it is.
+    public static let ignoreTLSCertificate = "ignoreTLSCertificate"
+
     /// Log key suffix for one service (`<service>Log`).
     /// The number and the name the user set for each SIM slot.
     ///

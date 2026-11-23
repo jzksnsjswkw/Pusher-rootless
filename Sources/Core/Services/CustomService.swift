@@ -62,6 +62,10 @@ public enum CustomService: PushService {
             method: config.raw.string(PrefKey.method, default: "POST")
         )
         request.bodyType = config.raw.string(PrefKey.bodyType, default: "json")
+        // Off unless the instance says otherwise. A webhook is the one service
+        // whose endpoint the user chooses, and a self-hosted one is usually
+        // reached by an address its certificate does not name.
+        request.allowsUntrustedCertificate = config.raw.bool(PrefKey.ignoreTLSCertificate)
         return withLogBody(request, infoDict)
     }
 
@@ -83,6 +87,7 @@ public enum CustomService: PushService {
             PrefKey.method: "POST",
             PrefKey.bodyType: "json",
             PrefKey.authenticationMethod: 0,
+            PrefKey.ignoreTLSCertificate: false,
             // The payload's `date` field is formatted with this, and
             // `Custom.plist` offers a field for it.
             PrefKey.dateFormat: "MMM d, h:mm a",

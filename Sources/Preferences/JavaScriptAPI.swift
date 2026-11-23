@@ -90,13 +90,14 @@ enum JavaScriptAPI {
           method?: "GET" | "POST" | "PUT" | ...    // \("default \"POST\"".localized)
           headers?: { [name: string]: string }
           body?: object | string                   // \("an object is sent as JSON".localized)
+          skipTLS?: boolean                        // \("accept any server certificate, for this call only".localized)
         }): Response
-        // \("Sends now and returns the response, so you can check res.ok and decide whether to push again.".localized)
 
         push({ shortcut: string, payload: object }): Response
         // \("Runs one of your Shortcuts instead of sending a request. payload is required and is passed to it exactly as written.".localized)
 
         fetch(url: string, init?: object): Promise<Response>
+        // init also takes skipTLS?: boolean — \(("accept any server certificate, for this call only".localized))
         // \("Real HTTP: Response has ok, status, headers, url, json() and text().".localized)
 
         localStorage: {
