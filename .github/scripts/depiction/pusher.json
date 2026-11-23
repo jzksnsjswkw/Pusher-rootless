@@ -9,7 +9,7 @@
    "views": [
     {
      "class": "DepictionMarkdownView",
-     "markdown": "**iOS版的 短信转发器 和 通知滤盒**\n\n将设备上的通知转发到你想要的地方，不仅限于短信，还可拦截特定通知，让其不在设备上显示。\n\n- 将通知转发到 Bark、钉钉、企业微信、飞书、邮件、Gotify、Webhook 等\n- 写 JavaScript 自定义转发逻辑"
+     "markdown": "**将通知转发到其他设备**\n\n将设备上的通知转发到你想要的地方，不仅限于短信，还可拦截特定通知，让其不在设备上显示。\n\n- 将通知转发到 Bark、钉钉、企业微信、飞书、邮件、Gotify、Webhook 等\n- 写 JavaScript 自定义转发逻辑"
     },
     {
      "class": "DepictionSpacerView",
@@ -46,7 +46,7 @@
    "views": [
     {
      "class": "DepictionMarkdownView",
-     "markdown": "**The SMS forwarder and notification filter for iOS**\n\nForward the notifications on your device wherever you want — not just SMS — and block the ones you would rather not see.\n\n- Forward to Bark, DingTalk, WeCom, Feishu, email, Gotify, webhooks and more\n- Write JavaScript for the forwarding logic"
+     "markdown": "**Forward notifications to other devices**\n\nForward the notifications on your device wherever you want — not just SMS — and block the ones you would rather not see.\n\n- Forward to Bark, DingTalk, WeCom, Feishu, email, Gotify, webhooks and more\n- Write JavaScript for the forwarding logic"
     },
     {
      "class": "DepictionSpacerView",

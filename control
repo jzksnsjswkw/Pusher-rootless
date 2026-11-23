@@ -11,7 +11,7 @@ Author: jzksnsjswkw <214893178@qq.com>
 Section: Tweaks
 Icon: https://jzksnsjswkw.github.io/repo/icon.png
 Depiction: https://jzksnsjswkw.github.io/repo/
-Description: iOS版的 短信转发器 和 通知滤盒
+Description: 将通知转发到其他设备
  将设备上的通知转发到你想要的地方，不仅限于短信，还可拦截特定通知，让其不在设备上显示。
  .
  - 将通知转发到 Bark、钉钉、企业微信、飞书、邮件、Gotify、Webhook 等
