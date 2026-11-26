@@ -32,39 +32,53 @@ endif
 # bundle needs; without one, AltList.framework fails to load at runtime
 # ("Library not loaded: @rpath/AltList.framework/AltList").
 
-# The control file's `Package:` must carry the same suffix the index gives it.
+# The package name carries `-rootless` on both schemes.
 #
-# roothide and rootless are two builds of one tweak, and a client keys on the
-# package name: without a suffix the source would show one row for two packages
-# and install whichever it happened to see. `make_repo.sh` appends `-roothide` /
-# `-rootless` to the index; the deb has to agree, or apt sees a conflict between
-# the name it is installing and the name it was told about, and an upgrade from
-# the other scheme installs a second copy instead of replacing the first.
-THEOS_PACKAGE_NAME := com.jzksnsjswkw.pusher
-ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
-	PUSHER_PACKAGE_NAME = $(THEOS_PACKAGE_NAME)-roothide
-else ifeq ($(THEOS_PACKAGE_SCHEME),rootless)
-	PUSHER_PACKAGE_NAME = $(THEOS_PACKAGE_NAME)-rootless
-endif
+# Not a per-scheme suffix: a client keys a package on name and architecture
+# together, so one name with two architectures is one row in Sileo and two debs on
+# disk. That is what lets an upgrade cross schemes — the record that
+# `dpkg --purge` removes is the same one, and the version comparison is between
+# two builds of the same package rather than between two unrelated packages that
+# happen to conflict.
+#
+# The bare `com.jzksnsjswkw.pusher` is kept as `Provides:` so anything that
+# depended on a name this project used to publish still resolves.
+#
+# The display name is `Pusher-rootless` on both schemes, and the `sed` below is
+# what enforces it: the template's own `Name:` is the same string, but one place
+# deciding means a template edit cannot make the two schemes disagree.
+#
+# The source `control` is a template, never shipped: `deb.mk` reads it at parse
+# time and the copy below is what ends up inside the deb. It carries no suffix for
+# the same reason — the `sed` here is the only thing that decides, and a value in
+# the file would only be a second place for it to go wrong.
+PUSHER_PACKAGE_NAME := com.jzksnsjswkw.pusher-rootless
+PUSHER_DISPLAY_NAME := Pusher-rootless
 
-# The patch has to happen before `deb.mk` reads the control — it derives
-# `THEOS_PACKAGE_NAME` from it at parse time and generates the staging control
-# from it later, so editing either afterwards is too late. A per-scheme copy is
-# written here and handed to `deb.mk` as its source control file.
 PUSHER_CONTROL := $(THEOS_PROJECT_DIR)/.theos/control.$(THEOS_PACKAGE_SCHEME)
-$(shell mkdir -p $(THEOS_PROJECT_DIR)/.theos &&         /usr/bin/sed 's|^Package: .*|Package: $(PUSHER_PACKAGE_NAME)|'             $(THEOS_PROJECT_DIR)/control > $(PUSHER_CONTROL))
+$(shell mkdir -p $(THEOS_PROJECT_DIR)/.theos && \
+        /usr/bin/sed -e 's|^Package: .*|Package: $(PUSHER_PACKAGE_NAME)|' \
+                      -e 's|^Name: .*|Name: $(PUSHER_DISPLAY_NAME)|' \
+            $(THEOS_PROJECT_DIR)/control > $(PUSHER_CONTROL))
 _THEOS_DEB_PACKAGE_CONTROL_PATH := $(PUSHER_CONTROL)
 
 include $(THEOS)/makefiles/common.mk
 
 # `deb.mk` reads the project's `control` file at parse time, with `:=`, so the
-# per-scheme copy has to be generated and handed over *after* that include — and
-# before the packaging rules expand their recipes.
+# copy has to be handed over *after* that include — and before the packaging rules
+# expand their recipes.
 PUSHER_CONTROL := $(THEOS_PROJECT_DIR)/.theos/control.$(THEOS_PACKAGE_SCHEME)
 $(shell mkdir -p $(THEOS_PROJECT_DIR)/.theos && \
-        /usr/bin/sed 's|^Package: .*|Package: $(PUSHER_PACKAGE_NAME)|' \
+        /usr/bin/sed -e 's|^Package: .*|Package: $(PUSHER_PACKAGE_NAME)|' \
+                      -e 's|^Name: .*|Name: $(PUSHER_DISPLAY_NAME)|' \
             $(THEOS_PROJECT_DIR)/control > $(PUSHER_CONTROL))
 _THEOS_DEB_PACKAGE_CONTROL_PATH := $(PUSHER_CONTROL)
+
+# `package.mk` clears `THEOS_PACKAGE_NAME` and `deb.mk` recomputes it from the
+# *source* control, so without this the deb is named after whatever the template
+# says. The filename is what a release uploads and what the index links to; it has
+# to carry the name the package does.
+THEOS_PACKAGE_NAME := $(PUSHER_PACKAGE_NAME)
 
 # Swift build settings for every target in this project.
 #

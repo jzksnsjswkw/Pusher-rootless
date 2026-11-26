@@ -80,42 +80,30 @@ for deb in "${DEBS[@]}"; do
     md5=$(md5 -q "$deb" 2>/dev/null || md5sum "$deb" | cut -d' ' -f1)
     sha256=$(shasum -a 256 "$deb" 2>/dev/null | cut -d' ' -f1 || sha256sum "$deb" | cut -d' ' -f1)
 
-    # Two builds are published for every release — roothide (arm64e) and rootless
-    # (arm64) — and they are the same package at the same version, differing only
-    # in where they install. A client keyed on the package name alone would show
-    # one entry for the two and pick whichever it saw last, so roothide's build
-    # carries a suffix and a `Provides` the plain name: Sileo then lists it as its
-    # own row, and anything depending on `com.jzksnsjswkw.pusher` still resolves.
-    # The deb already carries the scheme suffix in its `Package:` field (the
-    # Makefile adds it), so the index uses the name as-is. Appending a second
-    # suffix here produced `com.jzksnsjswkw.pusher-roothide-roothide`, which apt
-    # would treat as yet another package.
+    # The deb's own `Package:` and `Name:` are used as they are.
+    #
+    # Both schemes carry the same package name and differ only in
+    # `Architecture` — a client keys a package on the pair, so Sileo renders one
+    # row for the two builds and apt upgrades across them. This script used to
+    # invent the suffix on its way out while the deb kept a bare name; the two
+    # then disagreed about what was installed, which is what left an upgrade from
+    # one scheme to the other with two records and one set of files.
     pkg_name="$name"
-    display_name=""
-    provides=""
-    # The display name sticks to Pusher's own packages. A mirrored dependency
-    # keeps whatever name its control carries — it is not this project's to
-    # rename, and a user looking for SandyXpc should find it under its own name.
-    case "$name" in
-        com.jzksnsjswkw.pusher*)
-            case "$arch" in
-                iphoneos-arm64e) display_name="Pusher-roothide" ;;
-                iphoneos-arm64) display_name="Pusher-rootless" ;;
-            esac
-            ;;
-        *) display_name=$(field Name) ;;
-    esac
-    case "$name" in
-        *-roothide|*-rootless) provides="Provides: ${name%-*}" ;;
-    esac
+    display_name=$(field Name)
+    [ -n "$display_name" ] || display_name="$name"
+    provides=$(field Provides)
 
     {
         echo "Package: $pkg_name"
         # The name Sileo lists. Without it the row shows the package identifier,
         # which is an implementation detail the reader has no use for.
-        [ -n "$display_name" ] && echo "Name: $display_name"
+        echo "Name: $display_name"
         echo "Version: $version"
-        [ -n "$provides" ] && echo "$provides"
+        # `Provides:` comes from the deb. It used to be synthesised here from the
+        # name suffix, which no longer exists — the alias a package wants to
+        # declare is its own business, and guessing one from a hyphen put the
+        # wrong name in the index the moment the suffixes went away.
+        [ -n "$provides" ] && echo "Provides: $provides"
         echo "Architecture: $arch"
         echo "Section: $(field_or Section Tweaks)"
         echo "Priority: optional"
@@ -231,12 +219,27 @@ fi
 # Served from here rather than from inside the deb because Sileo shows the icon
 # before anything is installed — a `file://` path only resolves afterwards, and to
 # a path that differs by packaging scheme.
-PACKAGE_ICON="${PACKAGE_ICON:-.github/scripts/icon.png}"
-if [ ! -f "$PACKAGE_ICON" ]; then
-    echo "error: $PACKAGE_ICON is missing — every package row will show a placeholder" >&2
-    exit 1
-fi
-cp "$PACKAGE_ICON" "$OUT/icon.png"
+#
+# Copied under the name the package's control points at (`pusher.png`), not as
+# `icon.png`: one shared filename means a second project's icon silently replaces
+# this one, and the icon a source lists is per package. The name is read back out
+# of the control rather than guessed, so a package that names a different file
+# gets that file copied.
+for deb in "${DEBS[@]}"; do
+    [ -f "$deb" ] || continue
+    icon=$(dpkg-deb -f "$deb" Icon 2>/dev/null || true)
+    case "$icon" in
+        *"$PAGES_URL"/*) icon_name="${icon##*/}" ;;
+        *) continue ;;
+    esac
+    [ -n "$icon_name" ] || continue
+    src=".github/scripts/$icon_name"
+    if [ ! -f "$src" ]; then
+        echo "error: $src is missing — $deb would list a broken icon" >&2
+        exit 1
+    fi
+    cp "$src" "$OUT/$icon_name"
+done
 
 echo "Indexed $(grep -c '^Package: ' "$OUT/Packages") package(s) into $OUT/"
 ls -la "$OUT"

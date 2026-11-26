@@ -1,15 +1,15 @@
-Package: com.jzksnsjswkw.pusher
+Package: com.jzksnsjswkw.pusher-rootless
 Name: Pusher-rootless
 Depends: mobilesubstrate, firmware (>= 15.0), com.opa334.altlist, com.82flex.libsandyxpc
-Conflicts: com.jzksnsjswkw.pusher, com.noahsaso.pusher
-Replaces: com.jzksnsjswkw.pusher, com.noahsaso.pusher
+Conflicts: com.noahsaso.pusher, com.jzksnsjswkw.pusher, com.jzksnsjswkw.pusher-roothide
+Replaces: com.noahsaso.pusher, com.jzksnsjswkw.pusher, com.jzksnsjswkw.pusher-roothide
 Provides: com.jzksnsjswkw.pusher
 Version: 3.0.1
 Architecture: iphoneos-arm
 Maintainer: jzksnsjswkw
 Author: jzksnsjswkw <214893178@qq.com>
 Section: Tweaks
-Icon: https://jzksnsjswkw.github.io/repo/icon.png
+Icon: https://jzksnsjswkw.github.io/repo/pusher.png
 Depiction: https://jzksnsjswkw.github.io/repo/
 Description: 将通知转发到其他设备
  将收到的通知转发到你想要的地方，还可以根据关键字拦截通知
