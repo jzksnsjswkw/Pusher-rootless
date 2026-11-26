@@ -65,6 +65,21 @@ jobs:
             --pattern '*.deb' --dir staged
           ls -la staged
 
+      - name: Fetch the shared index builder
+        # One implementation for every project that publishes into this source.
+        # Each project used to carry its own copy; two copies of the carry-forward
+        # rule means the one nobody edited that day deletes the other project's
+        # rows, which is how Relocate disappeared. The builder, the source icons,
+        # the depiction documents and the landing-page template all live in
+        # `jzksnsjswkw/repo` under `tools/`, so they cannot drift apart.
+        run: |
+          mkdir -p tools
+          curl -fsSL --retry 3 --max-time 60 \
+            "https://github.com/jzksnsjswkw/repo/archive/refs/heads/tools.tar.gz" \
+            -o tools.tar.gz
+          tar -xzf tools.tar.gz --strip-components=2 -C tools repo-tools/tools
+          ls -la tools
+
       - name: Fetch the live index
         # The carry-forward reads this: the branch is shared with other projects,
         # and an index built only from this release's debs deletes their rows. A
@@ -87,11 +102,13 @@ jobs:
           # `packages/mirrored` is picked up by the script itself: SandyXpc is a
           # runtime dependency whose debs belong in this source, or installing
           # Pusher stops on an unresolved dependency nobody can find.
-          ./.github/scripts/make_repo.py \
+          python3 tools/make_index.py \
+            --project pusher \
             --tag "${{ steps.tag.outputs.value }}" \
             --out repo \
             --previous previous/Packages \
-            --debs staged/*.deb
+            --debs staged/*.deb \
+            --mirrored packages/mirrored
           ls -la repo/debs 2>/dev/null || true
 
       - name: Publish to Pages
@@ -100,16 +117,17 @@ jobs:
           # The source lives in `jzksnsjswkw/repo`, which is what
           # https://jzksnsjswkw.github.io/repo/ serves. Publishing to this
           # repository's own gh-pages would put the index at /Pusher-rootless/
-          # instead, and every URL `make_repo.py` writes points at /repo/ — so the
+          # instead, and every URL the builder writes points at /repo/ — so the
           # debs, the icons and the package page would all 404.
           #
           # That needs a token with write access to the other repository; the
           # workflow's own token cannot reach it.
           #
           # `keep_files: false` is what makes the publish a full replacement rather
-          # than an overlay, and it is safe only because `make_repo.py` carried the
-          # other projects' stanzas forward first. That is the whole reason the
-          # carry-forward exists: without it this step deletes Relocate.
+          # than an overlay, and it is safe only because the builder carried the
+          # other projects' stanzas, icons and depiction documents forward first.
+          # That is the whole reason the carry-forward exists: without it this step
+          # deletes Relocate.
           deploy_key: ${{ secrets.REPO_DEPLOY_KEY }}
           external_repository: jzksnsjswkw/repo
           publish_dir: ./repo
